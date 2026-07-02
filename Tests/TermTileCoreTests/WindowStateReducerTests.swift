@@ -174,4 +174,81 @@ struct WindowStateReducerTests {
         #expect(s == start)
         #expect(cmds.isEmpty)
     }
+
+    // ── #10: config-driven retile emission (ADR-0001 rule 1). Reduce emits commands on an
+    //    actual window-set CHANGE when enabled; it records NO pendings (the actor does that
+    //    per AX write — #18/#19). visible/gap chosen so `.zero`-seeded windows are off-target.
+    let visible = CGRect(x: 100, y: 200, width: 1000, height: 800)
+    let gap: CGFloat = 10
+    func enabled() -> TileConfig { TileConfig(isEnabled: true, visibleFrame: visible, gap: gap) }
+    func reduceCfg(_ s: WindowState, _ e: WindowEvent, _ cfg: TileConfig)
+        -> (WindowState, [FrameCommand]) {
+        WindowStateReducer.reduce(s, e, nowEpoch: now, epsilon: eps, config: cfg)
+    }
+
+    // 15 — created a NEW window (enabled) retiles ALL tracked windows; records no pendings.
+    @Test("created new window with enabled config retiles all tracked, records no pending")
+    func createdEnabledRetilesAll() {
+        let s0 = WindowState(windows: [TrackedWindow(id: 1, frame: .zero),
+                                       TrackedWindow(id: 2, frame: .zero)])
+        let (s, cmds) = reduceCfg(s0, WindowEvent(windowID: 3, kind: .created, frame: rect(0, 0)), enabled())
+        let frames = TileLayout.frames(count: 3, visibleFrame: visible, gap: gap)
+        #expect(cmds.count == 3)
+        #expect(cmds.map { $0.targetFrame } == frames)
+        #expect(s.pending.isEmpty)  // reduce records nothing — the actor records per AX write
+        #expect(s.windows.count == 3)
+    }
+
+    // 16 — created for an EXISTING id is a frame update, NOT a set change → no retile (R2).
+    @Test("created for existing id with enabled config does not retile")
+    func createdExistingEnabledNoRetile() {
+        let s0 = WindowState(windows: [TrackedWindow(id: 1, frame: .zero)])
+        let (_, cmds) = reduceCfg(s0, WindowEvent(windowID: 1, kind: .created, frame: rect(9, 9)), enabled())
+        #expect(cmds.isEmpty)
+    }
+
+    // 17 — destroyed a KNOWN id (enabled) retiles the remainder.
+    @Test("destroyed known id with enabled config retiles the remainder")
+    func destroyedEnabledRetilesRemainder() {
+        let s0 = WindowState(windows: [TrackedWindow(id: 1, frame: .zero),
+                                       TrackedWindow(id: 2, frame: .zero),
+                                       TrackedWindow(id: 3, frame: .zero)])
+        let (_, cmds) = reduceCfg(s0, WindowEvent(windowID: 3, kind: .destroyed, frame: nil), enabled())
+        #expect(cmds.count == 2)
+        #expect(cmds.map { $0.targetFrame } == TileLayout.frames(count: 2, visibleFrame: visible, gap: gap))
+    }
+
+    // 18 — destroyed an UNKNOWN id (enabled) is a spike-05 phantom → set unchanged → no retile (R2).
+    @Test("destroyed unknown id with enabled config does not retile")
+    func destroyedUnknownEnabledNoRetile() {
+        let s0 = WindowState(windows: [TrackedWindow(id: 1, frame: .zero)])
+        let (_, cmds) = reduceCfg(s0, WindowEvent(windowID: 999, kind: .destroyed, frame: nil), enabled())
+        #expect(cmds.isEmpty)
+    }
+
+    // 19 — nil-frame created (enabled) is a defensive no-op → set unchanged → no retile (R2).
+    @Test("nil-frame created with enabled config does not retile")
+    func nilFrameCreatedEnabledNoRetile() {
+        let s0 = WindowState(windows: [TrackedWindow(id: 1, frame: .zero)])
+        let (_, cmds) = reduceCfg(s0, WindowEvent(windowID: 2, kind: .created, frame: nil), enabled())
+        #expect(cmds.isEmpty)
+    }
+
+    // 20 — moved (enabled) never retiles — drag reorder is #11, not the structural engine.
+    @Test("moved with enabled config emits no commands (drag reorder is #11)")
+    func movedEnabledNoRetile() {
+        let s0 = WindowState(windows: [TrackedWindow(id: 1, frame: .zero),
+                                       TrackedWindow(id: 2, frame: .zero)])
+        let (_, cmds) = reduceCfg(s0, WindowEvent(windowID: 1, kind: .moved, frame: rect(5, 5)), enabled())
+        #expect(cmds.isEmpty)
+    }
+
+    // 21 — regression: created new window with DISABLED config emits nothing (off = inert).
+    @Test("created new window with disabled config emits no commands")
+    func createdDisabledNoRetile() {
+        let s0 = WindowState(windows: [TrackedWindow(id: 1, frame: .zero)])
+        let (_, cmds) = reduceCfg(s0, WindowEvent(windowID: 2, kind: .created, frame: rect(0, 0)),
+                                  TileConfig(isEnabled: false, visibleFrame: visible, gap: gap))
+        #expect(cmds.isEmpty)
+    }
 }

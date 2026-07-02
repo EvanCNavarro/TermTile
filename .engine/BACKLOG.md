@@ -109,22 +109,51 @@ committed; findings notes are the durable output.
   (State, [FrameCommand]) in Core; pending-expectation ledger (CGWindowID → frame ±
   epsilon + deadline) classifies moves internal/external as a pure function. Swindler =
   pattern reference only, never a dependency.
-  DEFERRED to #10: TilingActor + WindowSystem port + AX adapter + in-memory fake
-  [DEP: shape — port shape is adapter-driven and #9's reducer emits no commands, so the actor's
-  write path is un-exercisable until #10's adapter+cases] → #10. Recorded run-loop-hosting DESIGN
+  DEFERRED to #18: TilingActor + WindowSystem port + AX adapter + in-memory fake
+  [DEP: shape — port shape is adapter-driven and the reducer emits no commands until #10's cases, so the actor's
+  write path is un-exercisable until #10's cases land] → #18. Recorded run-loop-hosting DESIGN
   decision (spike-05:62/103): app-level AXObserver registration (one CFRunLoopSource/pid, low
   event rate 6-14ms) bridged into an AsyncStream<WindowEvent> on the MAIN run loop is sufficient;
   move to a dedicated run-loop thread ONLY if main-thread contention is observed live.
-#10 · Tiling engine: toggle-on retile + auto-retile on create/destroy · S0
-  blocked-by #4, #5, #8, #9. ALSO builds (from #9): TilingActor in Kit owns the AX adapter +
-  cached WindowState snapshot (instant reads, serialized async writes, ~1s AX messaging timeout),
-  the WindowSystem port + in-memory fake, and the element(hash)→CGWindowID map + destroy-dedupe
-  (spike-05: ids unresolvable at destroy). Adds the command-emitting reducer CASES (retile). PROVE:
-  live iTerm2 windows snap to grid on toggle and on new-window; screencapture evidence.
+#10 · Retile policy: command-emitting reducer cases (pure Core) · DONE
+  (2026-07-02: swift test 71/71 green [+12 — 8 TileEngine, 4 reducer-emission] + invert-check red
+  [structural gate flipped so .moved retiles → "moved emits []" fails with 2 real FrameCommands,
+  restored green]; PURE Core [ADR-0001 rule 1], core-purity.sh PASS. TileConfig + TileEngine.
+  retileCommands [idempotence no-op filter] land in TermTileCore; reduce gains config:.disabled
+  default + windowSetChanged gate. Skeptic caught 3 BLOCKERs: (R1) "one AX write per command" is
+  false [size→pos→size=3 writes] → reduce records NO pendings, actor does per-write [#18/#19];
+  (R2) gate on actual set-change not event-kind [phantom destroy/nil-frame no-retile]; (R3) full
+  downstream repoint. SCOPED from the old #10: the TilingActor/port/fake/AX-adapter/live-iTerm2
+  PROVE split to #18/#19 [real DEP — un-exercisable until reduce emits commands, this beat's work].
+  Plan: .engine/state/stoke-plan-10.md; receipt: .engine/state/receipt.md Row 8.)
+  blocked-by #4, #5, #8, #9. Pure retile POLICY only (ADR-0001 rule 1): TileConfig + TileEngine.
+  retileCommands mapping windows→TileLayout slots with idempotence, and reduce's create/destroy
+  command-emission on an actual window-set change when enabled. Records no pendings (the actor
+  does, per AX write). PROVE = swift test + invert-check (pure Core, like #8/#9); the live-AX
+  grid-snap proof is #19.
+#18 · Tiling shell: WindowSystem port + in-memory fake + TilingActor · S0
+  blocked-by #10. Builds (absorbed from the old #10, un-exercisable until #10's commands landed):
+  the WindowSystem port (enumerate/readFrame/writeFrame + AsyncStream<WindowEvent>), an in-memory
+  fake for tests, and TilingActor in Kit owning the AX adapter handle + a cached TermTileCore.
+  WindowState snapshot (instant reads, serialized async writes, ~1s AX messaging timeout), the
+  element(CFHash)→CGWindowID map + destroy-dedupe (spike-05: destroy ids unresolvable -25201).
+  The actor records ONE PendingMove per AX WRITE via WindowState.recording (NOT per command —
+  size→pos→size = 3 writes). Run-loop-hosting DESIGN already made (#9): app-level AXObserver
+  bridged to an AsyncStream on the MAIN run loop. Tested against the fake (no live AX here).
+  [DEP: shape — the actor's apply-commands write path cannot exist until #10's reducer emits
+  commands] → #10.
+#19 · AX adapter (real WindowSystem) + LIVE iTerm2 PROVE: toggle-on + new-window snap-to-grid · S0
+  blocked-by #18. Promote AXProbe enumerate/setFrame/observe into the real WindowSystem adapter
+  (imports ApplicationServices; the ONLY control surface — ADR rule 2); size→pos→size writes,
+  AXEnhancedUserInterface disable/restore INLINE (never defer — TRAP-12), coordinate flip (AX
+  top-left) + per-app min-size clamp via readback (iTerm2 73×67, never hardcode). Owns the
+  cross-Space kAXWindows-completeness + fullscreen-enumeration + spike-05 per-window-destroyed
+  questions re-homed from the old #10. PROVE (FL-1, this is where it lands): live iTerm2 windows
+  snap to grid on toggle-on and on new-window; screencapture evidence into docs/verification/.
 #11 · Drag snap-reorder: nearest-slot assignment on drag end + shuffle · S0
-  blocked-by #6, #10.
+  blocked-by #6, #19.
 #12 · Menu-bar app shell: toggle, target-app picker, launch-at-login, settings · S0
-  blocked-by #1; UI wiring to engine blocked-by #10. SwiftUI MenuBarExtra `.window` style
+  blocked-by #1; UI wiring to engine blocked-by #19. SwiftUI MenuBarExtra `.window` style
   (RememBar pattern; delegate-adaptor gotcha: init() is the reliable hook). Launch-at-login
   via SMAppService.mainApp (RememBar lacks this — audit §8.6). Settings = UserDefaults
   behind a small protocol (audit §8.7). Permission UX: probe + Privacy_Accessibility deep
@@ -146,7 +175,7 @@ committed; findings notes are the durable output.
 ## Phase C — deferred (do not pull forward without a reason)
 
 #15 · Multi-display + Spaces awareness · S0
-  [DEP: shape — needs #10's engine surface]
+  [DEP: shape — needs #19's live engine surface]
 #16 · Sparkle auto-updates + release pipeline · S0
   [DEP: blocked-by #13]
 #17 · Gap/padding settings UI + per-app profiles · S0

@@ -5,11 +5,14 @@ import CoreGraphics
 /// echoes of the tiler's own AX writes (`.internal`) vs genuine external moves. Pure: the
 /// clock (`nowEpoch`) and match tolerance (`epsilon`) are parameters — no AX, no state.
 ///
-/// #9 emits NO `FrameCommand`s for any event: the tiling/reorder POLICY (retile on
-/// create/destroy, drag snap-reorder) is added as reducer cases by #10/#11. This beat lands
-/// the state bookkeeping + ledger classification the policy builds on.
+/// #10 adds the retile POLICY (ADR-0001 rule 1): on an actual window-set change
+/// (`.created` of a new id / `.destroyed` of a known id) when `config.isEnabled`, the reducer
+/// emits `TileEngine.retileCommands` over the resulting windows. It records NO pending
+/// expectations — the actor does that per AX write (#18/#19). `.moved`/`.resized` never
+/// retile (drag snap-reorder is #11). Disabled config = inert (spec: "Off = no rigid behavior").
 public enum WindowStateReducer {
-    /// - Returns: the next state and the commands to apply (always empty in #9).
+    /// - Returns: the next state and the commands to apply (empty unless a set change +
+    ///   enabled config triggers a retile).
     ///
     /// Behavior per kind (expired pendings are GC'd first on every step so the ledger stays
     /// bounded — `MoveClassifier` also independently declines expired entries):
@@ -24,10 +27,17 @@ public enum WindowStateReducer {
         _ state: WindowState,
         _ event: WindowEvent,
         nowEpoch: Double,
-        epsilon: CGFloat
+        epsilon: CGFloat,
+        config: TileConfig = .disabled
     ) -> (WindowState, [FrameCommand]) {
         var next = state
         next.pending.removeAll { $0.expiresAtEpoch < nowEpoch }
+
+        // Retile fires only on an actual window-set change — NOT on frame updates of an
+        // existing window (`.created` for a known id) or on no-op events (`.destroyed` of an
+        // unknown id — spike-05 phantom; nil-frame `.created`). Gating on kind alone would
+        // spuriously snap an off-grid window on those events.
+        var windowSetChanged = false
 
         switch event.kind {
         case .created:
@@ -36,11 +46,14 @@ public enum WindowStateReducer {
                 next.windows[i].frame = frame
             } else {
                 next.windows.append(TrackedWindow(id: event.windowID, frame: frame))
+                windowSetChanged = true
             }
 
         case .destroyed:
+            let countBefore = next.windows.count
             next.windows.removeAll { $0.id == event.windowID }
             next.pending.removeAll { $0.windowID == event.windowID }
+            windowSetChanged = next.windows.count != countBefore
 
         case .moved, .resized:
             guard let frame = event.frame else { break }
@@ -63,6 +76,9 @@ public enum WindowStateReducer {
             }
         }
 
-        return (next, [])
+        let commands = windowSetChanged && config.isEnabled
+            ? TileEngine.retileCommands(windows: next.windows, config: config, epsilon: epsilon)
+            : []
+        return (next, commands)
     }
 }
