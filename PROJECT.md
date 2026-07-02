@@ -1,9 +1,9 @@
 # Project
 
 Name: termtile
-Profile: web
+Profile: macos-native (Swift/SPM menu-bar app)
 Framework adapter: none
-Deploy target: cloudflare
+Deploy target: local .app bundle (signed release via GitHub Releases — see backlog #13)
 
 ## Structure
 
