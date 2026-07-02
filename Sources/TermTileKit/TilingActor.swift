@@ -50,6 +50,20 @@ public actor TilingActor {
         await apply(commands)
     }
 
+    /// Drag snap-reorder at drag END (spec-draft:25-28). The imperative shell — a global
+    /// mouse-up CGEventTap (spike-06), wired in #12 — passes the dragged window's id when a drag
+    /// finishes. Its cached frame (kept fresh by the mid-drag `.moved` echoes `handle` folds) is
+    /// the drop point: the pure `TileEngine.reorderCommands` reassigns it to the nearest slot,
+    /// shuffles the rest, and returns the snap commands, which `apply` issues while recording one
+    /// pending per AX write so the snap's own echoes classify `.internal` and never re-tile.
+    /// No-op when disabled or the id isn't tracked.
+    public func handleDragEnd(_ windowID: CGWindowID) async {
+        let (newOrder, commands) = TileEngine.reorderCommands(
+            windows: state.windows, draggedID: windowID, config: config, epsilon: epsilon)
+        state.windows = newOrder
+        await apply(commands)
+    }
+
     /// Consume the port's event stream (ADR rule 4 — the AXObserver is bridged ONCE at the
     /// adapter into this stream). Returns when the stream finishes.
     public func run() async {

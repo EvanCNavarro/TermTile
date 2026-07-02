@@ -135,4 +135,51 @@ struct TilingActorTests {
         #expect(await fake.readFrame(1) == w.frame)
         #expect(await fake.readFrame(99) == nil)
     }
+
+    // #11 — drag snap-reorder at drag END. A mid-drag `.moved` alone must NOT reorder (the
+    // reducer's `.moved` path is untouched); `handleDragEnd` reads the dragged window's cached
+    // drop frame, reassigns it to the nearest slot, shuffles the rest, and snaps the new order —
+    // recording pendings per AX write so the snap's own echoes would classify `.internal`.
+    @Test("drag end: reorder to nearest slot, shuffle, snap; snapshot order updated")
+    func dragEndReorders() async {
+        let f = targets(4)
+        let seed = (0..<4).map { win(CGWindowID($0 + 1), f[$0]) }   // all four ON their grid slots
+        let fake = InMemoryWindowSystem(windows: seed)
+        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        await actor.activate(config: enabled())
+        #expect(await fake.recordedWrites.isEmpty)                  // already on grid → no writes
+
+        // Simulate dragging id1 (slot 0) so its drop center lands in slot 3: an EXTERNAL `.moved`
+        // updates the cached frame (no matching pending → external, no reorder, no write).
+        let dropped = CGRect(x: f[3].midX - 50, y: f[3].midY - 50, width: 100, height: 100)
+        await actor.handle(WindowEvent(windowID: 1, kind: .moved, frame: dropped))
+        #expect(await fake.recordedWrites.isEmpty)                  // mid-drag move alone: no reorder
+        #expect(await actor.snapshot.windows.first { $0.id == 1 }?.frame == dropped)
+
+        // Drag END → reorder + snap.
+        await actor.handleDragEnd(1)
+
+        let finalOrder = await actor.snapshot.windows
+        #expect(finalOrder.map(\.id) == [2, 3, 4, 1])              // id1 → slot 3; rest shuffle up
+        let writes = await fake.recordedWrites
+        #expect(writes.contains { $0.id == 1 && $0.target == f[3] })   // dragged snaps to slot 3
+        for w in writes {                                          // every write hits the NEW slot
+            let newSlot = finalOrder.firstIndex { $0.id == w.id }!
+            #expect(w.target == f[newSlot])
+        }
+        #expect(await actor.snapshot.pending.count == writes.count * 3) // one trio per AX write
+    }
+
+    // #11 — an untracked drag-end id is a clean no-op (leading guard): no writes, no state churn.
+    @Test("drag end for an untracked id is a no-op")
+    func dragEndUntrackedNoop() async {
+        let f = targets(2)
+        let fake = InMemoryWindowSystem(windows: [win(1, f[0]), win(2, f[1])])
+        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        await actor.activate(config: enabled())
+        await actor.handleDragEnd(999)
+        #expect(await fake.recordedWrites.isEmpty)
+        #expect(await actor.snapshot.windows.map(\.id) == [1, 2])
+        #expect(await actor.snapshot.pending.isEmpty)
+    }
 }

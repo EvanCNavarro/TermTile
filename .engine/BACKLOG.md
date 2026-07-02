@@ -201,7 +201,20 @@ committed; findings notes are the durable output.
   re-homed cross-Space kAXWindows-completeness + fullscreen-enumeration + per-window-destroyed
   questions. PROVE (FL-1): a freshly-created iTerm2 window fires a .created WindowEvent through
   adapter.events() and the running TilingActor snaps it to grid; screencapture → docs/verification/.
-#11 · Drag snap-reorder: nearest-slot assignment on drag end + shuffle · S0
+#11 · Drag snap-reorder: nearest-slot assignment on drag end + shuffle · DONE
+  (2026-07-03: swift test 102/102 green [+9 pure reorder incl. permutation property N=2..8 + 2 actor]
+  + TWO invert-checks red [pure argmin flip → 12 issues; actor state-drop → 5 issues, restored green];
+  PURE Core reorder policy + Kit actor method, core-purity.sh PASS. TermTileCore.TileEngine.
+  reorderCommands [drop-center → nearest slot via stable argmin, list remove+insert shuffle,
+  retileCommands snap; leading guard disabled/untracked/empty; N=1 snaps back] + TilingActor.
+  handleDragEnd [reads cache, calls pure fn, updates state.windows, apply records size→pos→size
+  pending trio per write] land. Reducer .moved/.resized UNTOUCHED [mid-drag move updates cache, no
+  reorder — drag-END is a mouse-up, not an AX notification]. PROVE = in-process actor-over-fake [#18
+  non-adapter bar]: real TilingActor snapped id1→slot3, snapshot [2,3,4,1], every write hits new slot,
+  pending==writes×3. Skeptic caught B1 [leading-guard order before geometry] + N1 [exact-frame seeding
+  for the idempotent case] + R3 [PROVE-bar]. Plan: .engine/state/stoke-plan-11.md; receipt: receipt.md
+  Row 8. DEFERRED: live CGEventTap mouse-up TRIGGER + live reorder screencapture → #12; true cursor
+  drop-point + final-move race → #12.)
   blocked-by #6, #19b (needs adapter.events() for external-move/drag detection).
 #12 · Menu-bar app shell: toggle, target-app picker, launch-at-login, settings · S0
   blocked-by #1; UI wiring to engine blocked-by #19b (needs the full engine incl. events()).
