@@ -715,6 +715,23 @@ if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "tilecheck" {
     tilecheck()
 }
 
+// settingscheck <suite> — #12a LIVE persistence PROVE. Drives the REAL
+// `UserDefaultsSettingsStore` (no inline copy): a store SAVEs a known non-default AppSettings,
+// then a SEPARATE fresh store instance LOADs it back — proving the write hit the real macOS
+// defaults DB and is read across instances. The suite is LEFT written so the shell can
+// independently `defaults read <suite>` (an EXTERNAL process observing the same bytes) before
+// deleting it. Synchronous, no AX, no async → no TRAP-14/TRAP-12 exposure. Exits 0 iff the
+// readback equals the saved value.
+if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "settingscheck" {
+    let suite = CommandLine.arguments[2]
+    let saved = AppSettings(isEnabled: true, targetBundleID: "com.mitchellh.ghostty")
+    UserDefaultsSettingsStore(suiteName: suite).save(saved)               // real product write
+    let loaded = UserDefaultsSettingsStore(suiteName: suite).load()       // fresh instance read
+    let ok = loaded == saved
+    print("settingscheck: suite=\(suite) saved=\(saved) loaded=\(loaded) PASS=\(ok)")
+    exit(ok ? 0 : 1)
+}
+
 // livecheck <bundle-id> [count] [outPNG] — #19a LIVE grid-snap PROVE. Dispatched via a
 // semaphore-blocked `Task.detached`: top-level main.swift code runs on the @MainActor, so a plain
 // `Task {}` INHERITS main-actor isolation and enqueues onto the main thread — which is then parked

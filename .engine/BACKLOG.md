@@ -216,17 +216,40 @@ committed; findings notes are the durable output.
   Row 8. DEFERRED: live CGEventTap mouse-up TRIGGER + live reorder screencapture → #12; true cursor
   drop-point + final-move race → #12.)
   blocked-by #6, #19b (needs adapter.events() for external-move/drag detection).
-#12 · Menu-bar app shell: toggle, target-app picker, launch-at-login, settings · S0
-  blocked-by #1; UI wiring to engine blocked-by #19b (needs the full engine incl. events()).
-  SwiftUI MenuBarExtra `.window` style
-  (RememBar pattern; delegate-adaptor gotcha: init() is the reliable hook). Launch-at-login
-  via SMAppService.mainApp (RememBar lacks this — audit §8.6). Settings = UserDefaults
-  behind a small protocol (audit §8.7). Permission UX: probe + Privacy_Accessibility deep
-  link + blocked-status fix-it row (adapt FileSearchAccessChecker pattern). Includes live
-  prompt-path UX observation from the bundled-app identity (spike 02: prompt can't fire
-  from a pre-trusted shell; bundle probing pollutes TCC).
+#12 · Menu-bar app shell: toggle, target-app picker, launch-at-login, settings — SPLIT by
+  stoke-plan-12a.md into #12a/#12b/#12c (four features across three PROVE-surfaces; precedent
+  #19→#19a/b). Original authorities: SwiftUI MenuBarExtra `.window` style (RememBar; delegate-
+  adaptor gotcha: init() is the reliable hook); SMAppService.mainApp (audit §8.6); UserDefaults
+  behind a protocol (audit §8.7); permission fix-it row (adapt FileSearchAccessChecker).
+#12a · Settings persistence port: AppSettings + SettingsStore + UserDefaultsSettingsStore + fake · DONE
+  (2026-07-03: swift test 107/107 green [+5] + invert-check red [break load()→.defaults → tests 4&5
+  fail, restored]; PROVEN LIVE via EXTERNAL process — AXProbe settingscheck drove the REAL
+  UserDefaultsSettingsStore to the actual macOS defaults DB, a separate `defaults read` observed
+  isEnabled=1 targetBundleID=ghostty, suite deleted. AppSettings [pure value type] + SettingsStore
+  [sync protocol] + UserDefaultsSettingsStore [suiteName:String? → Sendable; per-key object/string
+  fallback] + lock-guarded @unchecked Sendable InMemorySettingsStore fake [sync port can't be an
+  actor — inverse of WindowSystem]; all in Kit, core-purity green. Skeptic caught 3 BLOCKERs pre-build
+  [actor-fake-impossible, wrong-invert-only-reddens-test-1, parallel-suite-race]. Plan:
+  .engine/state/stoke-plan-12a.md; receipt: .engine/state/receipt.md Row 8; verification:
+  docs/verification/task12a-settings.md.)
+  blocked-by #1 (DONE). Kit, pure-Foundation seam. Persist ONLY MVP-user-changeable state:
+  isEnabled (toggle, default false) + targetBundleID (picker, default com.googlecode.iterm2).
+  Gap = hardcoded constant (→ #17); launchAtLogin source-of-truth = SMAppService.status (→ #12b),
+  NOT UserDefaults (double-source bug). PROVE = swift test incl. LIVE UserDefaults(suiteName:)
+  cross-instance round-trip + invert-check. Plan: .engine/state/stoke-plan-12a.md.
+#12b · Launch-at-login: SMAppService.mainApp behind a LoginItem protocol + fake · S0
+  blocked-by #12a. Logic/registration API testable via fake now; the LIVE login-item
+  registration is observable only from a bundled .app.
+  [DEP: blocked-by #13 — SMAppService.mainApp requires the packaged .app + login-item domain; a
+  `swift run` binary can't register a real login item, so the LIVE prove needs #13's bundle] → #13
+#12c · MenuBarExtra shell wiring: toggle→TilingActor.activate, target-app picker, permission fix-it row · S0
+  blocked-by #12a, #12b, #19b (needs the full engine incl. events()). SwiftUI MenuBarExtra
+  `.window` style (RememBar; init() is the reliable delegate hook). Composes SettingsStore +
+  LoginItem + AccessibilityTrust probe + Privacy_Accessibility deep link into the shell. PROVE =
+  LIVE app launch + AX menu-bar enumeration (System Events → menu bar item) + CGWindowList
+  layer-25 window — NOT pixels (TRAP-1). Includes bundled-app prompt-path UX observation (spike 02).
 #13 · Packaging + CI: .app bundle, codesign, smoke scripts, test/release workflows · S0
-  blocked-by #12. Authority: docs/research/remembar-audit.md COPY/ADAPT table. Build script
+  blocked-by #12c. Authority: docs/research/remembar-audit.md COPY/ADAPT table. Build script
   (Info.plist heredoc, LSUIElement, sips/iconutil icon; glob resources — audit §8.4),
   inside-out ad-hoc codesign no --deep + verify strict, test-packaged-app.sh launch proof,
   monotonic build number (NOT dots-stripped — audit §8.5), SwiftLint + Semgrep + Dependabot,
