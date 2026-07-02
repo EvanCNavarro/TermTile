@@ -9,6 +9,7 @@
 @preconcurrency import ApplicationServices
 import AppKit
 import Foundation
+import TermTileCore  // spike-06: exercise the REAL MoveClassifier live (no inline copy)
 
 // The one private call the architecture allows itself (research doc :27-28,
 // AeroSpace/Rectangle precedent): AXUIElement → CGWindowID.
@@ -249,6 +250,157 @@ func observe(bundleID: String, seconds: Int, skipPerWindow: Bool) {
     }
     print("observe: done epochUs=\(nowEpochUs())")
     exit(registrationsOK ? 0 : 1)
+}
+
+// Spike 06 mode: drag-end / self-move tagging. Places a spike window at a known frame,
+// arms an app-level AXObserver, records a PendingMove expectation, drives ONE programmatic
+// move, and — GATED on a real AXWindowMoved firing for that window (audit B1: a ledger-only
+// verdict is spoofable; the moved-event fire is the gate, not a data line) — runs the REAL
+// TermTileCore.MoveClassifier three ways on the SAME observed frame: vs the recorded
+// expectation (→internal), vs an empty ledger (→external), vs a +100-shifted ledger
+// (→external). Exit 0 iff moved fired AND position actually changed AND all three verdicts
+// hold. Findings: docs/research/spikes/06-drag-end-detection.md
+nonisolated(unsafe) var dragMovedWindows: Set<CGWindowID> = []  // set on the run-loop thread only
+
+func dragprobe(bundleID: String, windowID: CGWindowID) {
+    setvbuf(stdout, nil, _IOLBF, 0)  // spike-05 F4: line-buffer for tail-ability
+    guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
+    else { print("dragprobe: \(bundleID) not running"); exit(1) }
+    let appEl = AXUIElementCreateApplication(app.processIdentifier)
+    let windows = (copyAttr(appEl, kAXWindowsAttribute).1 as? [AXUIElement]) ?? []
+    guard let win = windows.first(where: { w in
+        var id = CGWindowID(0)
+        return _AXUIElementGetWindow(w, &id) == .success && id == windowID
+    }) else { print("dragprobe: window \(windowID) not found in kAXWindows"); exit(1) }
+
+    func readFrame() -> CGRect {
+        var pos = CGPoint.zero, size = CGSize.zero
+        if let pv = copyAttr(win, kAXPositionAttribute).1, CFGetTypeID(pv) == AXValueGetTypeID() {
+            _ = AXValueGetValue(pv as! AXValue, .cgPoint, &pos)
+        }
+        if let sv = copyAttr(win, kAXSizeAttribute).1, CFGetTypeID(sv) == AXValueGetTypeID() {
+            _ = AXValueGetValue(sv as! AXValue, .cgSize, &size)
+        }
+        return CGRect(origin: pos, size: size)
+    }
+    func writeAttr(_ attr: String, _ v: AXValue) -> AXError {
+        AXUIElementSetAttributeValue(win, attr as CFString, v)
+    }
+    func posValue(_ p: CGPoint) -> AXValue { var q = p; return AXValueCreate(.cgPoint, &q)! }
+    func sizeValue(_ s: CGSize) -> AXValue { var t = s; return AXValueCreate(.cgSize, &t)! }
+
+    // AXEnhancedUserInterface off during writes (spike-04 F2 / research :58-59).
+    let euiWasOn = (copyAttr(appEl, "AXEnhancedUserInterface").1 as? Bool) == true
+    if euiWasOn { _ = AXUIElementSetAttributeValue(appEl, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse) }
+    defer { if euiWasOn { _ = AXUIElementSetAttributeValue(appEl, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue) } }
+
+    // Setup (events NOT gated): place at a known on-screen base so the measured +80 move
+    // can't clamp off-screen. size→pos→size (spike-04 ordering).
+    let base = CGRect(x: 200, y: 200, width: 800, height: 600)
+    _ = writeAttr(kAXSizeAttribute, sizeValue(base.size))
+    _ = writeAttr(kAXPositionAttribute, posValue(base.origin))
+    _ = writeAttr(kAXSizeAttribute, sizeValue(base.size))
+    usleep(200_000)  // settle before we start measuring
+    let preMove = readFrame()
+    print("dragprobe: placed base, preMove=\(rectStr(preMove))")
+
+    // Arm the observer AFTER placement so only the measured move is observed.
+    var obs: AXObserver?
+    guard AXObserverCreate(app.processIdentifier, { _, element, notification, _ in
+        let name = notification as String
+        guard name == "AXWindowMoved" || name == "AXWindowResized" else { return }
+        var wid = CGWindowID(0)
+        _ = _AXUIElementGetWindow(element, &wid)
+        print("event: name=\(name) id=\(wid) epochUs=\(nowEpochUs())")
+        dragMovedWindows.insert(wid)
+    }, &obs) == .success, let observer = obs
+    else { print("dragprobe: AXObserverCreate failed"); exit(1) }
+    for n in ["AXWindowMoved", "AXWindowResized"] {
+        _ = AXObserverAddNotification(observer, appEl, n as CFString, nil)
+    }
+    CFRunLoopAddSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(observer), .defaultMode)
+
+    // Record the expectation from the SAME readback path (audit SF4: size from live read,
+    // only position changes → no clamp risk), then drive the move.
+    let targetPos = CGPoint(x: preMove.origin.x + 80, y: preMove.origin.y + 80)
+    guard targetPos != preMove.origin else { print("dragprobe: target == current, no move"); exit(1) }
+    let expected = CGRect(origin: targetPos, size: preMove.size)
+    let nowEpoch = Date().timeIntervalSince1970
+    let pending = [PendingMove(windowID: windowID, expectedFrame: expected, expiresAtEpoch: nowEpoch + 2.0)]
+    print("dragprobe: expect=\(rectStr(expected)) armed epochUs=\(nowEpochUs())")
+    _ = writeAttr(kAXPositionAttribute, posValue(targetPos))
+
+    // Pump until the real AXWindowMoved for our window fires, or deadline (audit B1 gate).
+    let deadline = Date().addingTimeInterval(2.0)
+    while Date() < deadline && !dragMovedWindows.contains(windowID) {
+        _ = CFRunLoopRunInMode(.defaultMode, 0.1, false)
+    }
+    let movedFired = dragMovedWindows.contains(windowID)
+    usleep(100_000)
+    let observed = readFrame()
+    let posChanged = observed.origin != preMove.origin
+    let eps: CGFloat = 1.0
+    let vInternal = MoveClassifier.classify(windowID: windowID, observedFrame: observed,
+        nowEpoch: nowEpoch, pending: pending, epsilon: eps)
+    let vEmpty = MoveClassifier.classify(windowID: windowID, observedFrame: observed,
+        nowEpoch: nowEpoch, pending: [], epsilon: eps)
+    let shifted = [PendingMove(windowID: windowID,
+        expectedFrame: expected.offsetBy(dx: 100, dy: 100), expiresAtEpoch: nowEpoch + 2.0)]
+    let vShifted = MoveClassifier.classify(windowID: windowID, observedFrame: observed,
+        nowEpoch: nowEpoch, pending: shifted, epsilon: eps)
+
+    print("dragprobe: movedFired=\(movedFired) posChanged=\(posChanged) observed=\(rectStr(observed))")
+    print("dragprobe: verdict vsExpected=\(vInternal) vsEmpty=\(vEmpty) vsShifted+100=\(vShifted)")
+    let pass = movedFired && posChanged
+        && vInternal == .internal && vEmpty == .external && vShifted == .external
+    print("dragprobe: PASS=\(pass)")
+    exit(pass ? 0 : 1)
+}
+
+func rectStr(_ r: CGRect) -> String {
+    "(\(Int(r.origin.x)),\(Int(r.origin.y)) \(Int(r.width))x\(Int(r.height)))"
+}
+
+// Spike 06 mode: mouse-up feasibility for the drag-END signal. Uses the NON-prompting
+// CGPreflightListenEventAccess() (audit N12: CGRequestListenEventAccess would raise a TCC
+// dialog on Bobby's unattended screen — declined) as the reported signal, and only
+// attempts a listen-only CGEventTap for leftMouseUp if input monitoring is ALREADY
+// granted. Either outcome is a finding for #12's permission UX; does not gate #6 DONE.
+func mouseprobe(seconds: Int) {
+    setvbuf(stdout, nil, _IOLBF, 0)
+    let granted = CGPreflightListenEventAccess()
+    print("mouseprobe: inputMonitoringPreflight=\(granted)")
+    guard granted else {
+        print("mouseprobe: not granted — menu-bar app will need Input Monitoring for a "
+            + "global mouse-up CGEventTap (finding for #12). No prompt raised (preflight only).")
+        exit(0)
+    }
+    let mask = CGEventMask(1 << CGEventType.leftMouseUp.rawValue)
+    guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
+        options: .listenOnly, eventsOfInterest: mask,
+        callback: { _, _, event, _ in
+            print("mouseprobe: leftMouseUp observed epochUs=\(nowEpochUs())")
+            return Unmanaged.passUnretained(event)
+        }, userInfo: nil)
+    else { print("mouseprobe: CGEvent.tapCreate returned nil despite preflight=true"); exit(0) }
+    CGEvent.tapEnable(tap: tap, enable: true)
+    let src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+    CFRunLoopAddSource(CFRunLoopGetCurrent(), src, .commonModes)
+    print("mouseprobe: listen-only leftMouseUp tap installed+enabled from bg process; "
+        + "watching \(seconds)s (reception during unattended run may be 0 — that is expected)")
+    let deadline = Date().addingTimeInterval(Double(seconds))
+    while Date() < deadline { _ = CFRunLoopRunInMode(.defaultMode, deadline.timeIntervalSinceNow, false) }
+    print("mouseprobe: done epochUs=\(nowEpochUs())")
+    exit(0)
+}
+
+if CommandLine.arguments.count >= 4, CommandLine.arguments[1] == "dragprobe",
+   let winID = UInt32(CommandLine.arguments[3]) {
+    dragprobe(bundleID: CommandLine.arguments[2], windowID: CGWindowID(winID))
+}
+
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "mouseprobe" {
+    mouseprobe(seconds: CommandLine.arguments.count >= 3 ? (Int(CommandLine.arguments[2]) ?? 2) : 2)
 }
 
 if CommandLine.arguments.count >= 4, CommandLine.arguments[1] == "observe",

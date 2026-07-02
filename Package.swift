@@ -19,8 +19,11 @@ let package = Package(
         .target(name: "TermTileKit", dependencies: ["TermTileCore"]),
         // Thin shell: MenuBarExtra UI + composition root. Depends on Kit and Core.
         .executableTarget(name: "TermTile", dependencies: ["TermTileKit", "TermTileCore"]),
-        // Spike 02/03 probe (throwaway-quality, committed): observes TCC trust attribution.
-        .executableTarget(name: "AXProbe"),
+        // Spike 02-06 probe (throwaway-quality, committed): observes TCC trust, AX
+        // enumeration/frame-writes/events, and drag-end/self-move tagging. Depends on the
+        // PURE core so the spike-06 dragprobe exercises the REAL MoveClassifier (no
+        // inline-copy drift); TermTileCore has no AppKit/AX so it cannot pollute the probe.
+        .executableTarget(name: "AXProbe", dependencies: ["TermTileCore"]),
         .testTarget(name: "TermTileCoreTests", dependencies: ["TermTileCore"]),
         .testTarget(name: "TermTileKitTests", dependencies: ["TermTileKit"])
     ]

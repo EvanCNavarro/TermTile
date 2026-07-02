@@ -58,7 +58,15 @@ committed; findings notes are the durable output.
   ~5s undo-close retention anomaly recorded → #9 must ignore unknown-hash destroys.)
   blocked-by #3. Findings: event latency/ordering; kAXUIElementDestroyed per-window
   registration; CFRunLoop→Swift 6 strict-concurrency bridging (dedicated run-loop thread?).
-#6 · Spike: drag-end detection — debounced kAXMoved vs CGEventTap/NSEvent global mouse-up · S0
+#6 · Spike: drag-end detection — debounced kAXMoved vs CGEventTap/NSEvent global mouse-up · DONE
+  (2026-07-02: swift test 36/36 green [12 new MoveClassifier] + invert-check red 8-issue oracle;
+  PROVE live on real iTerm2 window 78924 — REAL MoveClassifier tags a programmatic move internal
+  vs recorded expectation / external vs empty / external vs +100-shifted on the SAME AX-delivered
+  frame [dragprobe B1-gated on actual AXWindowMoved fire]; mouseprobe: leftMouseUp CGEventTap
+  installs+enabled from bg process [Input-Monitoring preflight=true, non-prompting]. Findings:
+  docs/research/spikes/06-drag-end-detection.md. RECOMMEND global mouse-up (cadence-independent).
+  B2 ledger contract: caller records ONE PendingMove per AX write. Live human-drag cadence +
+  mouse-up reception recorded UNVERIFIED [needs human-in-loop]. Plan: .engine/state/stoke-plan-6.md.)
   blocked-by #5. Read Rectangle + Amethyst source first (Trace), then probe both; pick
   with evidence. Also verify self-move tagging (ignore our own AX writes).
 #7 · Spike: macOS native tiling interference — AX frame sets vs Sequoia/Tahoe snap · S0
