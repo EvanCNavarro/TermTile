@@ -1,5 +1,5 @@
 import Testing
-@testable import TermTile
+@testable import TermTileCore
 
 @Suite("WindowEventKind")
 struct WindowEventTests {

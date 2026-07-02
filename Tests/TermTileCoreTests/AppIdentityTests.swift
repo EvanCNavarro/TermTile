@@ -1,4 +1,4 @@
-@testable import TermTile
+@testable import TermTileCore
 import Testing
 
 @Suite("App identity — one name everywhere")

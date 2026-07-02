@@ -12,9 +12,16 @@ let package = Package(
         .executable(name: "AXProbe", targets: ["AXProbe"])
     ],
     targets: [
-        .executableTarget(name: "TermTile"),
-        // Spike 02 probe (throwaway-quality, committed): observes TCC trust attribution.
+        // Functional core (ADR-0001): pure layout math + domain types. CoreGraphics only —
+        // NO AppKit / ApplicationServices (enforced by .engine/checks/core-purity.sh).
+        .target(name: "TermTileCore"),
+        // The window-system port + AX adapters (ADR-0001). Depends on Core.
+        .target(name: "TermTileKit", dependencies: ["TermTileCore"]),
+        // Thin shell: MenuBarExtra UI + composition root. Depends on Kit and Core.
+        .executableTarget(name: "TermTile", dependencies: ["TermTileKit", "TermTileCore"]),
+        // Spike 02/03 probe (throwaway-quality, committed): observes TCC trust attribution.
         .executableTarget(name: "AXProbe"),
-        .testTarget(name: "TermTileTests", dependencies: ["TermTile"])
+        .testTarget(name: "TermTileCoreTests", dependencies: ["TermTileCore"]),
+        .testTarget(name: "TermTileKitTests", dependencies: ["TermTileKit"])
     ]
 )

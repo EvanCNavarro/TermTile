@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import TermTile
+@testable import TermTileCore
 
 @Suite("FrameMath")
 struct FrameMathTests {

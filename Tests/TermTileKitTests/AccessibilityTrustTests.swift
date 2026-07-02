@@ -1,4 +1,4 @@
-@testable import TermTile
+@testable import TermTileKit
 import Testing
 
 @Suite("Accessibility trust wrapper — stable invariants only (trust value is environment-dependent)")

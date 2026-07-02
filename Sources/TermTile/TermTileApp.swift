@@ -1,4 +1,5 @@
 import SwiftUI
+import TermTileCore
 
 @main
 struct TermTileApp: App {

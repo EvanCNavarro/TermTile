@@ -67,7 +67,12 @@ committed; findings notes are the durable output.
 
 ## Phase B — the informed build (unblocked by Phase A evidence)
 
-#8 · Layout math: pure TermTileCore module — (windowCount, visibleFrame, gaps) → column-of-2 frames · S1
+#8 · Layout math: pure TermTileCore module — (windowCount, visibleFrame, gaps) → column-of-2 frames · DONE
+  (2026-07-02: swift test 24/24 green [13 migrated + 11 TileLayout property tests] + invert-check
+  red across N=1..12; ADR-0001 four-target split LIVE [Core←Kit←TermTile + AXProbe]; core-purity.sh
+  fail-closed [catches @preconcurrency import], bait-proven; TileLayout.frames public, column-major.
+  Skeptic audit caught F1 BLOCKER: cross-module AppIdentity needs public. Plan: .engine/state/
+  stoke-plan-8.md; receipt: .engine/state/receipt.md Row 8.)
   blocked-by #1 only (pure function, no AX). ARCHITECTURE IS BINDING: docs/decisions/
   0001-functional-core-imperative-shell.md — this task ALSO creates the target split
   (TermTileCore/TermTileKit/TermTile/AXProbe), migrates AppIdentity/WindowFiltering/

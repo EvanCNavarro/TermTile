@@ -1,5 +1,5 @@
 import Testing
-@testable import TermTile
+@testable import TermTileKit
 
 @Suite("WindowFiltering")
 struct WindowFilteringTests {
