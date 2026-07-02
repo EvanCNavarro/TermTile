@@ -55,12 +55,19 @@ committed; findings notes are the durable output.
 
 ## Phase B — the informed build (unblocked by Phase A evidence)
 
-#8 · Layout math: pure module — (windowCount, visibleFrame, gaps) → column-of-2 frames · S1
-  blocked-by #1 only (pure function, no AX). columns=ceil(N/2), even widths, last column
-  1 window if N odd; property tests across N=1..12 + edge frames. TDD showcase task.
-#9 · Window state model: cached AX snapshot + self-move tagging (Swindler pattern) · S0
-  blocked-by #3, #5. Instant reads from cache; async writes; `external` flag on moves;
-  reduced AX messaging timeout (~1s).
+#8 · Layout math: pure TermTileCore module — (windowCount, visibleFrame, gaps) → column-of-2 frames · S1
+  blocked-by #1 only (pure function, no AX). ARCHITECTURE IS BINDING: docs/decisions/
+  0001-functional-core-imperative-shell.md — this task ALSO creates the target split
+  (TermTileCore/TermTileKit/TermTile/AXProbe), migrates AppIdentity/WindowFiltering/
+  AccessibilityTrust into their targets, and adds .engine/checks/core-purity.sh.
+  columns=ceil(N/2), even widths, last column 1 window if N odd; property tests across
+  N=1..12 + edge frames. TDD showcase task.
+#9 · Window state model: reducer + expectation ledger (ADR-0001 rules 3-4) · S0
+  blocked-by #3, #5, #8 (needs the target split). Pure reducer (State, WindowEvent) →
+  (State, [FrameCommand]) in Core; pending-expectation ledger (CGWindowID → frame ±
+  epsilon + deadline) classifies moves internal/external as a pure function; TilingActor
+  in Kit owns the AX adapter + cached snapshot (instant reads, serialized async writes,
+  ~1s AX messaging timeout). Swindler = pattern reference only, never a dependency.
 #10 · Tiling engine: toggle-on retile + auto-retile on create/destroy · S0
   blocked-by #4, #5, #8, #9. PROVE: live iTerm2 windows snap to grid on toggle and on
   new-window; screencapture evidence.
