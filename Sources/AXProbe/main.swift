@@ -119,11 +119,14 @@ func setFrame(bundleID: String, windowID: CGWindowID, target: CGRect) {
     var targetPos = target.origin
     var allOK = true
     func timedWrite(_ label: String, _ attr: String, _ value: AXValue) {
+        // epochUs stamped in-process at write time: shell-side stamps carry ~40-120ms
+        // spawn overhead that swamps AX latencies (spike-05 audit F5).
+        let epochUs = Int(Date().timeIntervalSince1970 * 1_000_000)
         let start = clock.now
         let err = AXUIElementSetAttributeValue(win, attr as CFString, value)
         let micros = (clock.now - start) / .microseconds(1)
         allOK = allOK && err == .success
-        print("write: \(label) err=\(err.rawValue) us=\(Int(micros))")
+        print("write: \(label) err=\(err.rawValue) us=\(Int(micros)) epochUs=\(epochUs)")
     }
     guard let sizeVal = AXValueCreate(.cgSize, &targetSize),
           let posVal = AXValueCreate(.cgPoint, &targetPos)
@@ -160,6 +163,98 @@ func setFrame(bundleID: String, windowID: CGWindowID, target: CGRect) {
         print("eui: restored err=\(on.rawValue)")
     }
     exit(allOK && stable ? 0 : 1)
+}
+
+// Spike 05 mode: per-pid AXObserver — register app-level window notifications +
+// per-window destroyed, then pump the run loop for N seconds printing one line per
+// event. Which registration actually reports destruction (app-level vs per-window)
+// is DATA observed at fire time — app-level registration accepts silently (audit F2).
+// Exit 0 iff the app-level created/moved/resized registrations returned .success.
+// Findings: docs/research/spikes/05-axobserver-events.md
+func nowEpochUs() -> Int { Int(Date().timeIntervalSince1970 * 1_000_000) }
+
+// skipPerWindow (--no-perwin) suppresses per-window + on-the-fly destroyed
+// registration, isolating whether APP-level AXUIElementDestroyed fires for window
+// destruction at all — fire/no-fire is the only way to answer that (audit F2).
+func observe(bundleID: String, seconds: Int, skipPerWindow: Bool) {
+    // Line-buffer stdout: when redirected to a file, Swift print() is FULLY buffered
+    // and an abnormal exit destroys the whole event log (audit F4, verified).
+    setvbuf(stdout, nil, _IOLBF, 0)
+    guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
+    else { print("observe: \(bundleID) not running"); exit(1) }
+    let pid = app.processIdentifier
+
+    var obs: AXObserver?
+    // No-capture closure → @convention(c); the observer arrives as the callback's own
+    // first parameter, so re-registration needs no globals/refcon (audit F1 shape).
+    let createErr = AXObserverCreate(pid, { observer, element, notification, _ in
+        let name = notification as String
+        var windowID = CGWindowID(0)
+        let idErr = _AXUIElementGetWindow(element, &windowID)
+        // Inlined WindowEventKind mapping — pointer: Sources/TermTile/WindowEvent.swift
+        // (executable targets can't import executables, spike-04 audit F4 precedent).
+        let kind: String
+        switch name {
+        case "AXWindowCreated": kind = "created"
+        case "AXWindowMoved": kind = "moved"
+        case "AXWindowResized": kind = "resized"
+        case "AXUIElementDestroyed": kind = "destroyed"
+        default: kind = "unmapped"
+        }
+        // CFHash correlates create↔destroy even if id resolution fails on the dead
+        // element (audit F11/W3).
+        print("event: epochUs=\(nowEpochUs()) name=\(name) kind=\(kind) id=\(windowID) "
+            + "idErr=\(idErr.rawValue) hash=\(CFHash(element))")
+        if name == "AXWindowCreated", !CommandLine.arguments.contains("--no-perwin") {
+            // Register destroyed on the new window on-the-fly; -25209
+            // (already registered) is benign (audit F3).
+            let err = AXObserverAddNotification(
+                observer, element, "AXUIElementDestroyed" as CFString, nil)
+            print("event: destroyed-on-new hash=\(CFHash(element)) err=\(err.rawValue)")
+        }
+    }, &obs)
+    guard createErr == .success, let observer = obs
+    else { print("observe: AXObserverCreate err=\(createErr.rawValue)"); exit(1) }
+
+    let appEl = AXUIElementCreateApplication(pid)
+    var registrationsOK = true
+    for name in ["AXWindowCreated", "AXWindowMoved", "AXWindowResized", "AXUIElementDestroyed"] {
+        let err = AXObserverAddNotification(observer, appEl, name as CFString, nil)
+        print("register: app-level \(name) err=\(err.rawValue)")
+        // App-level destroyed acceptance/fire behavior is the (b) finding, not a
+        // pass/fail criterion (audit F2).
+        if name != "AXUIElementDestroyed" { registrationsOK = registrationsOK && err == .success }
+    }
+    if skipPerWindow {
+        print("register: per-window destroyed SKIPPED (--no-perwin)")
+    } else {
+        let windows = (copyAttr(appEl, kAXWindowsAttribute).1 as? [AXUIElement]) ?? []
+        var perWindowOK = 0
+        for win in windows {
+            var windowID = CGWindowID(0)
+            _ = _AXUIElementGetWindow(win, &windowID)
+            let err = AXObserverAddNotification(observer, win, "AXUIElementDestroyed" as CFString, nil)
+            if err == .success { perWindowOK += 1 }
+            else { print("register: per-window destroyed id=\(windowID) err=\(err.rawValue)") }
+        }
+        print("register: per-window destroyed ok=\(perWindowOK)/\(windows.count)")
+    }
+
+    CFRunLoopAddSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(observer), .defaultMode)
+    print("observe: pid=\(pid) armed epochUs=\(nowEpochUs()) deadline=\(seconds)s")
+    let deadline = Date().addingTimeInterval(Double(seconds))
+    while Date() < deadline {
+        // rc=3 kCFRunLoopRunTimedOut is the expected deadline exit (audit F9).
+        _ = CFRunLoopRunInMode(.defaultMode, deadline.timeIntervalSinceNow, false)
+    }
+    print("observe: done epochUs=\(nowEpochUs())")
+    exit(registrationsOK ? 0 : 1)
+}
+
+if CommandLine.arguments.count >= 4, CommandLine.arguments[1] == "observe",
+   let seconds = Int(CommandLine.arguments[3]) {
+    observe(bundleID: CommandLine.arguments[2], seconds: seconds,
+            skipPerWindow: CommandLine.arguments.contains("--no-perwin"))
 }
 
 if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "enumerate" {

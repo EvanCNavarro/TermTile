@@ -48,7 +48,14 @@ committed; findings notes are the durable output.
   clamp + EUI=true interference unobservable here → recorded as explicit UNVERIFIED.)
   blocked-by #3. Findings: does iTerm2 honor kAXPosition/kAXSize promptly? min-size
   clamping? latency per write? Repeat probe on WezTerm for parity (app-agnostic goal).
-#5 · Spike: AXObserver per-pid — windowCreated/moved/destroyed events for iTerm2 · S0
+#5 · Spike: AXObserver per-pid — windowCreated/moved/destroyed events for iTerm2 · DONE
+  (2026-07-02: swift test 13/13 green + invert-check red; PROVE live on real iTerm2 —
+  3 lifecycles n=3: app-level registration fires ALL FOUR notifications incl. destroyed
+  (--no-perwin run CONTRADICTS research :23-24 per-window-required claim); ordering
+  strict created→resized→moved→destroyed; moved/resized 6-14ms in-process; destroyed
+  element id unresolvable (-25201) → #9 needs element-hash→id map; naive Swift 6
+  closure shape compiles clean; findings: docs/research/spikes/05-axobserver-events.md.
+  ~5s undo-close retention anomaly recorded → #9 must ignore unknown-hash destroys.)
   blocked-by #3. Findings: event latency/ordering; kAXUIElementDestroyed per-window
   registration; CFRunLoop→Swift 6 strict-concurrency bridging (dedicated run-loop thread?).
 #6 · Spike: drag-end detection — debounced kAXMoved vs CGEventTap/NSEvent global mouse-up · S0
