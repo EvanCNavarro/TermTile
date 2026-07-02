@@ -23,7 +23,10 @@ let package = Package(
         // enumeration/frame-writes/events, and drag-end/self-move tagging. Depends on the
         // PURE core so the spike-06 dragprobe exercises the REAL MoveClassifier (no
         // inline-copy drift); TermTileCore has no AppKit/AX so it cannot pollute the probe.
-        .executableTarget(name: "AXProbe", dependencies: ["TermTileCore"]),
+        // Also depends on Kit (#19a livecheck): the throwaway probe drives the REAL
+        // AXWindowSystem adapter live against iTerm2, so the grid-snap PROVE exercises product
+        // code, not an inline copy (same no-drift rationale as the Core dep).
+        .executableTarget(name: "AXProbe", dependencies: ["TermTileCore", "TermTileKit"]),
         .testTarget(name: "TermTileCoreTests", dependencies: ["TermTileCore"]),
         .testTarget(name: "TermTileKitTests", dependencies: ["TermTileKit"])
     ]

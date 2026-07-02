@@ -132,3 +132,21 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   receipt to strip accurate `defer`/`skip` references to dodge the scanner; that corrupts the
   durable record. Not a repo-state check (gate-tooling behavior); fix path is teaching il7 to
   exempt inline-code tokens, out of scope for the beat that hits it.
+
+### TRAP-14: `Task {}` from main.swift top-level + `sem.wait()` on main = deadlock (silent, zero output)
+- what happened: #19a's `livecheck`/`livecheck-ids` dispatched async work as `Task { await … }`
+  followed by `sem.wait()` to block sync `main`. The probe hung forever producing ZERO stdout.
+  `sample <pid>` showed ONE thread — the main thread parked in `semaphore_wait_trap` — and NO
+  worker thread: the Task closure never ran. Cause: top-level statements in a Swift `main.swift`
+  execute on the `@MainActor`, so a bare `Task {}` INHERITS main-actor isolation and enqueues onto
+  the main thread — which is already blocked in `sem.wait()` → deadlock. Compounded by a second
+  masking bug: `setvbuf(stdout, nil, _IOLBF, 0)` (size 0) does NOT line-buffer a pipe, so even
+  progress that DID run would have been invisible until exit. Cost a full live-diagnosis cycle
+  (create windows → hang → kill → re-instrument with stderr markers → sample).
+- warning: to run async work from a synchronous `main.swift` entry that blocks on a semaphore, use
+  `Task.detached { … }` (global executor, no main-actor inheritance), and resolve any `@MainActor`
+  values (e.g. `NSScreen`) BEFORE the wait, passing them in — never touch them from the detached
+  task (it would hop back to the blocked main thread and re-deadlock). For live-probe progress,
+  write stage markers to `FileHandle.standardError` (unbuffered), don't trust `setvbuf` line-mode
+  on a pipe. Enforced by .engine/checks/axprobe-detached-task.sh (exit non-zero iff a bare `Task {`
+  appears in Sources/AXProbe/main.swift — the sync-main entry must use `Task.detached`).

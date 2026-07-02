@@ -10,6 +10,7 @@
 import AppKit
 import Foundation
 import TermTileCore  // spike-06: exercise the REAL MoveClassifier live (no inline copy)
+import TermTileKit   // #19a livecheck: drive the REAL AXWindowSystem adapter live (no inline copy)
 
 // The one private call the architecture allows itself (research doc :27-28,
 // AeroSpace/Rectangle precedent): AXUIElement → CGWindowID.
@@ -401,6 +402,140 @@ func mouseprobe(seconds: Int) {
     exit(0)
 }
 
+// #19a mode: LIVE grid-snap PROVE of the REAL TermTileKit.AXWindowSystem adapter (FL-1).
+// Creates its OWN throwaway iTerm2 windows (NEVER touches Bobby's existing windows — the adapter's
+// writeFrame is driven on the throwaway ids only, not a global activate()), computes a real grid
+// via AXGeometry (origin-screen flip) + TileLayout, snaps the throwaways with the REAL adapter,
+// asserts via adapter.readFrame that they landed, screencaptures the grid, then closes the
+// throwaways tolerantly (already-gone = success, TRAP-8; addressed by `window id N`, TRAP-6).
+// events() is NOT exercised here — the AXObserver bridge + new-window snap is #19b.
+// Exit 0 iff every throwaway write returned success AND its readback origin snapped within EPS.
+func runOsascript(_ script: String) -> String? {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    p.arguments = ["-e", script]
+    let out = Pipe(), err = Pipe()
+    p.standardOutput = out; p.standardError = err
+    do { try p.run() } catch { print("livecheck: osascript launch failed: \(error)"); return nil }
+    p.waitUntilExit()
+    let data = out.fileHandleForReading.readDataToEndOfFile()
+    let s = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    if p.terminationStatus != 0 {
+        let e = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        print("livecheck: osascript rc=\(p.terminationStatus) err=\(e.trimmingCharacters(in: .whitespacesAndNewlines))")
+    }
+    return s
+}
+
+/// The adapter-driving CORE of the PROVE (steps 1,3,4,5): given already-created throwaway window
+/// `ids`, build the REAL `AXWindowSystem`, compute a real `TileLayout` grid on the origin screen's
+/// AX visibleFrame, snap each id with the REAL `adapter.writeFrame`, assert the snap via
+/// `adapter.readFrame`, and screencapture the result. Uses NO AppleEvents (the caller owns window
+/// create/close), so it runs under only Accessibility trust (terminal-attributed, spike-02/04).
+/// Returns `true` iff every write succeeded AND its readback origin snapped within EPS.
+func stderrLog(_ s: String) { FileHandle.standardError.write(Data((s + "\n").utf8)) }
+
+/// The origin screen's AX visibleFrame — read `NSScreen` (a `@MainActor` type) HERE, on the
+/// main-actor top-level context, so the async snap work never hops back to a main thread that is
+/// parked in `sem.wait()` (that deadlock cost a full live diagnosis, TRAP-14). Points, origin
+/// screen (never `.main` — audit Axis 3). Returns `.null` if there is no screen.
+@MainActor func originAXVisibleFrame() -> CGRect {
+    guard let screen = NSScreen.screens.first else { return .null }
+    let axVisible = AXGeometry.axFrame(fromCocoa: screen.visibleFrame, displayHeight: screen.frame.height)
+    print("livecheck: originScreen H=\(Int(screen.frame.height)) "
+        + "cocoaVisible=\(rectStr(screen.visibleFrame)) → axVisible=\(rectStr(axVisible))")
+    return axVisible
+}
+
+func snapWindows(bundleID: String, ids: [CGWindowID], axVisible: CGRect, outPNG: String) async -> Bool {
+    let eps: CGFloat = 2.0            // spike-04: non-clamped readbacks are integer-exact
+    let gap: CGFloat = 12
+    guard axVisible != .null else { print("livecheck: no screen"); return false }
+
+    // (3) The REAL adapter + a real TileLayout grid for `ids.count` windows.
+    let adapter = AXWindowSystem(bundleID: bundleID)
+    let targets = TileLayout.frames(count: ids.count, visibleFrame: axVisible, gap: gap)
+
+    // Opportunistic enumerate findings (audit Axis 6: log, no deep treatment — cross-Space/
+    // fullscreen completeness is #19b). Includes Bobby's windows READ-ONLY; none are moved.
+    stderrLog("stage: adapter.tileableWindows()")
+    let enumerated = await adapter.tileableWindows()
+    print("livecheck: adapter enumerated \(enumerated.count) tileable iTerm2 window(s); "
+        + "throwaways present=\(ids.allSatisfy { id in enumerated.contains { $0.id == id } })")
+
+    // (4) Snap each throwaway with the REAL adapter.writeFrame; assert via adapter.readFrame.
+    var allSnapped = true
+    for (k, id) in ids.enumerated() {
+        let target = targets[k]
+        stderrLog("stage: writeFrame id=\(id) (\(k + 1)/\(ids.count))")
+        let ok = await adapter.writeFrame(id, to: target)
+        usleep(120_000)  // spike-04: settle < 50ms; generous
+        stderrLog("stage: readFrame id=\(id)")
+        let back = await adapter.readFrame(id) ?? .null
+        let dOrigin = max(abs(back.origin.x - target.origin.x), abs(back.origin.y - target.origin.y))
+        let dSize = max(abs(back.width - target.width), abs(back.height - target.height))
+        let snapped = ok && dOrigin <= eps       // origin is tiling-critical; size may cell-quantize
+        allSnapped = allSnapped && snapped
+        print("livecheck: id=\(id) write=\(ok) target=\(rectStr(target)) readback=\(rectStr(back)) "
+            + "dOrigin=\(Int(dOrigin)) dSize=\(Int(dSize)) snapped=\(snapped)")
+    }
+
+    // (5) Screencapture the rendered grid (FL-9 / MEMORY: screencapture = rendered-reality proof).
+    stderrLog("stage: screencapture → \(outPNG)")
+    usleep(300_000)
+    let cap = Process()
+    cap.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    cap.arguments = ["-x", outPNG]
+    try? cap.run(); cap.waitUntilExit()
+    print("livecheck: screencapture rc=\(cap.terminationStatus) → \(outPNG)")
+    return allSnapped
+}
+
+func livecheck(bundleID: String, count: Int, axVisible: CGRect, outPNG: String) async {
+    setvbuf(stdout, nil, _IOLBF, 0)  // spike-05 F4: line-buffer for tail-ability
+
+    // (2) Create N throwaway iTerm2 windows; iTerm2's AppleScript window id == CGWindowID (spike-03).
+    var ids: [CGWindowID] = []
+    for i in 0..<count {
+        guard let out = runOsascript(
+            "tell application \"iTerm2\" to return id of (create window with default profile)"),
+            let raw = UInt32(out) else {
+            print("livecheck: window \(i) create failed (out=nil/non-numeric)"); break
+        }
+        ids.append(CGWindowID(raw))
+    }
+    print("livecheck: created throwaway ids=\(ids.map(String.init).joined(separator: ","))")
+    guard ids.count == count else {
+        print("livecheck: FAIL — created \(ids.count)/\(count) windows")
+        for id in ids { _ = runOsascript("tell application \"iTerm2\" to close (window id \(id))") }
+        exit(1)
+    }
+    usleep(400_000)  // settle: let the new windows register in kAXWindows
+
+    let allSnapped = await snapWindows(bundleID: bundleID, ids: ids, axVisible: axVisible, outPNG: outPNG)
+
+    // (6) Close throwaways — SEPARATE from evidence (TRAP-9), tolerate already-gone (TRAP-8).
+    for id in ids {
+        _ = runOsascript("tell application \"iTerm2\" to close (window id \(id))")
+    }
+    print("livecheck: closed throwaways; PASS=\(allSnapped)")
+    exit(allSnapped ? 0 : 1)
+}
+
+/// Consent-free variant: the CALLER (a shell with AppleEvents consent) creates + closes the
+/// throwaway windows and passes their ids here; AXProbe drives ONLY the AX write path, so a
+/// freshly-rebuilt ad-hoc AXProbe (new cdhash → AppleEvents consent reset, spike-02) can still
+/// prove the live grid snap without a blocking Automation-consent dialog. Same real adapter,
+/// same screencapture, same PASS criterion as `livecheck`.
+func livecheckIDs(bundleID: String, ids: [CGWindowID], axVisible: CGRect, outPNG: String) async {
+    setvbuf(stdout, nil, _IOLBF, 0)
+    print("livecheck-ids: driving \(ids.count) pre-created ids="
+        + "\(ids.map(String.init).joined(separator: ","))")
+    let allSnapped = await snapWindows(bundleID: bundleID, ids: ids, axVisible: axVisible, outPNG: outPNG)
+    print("livecheck-ids: PASS=\(allSnapped)")
+    exit(allSnapped ? 0 : 1)
+}
+
 // Spike #7 mode: macOS Sequoia native-tiling interference / suppression surface. Exercises
 // the REAL TermTileCore.NativeTilingSettings resolver against the REAL com.apple.WindowManager
 // preference domain — (1) enumerates the 4 tiling toggles' live state, (2) proves the GLOBAL
@@ -477,6 +612,41 @@ func tilecheck() {
 
 if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "tilecheck" {
     tilecheck()
+}
+
+// livecheck <bundle-id> [count] [outPNG] — #19a LIVE grid-snap PROVE. Dispatched via a
+// semaphore-blocked `Task.detached`: top-level main.swift code runs on the @MainActor, so a plain
+// `Task {}` INHERITS main-actor isolation and enqueues onto the main thread — which is then parked
+// in `sem.wait()` → deadlock (TRAP-14). `Task.detached` runs on the global executor instead. The
+// origin screen (a @MainActor NSScreen read) is resolved HERE, before the wait, and passed in so
+// the detached work never hops back to the blocked main thread. livecheck calls exit() itself.
+if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "livecheck" {
+    let n = CommandLine.arguments.count >= 4 ? (Int(CommandLine.arguments[3]) ?? 4) : 4
+    let png = CommandLine.arguments.count >= 5
+        ? CommandLine.arguments[4] : "docs/verification/task19a-grid.png"
+    let axVisible = originAXVisibleFrame()
+    let sem = DispatchSemaphore(value: 0)
+    Task.detached {
+        await livecheck(bundleID: CommandLine.arguments[2], count: n, axVisible: axVisible, outPNG: png)
+        sem.signal()
+    }
+    sem.wait()
+}
+
+// livecheck-ids <bundle-id> <outPNG> <id1> [id2 …] — #19a consent-free LIVE PROVE. The caller
+// (a shell holding AppleEvents consent) creates+closes the throwaway windows; AXProbe drives only
+// the AX write path, so a rebuilt ad-hoc binary (AppleEvents consent reset, spike-02) still proves
+// the live snap. Same `Task.detached` + pre-resolved axVisible model as livecheck (TRAP-14).
+if CommandLine.arguments.count >= 5, CommandLine.arguments[1] == "livecheck-ids" {
+    let ids: [CGWindowID] = CommandLine.arguments[4...].compactMap { UInt32($0) }
+    let axVisible = originAXVisibleFrame()
+    let sem = DispatchSemaphore(value: 0)
+    Task.detached {
+        await livecheckIDs(bundleID: CommandLine.arguments[2], ids: ids,
+                           axVisible: axVisible, outPNG: CommandLine.arguments[3])
+        sem.signal()
+    }
+    sem.wait()
 }
 
 if CommandLine.arguments.count >= 4, CommandLine.arguments[1] == "dragprobe",

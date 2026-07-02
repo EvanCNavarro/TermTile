@@ -152,18 +152,44 @@ committed; findings notes are the durable output.
   bridged to an AsyncStream on the MAIN run loop. Tested against the fake (no live AX here).
   [DEP: shape — the actor's apply-commands write path cannot exist until #10's reducer emits
   commands] → #10.
-#19 · AX adapter (real WindowSystem) + LIVE iTerm2 PROVE: toggle-on + new-window snap-to-grid · S0
-  blocked-by #18. Promote AXProbe enumerate/setFrame/observe into the real WindowSystem adapter
-  (imports ApplicationServices; the ONLY control surface — ADR rule 2); size→pos→size writes,
-  AXEnhancedUserInterface disable/restore INLINE (never defer — TRAP-12), coordinate flip (AX
-  top-left) + per-app min-size clamp via readback (iTerm2 73×67, never hardcode). Owns the
-  cross-Space kAXWindows-completeness + fullscreen-enumeration + spike-05 per-window-destroyed
-  questions re-homed from the old #10. PROVE (FL-1, this is where it lands): live iTerm2 windows
-  snap to grid on toggle-on and on new-window; screencapture evidence into docs/verification/.
+#19a · AX adapter WRITE-PATH (real WindowSystem: enumerate/readFrame/writeFrame) + AXGeometry flip + LIVE iTerm2 grid-snap PROVE · DONE
+  (2026-07-03: swift test 86/86 green [+5 AXGeometry] + invert-check red [AXGeometry sign flip →
+  all 5 flip tests fail, restored green]; PROVE LIVE on real iTerm2 — the REAL TermTileKit
+  AXWindowSystem adapter enumerated 9 tileable windows [throwaways present=true] and writeFramed 4
+  throwaway windows to a real TileLayout 2×2 grid: readback EXACT [dOrigin=0 dSize=0 all snapped],
+  screencapture docs/verification/task19a-grid.png shows the clean grid, PASS=true rc=0, session
+  restored to baseline 17 windows. AXGeometry [Core, pure] + AXWindowSystem [Kit, actor, events()
+  = finished-empty stub] land; core-purity.sh PASS. Consent restructure: window create/close moved
+  to the AppleEvents-consented shell + AXProbe `livecheck-ids` [AX-only, terminal-attributed
+  Accessibility trust], so a rebuilt ad-hoc binary proves live without a blocking Automation-
+  consent dialog [spike-02 cdhash reset]. Hit TRAP-14 [bare `Task {` from @MainActor main + sem.wait
+  = deadlock → Task.detached + pre-resolved NSScreen; axprobe-detached-task.sh]. Plan:
+  .engine/state/stoke-plan-19.md; receipt: .engine/state/receipt.md Row 8. events()+WindowIDMap+
+  new-window-snap = #19b.)
+  (SPLIT from old #19 by stoke-plan-19.md §E brutal audit — the AXObserver→AsyncStream event
+  bridge is genuinely-new run-loop-thread-confined code, not a promotion; FL-1 is met by the live
+  grid snap alone, so #19b isolates the concurrency risk.)
+  blocked-by #18. Promote AXProbe enumerate/setFrame/observe→ WRITE side into TermTileKit
+  AXWindowSystem (imports ApplicationServices; the ONLY control surface — ADR rule 2):
+  size→pos→size writes, AXEnhancedUserInterface disable/restore via `defer` (actor method returns
+  normally — NOT inline; TRAP-12/axprobe-no-defer.sh are exit()-specific, guard only AXProbe),
+  min-size clamp READBACK logged-only (iTerm2 73×67, never hardcode, no compensation — YAGNI).
+  AXGeometry (pure Core, red-first): Cocoa→AX top-left flip off the ORIGIN screen (never .main).
+  events() = finished empty stub this beat. PROVE (FL-1): AXProbe `livecheck` creates throwaway
+  iTerm2 windows, the REAL adapter writeFrames them to a real TileLayout grid, readback snaps;
+  screencapture → docs/verification/. Plan: .engine/state/stoke-plan-19.md.
+#19b · AX adapter EVENT BRIDGE (AXObserver→AsyncStream) + LIVE new-window snap PROVE · S0
+  blocked-by #19a. Owns: the run-loop-thread-confined WindowIDMap (create-seed + destroy-resolve
+  via spike-05 -25201 + dedupe), the module-global continuation bridge (ADR rule 4 — a
+  @convention(c) callback can't capture self), the internal-echo-swallow loop proven LIVE, AND the
+  re-homed cross-Space kAXWindows-completeness + fullscreen-enumeration + per-window-destroyed
+  questions. PROVE (FL-1): a freshly-created iTerm2 window fires a .created WindowEvent through
+  adapter.events() and the running TilingActor snaps it to grid; screencapture → docs/verification/.
 #11 · Drag snap-reorder: nearest-slot assignment on drag end + shuffle · S0
-  blocked-by #6, #19.
+  blocked-by #6, #19b (needs adapter.events() for external-move/drag detection).
 #12 · Menu-bar app shell: toggle, target-app picker, launch-at-login, settings · S0
-  blocked-by #1; UI wiring to engine blocked-by #19. SwiftUI MenuBarExtra `.window` style
+  blocked-by #1; UI wiring to engine blocked-by #19b (needs the full engine incl. events()).
+  SwiftUI MenuBarExtra `.window` style
   (RememBar pattern; delegate-adaptor gotcha: init() is the reliable hook). Launch-at-login
   via SMAppService.mainApp (RememBar lacks this — audit §8.6). Settings = UserDefaults
   behind a small protocol (audit §8.7). Permission UX: probe + Privacy_Accessibility deep
@@ -180,12 +206,13 @@ committed; findings notes are the durable output.
   stable signing identity (Developer ID or self-created cert) so .app TCC grants survive
   rebuilds (spike 02 proved ad-hoc cdhash pinning voids grants; required before #14).
 #14 · E2E proof: fresh-boot flow — grant TCC, toggle on, spawn 5 terminals, verify grid, drag-reorder · S0
-  blocked-by #11, #13. Recorded evidence (screencaptures) into docs/verification/.
+  blocked-by #11, #13, #19b. Recorded evidence (screencaptures) into docs/verification/.
 
 ## Phase C — deferred (do not pull forward without a reason)
 
 #15 · Multi-display + Spaces awareness · S0
-  [DEP: shape — needs #19's live engine surface]
+  [DEP: shape — needs #19b's live engine surface; also owns the multi-display AXGeometry flip
+  reference (#19a uses the single origin screen)]
 #16 · Sparkle auto-updates + release pipeline · S0
   [DEP: blocked-by #13]
 #17 · Gap/padding settings UI + per-app profiles · S0
