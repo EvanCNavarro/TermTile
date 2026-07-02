@@ -94,3 +94,13 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   line as their anchor — wrap prose, never tokens. Always invoke cycle_close.py with
   `--task-refs-path .engine/state/task-refs.json`. Enforced by
   .engine/checks/reorient-next-task-cited.sh.
+
+### TRAP-11: Edit tool rejects files inspected only via Bash `cat` (recurred 3× in one beat)
+- what happened: Package.swift, AXProbe/main.swift, and BACKLOG.md were all read with a
+  Bash `cat`/`sed` first, so the first `Edit` on each failed with "File has not been read
+  yet" — the Edit/Write tools only honor a prior READ-TOOL call, not a shell cat. Cost a
+  re-Read round-trip on every one.
+- warning: before editing a file, open it with the Read TOOL (not Bash cat) at least once
+  this session — batch-reading via cat is fine for inspection but does NOT satisfy the edit
+  precondition. Not mechanically checkable from repo state (harness-interaction discipline,
+  no artifact).
