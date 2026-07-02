@@ -45,3 +45,21 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   dropping the rest of the command chain.
 - warning: in zsh, quote separator strings (`echo "==="`) or use `---`; never bare `=…`
   words in Bash-tool commands.
+
+### TRAP-6: iTerm2 AppleScript rejects `whose` filters on windows — use `window id N`
+- what happened: spike-03 cleanup ran `close (first window whose id is 78056)` and got
+  `-1719 Invalid index`, aborting the whole cleanup script (the windows turned out to be
+  externally closed already; post-state was verified equal to baseline three ways).
+- warning: iTerm2's scripting dialect does not support `whose` clauses on windows —
+  address windows by the direct element form `window id N` (that id is also the CGWindowID
+  and the _AXUIElementGetWindow id). Enforced by .engine/checks/no-iterm-whose-filter.sh.
+
+### TRAP-7: new traps get inserted mid-file, breaking numeric order (recurred 2 beats)
+- what happened: beat 1 inserted TRAP-4/5 above TRAP-3; this beat inserted TRAP-6 above
+  TRAP-5. Same edit reflex both times: anchoring the insertion on the last-READ heading
+  instead of the end of file. (Bonus this beat: bait-testing the ordering check on the
+  LIVE traps.md and reverting with `git checkout --` restored the stale index version,
+  silently deleting this very trap — bait-test checks on a COPY, or re-verify the file
+  after any index-restore.)
+- warning: APPEND new traps at the end of traps.md — anchor Edit old_string on the final
+  lines of the LAST trap, never on a heading. Enforced by .engine/checks/traps-ordered.sh.

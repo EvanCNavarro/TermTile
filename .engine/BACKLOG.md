@@ -31,7 +31,12 @@ committed; findings notes are the durable output.
   blocked-by #1. Findings: how trust behaves for an unsigned dev binary vs bundled .app.
   KNOWN (audit §6): ad-hoc signing pins TCC to the per-build cdhash → every rebuild resets
   the Accessibility grant. Measure the dev-loop pain; decide when Developer ID lands.
-#3 · Spike: enumerate iTerm2 windows (AXUIElementCreateApplication → kAXWindowsAttribute) · S0
+#3 · Spike: enumerate iTerm2 windows (AXUIElementCreateApplication → kAXWindowsAttribute) · DONE
+  (2026-07-02: swift test 6/6 green + invert-check red; PROVE live on real iTerm2 — tabs =
+  ONE AXWindow (15→16 with 3 tabs); _AXUIElementGetWindow ids match CGWindowList 17/17 AND
+  equal AppleScript window ids; minimized windows stay enumerated with real frames; findings:
+  docs/research/spikes/03-iterm2-window-enumeration.md. Fullscreen edge → #7, Spaces
+  completeness → #9.)
   blocked-by #2. Findings: do tabs present as one AXWindow? window IDs via
   _AXUIElementGetWindow? minimized/fullscreen filtering (kAXMinimizedAttribute,
   AXSubrole standard-vs-panel)?
