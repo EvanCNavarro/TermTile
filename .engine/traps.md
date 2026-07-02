@@ -63,3 +63,22 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   after any index-restore.)
 - warning: APPEND new traps at the end of traps.md — anchor Edit old_string on the final
   lines of the LAST trap, never on a heading. Enforced by .engine/checks/traps-ordered.sh.
+
+### TRAP-8: spike-created windows vanish externally before scripted cleanup (recurred 2 beats)
+- what happened: spike-03 AND spike-04 both had their created iTerm2 windows externally
+  closed (plausibly by the user after the done-note cue) before the scripted close ran;
+  spike-04's `close window id N` errored -1728, and because it led an `&&` chain, the
+  baseline-verification steps behind it never ran and had to be rerun manually.
+- warning: spike cleanup must (1) check existence first or treat -1728/already-gone as
+  SUCCESS, and (2) never put the close and the verification in one `&&` chain — verify
+  as a separate command so a failed close can't swallow the evidence. Not mechanically
+  checkable from repo state (cleanup scripts are transient).
+
+### TRAP-9: invert-check evidence lost by compounding flip+run+restore+run in one command
+- what happened: spike-04's first invert-check piped both the red run and the restored
+  green run through one compound command with a narrow grep/head filter; the outputs
+  interleaved and the failing `✘` line was not visibly captured, forcing a full redo.
+- warning: run the invert-check as SEPARATE commands — flip, run (capture the `✘`
+  assertion line explicitly), restore, run (capture green) — never fuse them; proof that
+  isn't visibly in the output is not proof (FL-1). Not mechanically checkable from repo
+  state (transient process discipline).

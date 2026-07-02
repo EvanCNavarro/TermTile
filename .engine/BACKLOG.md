@@ -40,7 +40,12 @@ committed; findings notes are the durable output.
   blocked-by #2. Findings: do tabs present as one AXWindow? window IDs via
   _AXUIElementGetWindow? minimized/fullscreen filtering (kAXMinimizedAttribute,
   AXSubrole standard-vs-panel)?
-#4 · Spike: set one iTerm2 window frame (size→position→size, AXEnhancedUserInterface off) · S0
+#4 · Spike: set one iTerm2 window frame (size→position→size, AXEnhancedUserInterface off) · DONE
+  (2026-07-02: swift test 11/11 green + invert-check red; PROVE live — 5-frame battery on
+  spike-created iTerm2 window 78164: err=0, readback exact, settle <50ms, 0.2-24ms/op;
+  min clamp 73x67 iTerm2 / 73x29 WezTerm; WezTerm full parity, window 78184, no
+  AppleScript needed; findings: docs/research/spikes/04-frame-writes.md. Cross-display
+  clamp + EUI=true interference unobservable here → recorded as explicit UNVERIFIED.)
   blocked-by #3. Findings: does iTerm2 honor kAXPosition/kAXSize promptly? min-size
   clamping? latency per write? Repeat probe on WezTerm for parity (app-agnostic goal).
 #5 · Spike: AXObserver per-pid — windowCreated/moved/destroyed events for iTerm2 · S0
