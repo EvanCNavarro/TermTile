@@ -23,7 +23,11 @@ committed; findings notes are the durable output.
   red-first test. ONE NAME EVERYWHERE from commit 1: target/product `TermTile`, bundle ID
   `dev.ecn.apps.termtile` (RememBar's naming drift required cleanup machinery — audit §8.9).
   Unblocks every other task; also turns the loop's build∧test signals live.
-#2 · Spike: Accessibility TCC — detect + prompt (AXIsProcessTrustedWithOptions) · S0
+#2 · Spike: Accessibility TCC — detect + prompt (AXIsProcessTrustedWithOptions) · DONE
+  (2026-07-02: swift test 4/4 green + invert-check red; PROVE live on real TCC surface —
+  shell-exec trusted=true via terminal attribution, bundled .app trusted=false with denied
+  cdhash-pinned row observed in system TCC.db; findings:
+  docs/research/spikes/02-accessibility-tcc.md. Decision: Developer ID lands with #13.)
   blocked-by #1. Findings: how trust behaves for an unsigned dev binary vs bundled .app.
   KNOWN (audit §6): ad-hoc signing pins TCC to the per-build cdhash → every rebuild resets
   the Accessibility grant. Measure the dev-loop pain; decide when Developer ID lands.
@@ -62,14 +66,18 @@ committed; findings notes are the durable output.
   (RememBar pattern; delegate-adaptor gotcha: init() is the reliable hook). Launch-at-login
   via SMAppService.mainApp (RememBar lacks this — audit §8.6). Settings = UserDefaults
   behind a small protocol (audit §8.7). Permission UX: probe + Privacy_Accessibility deep
-  link + blocked-status fix-it row (adapt FileSearchAccessChecker pattern).
+  link + blocked-status fix-it row (adapt FileSearchAccessChecker pattern). Includes live
+  prompt-path UX observation from the bundled-app identity (spike 02: prompt can't fire
+  from a pre-trusted shell; bundle probing pollutes TCC).
 #13 · Packaging + CI: .app bundle, codesign, smoke scripts, test/release workflows · S0
   blocked-by #12. Authority: docs/research/remembar-audit.md COPY/ADAPT table. Build script
   (Info.plist heredoc, LSUIElement, sips/iconutil icon; glob resources — audit §8.4),
   inside-out ad-hoc codesign no --deep + verify strict, test-packaged-app.sh launch proof,
   monotonic build number (NOT dots-stripped — audit §8.5), SwiftLint + Semgrep + Dependabot,
   release.yml with VirusTotal + provenance attestation + SHA-256 ("virus testing"), AND
-  swift test in CI gating release (RememBar's biggest gap — audit §8.1-8.3).
+  swift test in CI gating release (RememBar's biggest gap — audit §8.1-8.3). Includes a
+  stable signing identity (Developer ID or self-created cert) so .app TCC grants survive
+  rebuilds (spike 02 proved ad-hoc cdhash pinning voids grants; required before #14).
 #14 · E2E proof: fresh-boot flow — grant TCC, toggle on, spawn 5 terminals, verify grid, drag-reorder · S0
   blocked-by #11, #13. Recorded evidence (screencaptures) into docs/verification/.
 
