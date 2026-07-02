@@ -15,7 +15,9 @@ committing build architecture. Each spike lands as a small SPM target/test + a f
 note in `docs/research/spikes/NN-<slug>.md`. Spike code is throwaway-quality but
 committed; findings notes are the durable output.
 
-- `#1 · SPM package skeleton: menu-bar app target + Swift Testing wired, swift build/test green · S1`
+- `#1 · SPM package skeleton: menu-bar app target + Swift Testing wired, swift build/test green · DONE`
+  (2026-07-02: swift test 2/2 green + invert-check red; live launch proven — AX "status menu"
+  + CGWindowList layer-25 window; evidence: docs/verification/task1-spm-skeleton.md)
   Foundational. Package.swift (macOS 14+, Swift 6), Sources/TermTile/ executable target,
   Tests/TermTileTests/ (Swift Testing `@Suite`/`@Test`, per RememBar) with one real
   red-first test. ONE NAME EVERYWHERE from commit 1: target/product `TermTile`, bundle ID

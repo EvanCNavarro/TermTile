@@ -4,4 +4,29 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
 ≥2 independent stacks), PROMOTE it up to the base library at
 `~/.claude/skills/locomotion/reference/traps-index.md` and leave a pointer here.
 
-(none yet)
+### TRAP-1: menu-bar screenshot proof is unreliable under menu-bar managers
+- what happened: PROVE for task #1 tried to screenshot the TermTile status item twice; a
+  menu-bar manager (the "…" overflow) had parked the item off-screen (CGWindowList showed
+  its window at X=-4721, layer 25), so full-menu-bar screencaptures could never show it.
+- warning: on this Mac, prove a status item exists via read-only AX enumeration (System
+  Events → process → menu bar item "status menu") + CGWindowList (owner window at layer 25
+  = NSStatusWindowLevel), not via pixels. Screenshot evidence of menu-bar items is only
+  valid if the item is actually visible.
+
+### TRAP-2: gate-artifact line-shape — deferrals must be single-line, task-refs keys bare ints
+- what happened: first cycle_close.py run failed 3 gates: deferral bullets were wrapped
+  across lines (row7 only reads the first physical line, so the `→ #N` was invisible),
+  entries lacked `[DEP: …]` tags (il12), and task-refs.json used "#12"-style keys which
+  int() rejects, silently emptying the map (il_capture).
+- warning: in receipt/bubble Deferred sections write each entry as ONE physical line ending
+  `[DEP: external|shape|blocked-by #N|scope-cohesion: <shape>] → #N`; task-refs.json keys
+  are bare integers ("12", not "#12").
+
+### TRAP-3: cycle_close.py reads cwc.config.json at project root, not .engine/config.json
+- what happened: the Row-8 PROVE gate reported "no live-execution surface touched" even
+  though Sources/*.swift changed, because the gate script loads `cwc.config.json` (absent)
+  and .engine/config.json's subprocess_globs never reach it; untracked files are also
+  invisible to its `git diff HEAD` file list.
+- warning: keep `cwc.config.json` at project root mirroring .engine/config.json's live-surface
+  globs (enforced by .engine/checks/cwc-config-present.sh), and don't trust Row-8 "N/A" on a
+  cycle whose new files are still untracked — verify live anyway.
