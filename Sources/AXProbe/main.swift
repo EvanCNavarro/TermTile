@@ -290,9 +290,15 @@ func dragprobe(bundleID: String, windowID: CGWindowID) {
     func sizeValue(_ s: CGSize) -> AXValue { var t = s; return AXValueCreate(.cgSize, &t)! }
 
     // AXEnhancedUserInterface off during writes (spike-04 F2 / research :58-59).
+    // NOTE: restore is INLINE before the single terminal exit() — NOT `defer`. AXProbe
+    // terminates via exit(), which SKIPS Swift defer (spike-07 R1, verified: /tmp/deferexit
+    // never printed DEFER-RAN). A `defer` here silently left iTerm2's enhanced-UI OFF after
+    // every dragprobe run. Enforced by .engine/checks/axprobe-no-defer.sh.
     let euiWasOn = (copyAttr(appEl, "AXEnhancedUserInterface").1 as? Bool) == true
     if euiWasOn { _ = AXUIElementSetAttributeValue(appEl, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse) }
-    defer { if euiWasOn { _ = AXUIElementSetAttributeValue(appEl, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue) } }
+    func restoreEUI() {
+        if euiWasOn { _ = AXUIElementSetAttributeValue(appEl, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue) }
+    }
 
     // Setup (events NOT gated): place at a known on-screen base so the measured +80 move
     // can't clamp off-screen. size→pos→size (spike-04 ordering).
@@ -354,6 +360,7 @@ func dragprobe(bundleID: String, windowID: CGWindowID) {
     let pass = movedFired && posChanged
         && vInternal == .internal && vEmpty == .external && vShifted == .external
     print("dragprobe: PASS=\(pass)")
+    restoreEUI()  // inline restore before exit() (see restoreEUI note above)
     exit(pass ? 0 : 1)
 }
 
@@ -392,6 +399,84 @@ func mouseprobe(seconds: Int) {
     while Date() < deadline { _ = CFRunLoopRunInMode(.defaultMode, deadline.timeIntervalSinceNow, false) }
     print("mouseprobe: done epochUs=\(nowEpochUs())")
     exit(0)
+}
+
+// Spike #7 mode: macOS Sequoia native-tiling interference / suppression surface. Exercises
+// the REAL TermTileCore.NativeTilingSettings resolver against the REAL com.apple.WindowManager
+// preference domain — (1) enumerates the 4 tiling toggles' live state, (2) proves the GLOBAL
+// suppression surface is programmatically controllable via a write→readback→restore round-trip
+// on ALL FOUR keys, one at a time. Uses CFPreferences at (currentUser, anyHost) — the exact
+// scope `defaults`/`defaults write` touch (spike-07 R5), NOT CopyAppValue (which merges
+// NSGlobalDomain + both host layers). Restore is INLINE + atexit, NEVER defer (R1). Findings:
+// docs/research/spikes/07-native-tiling-interference.md
+nonisolated(unsafe) let tileDomain = "com.apple.WindowManager" as CFString  // immutable, shared-safe
+// Armed with the in-flight key's prior value ONLY during its round-trip window, so an
+// unexpected exit() restores exactly the one key we mutated (belt to the inline restore, R1b).
+nonisolated(unsafe) var tileRestore: [(key: CFString, prior: Bool?)] = []
+
+func tileRead(_ key: CFString) -> Bool? {
+    guard let v = CFPreferencesCopyValue(key, tileDomain,
+        kCFPreferencesCurrentUser, kCFPreferencesAnyHost) else { return nil }
+    if CFGetTypeID(v) == CFBooleanGetTypeID() { return CFBooleanGetValue((v as! CFBoolean)) }
+    return (v as? NSNumber)?.boolValue  // defensive: a non-CFBoolean stored value
+}
+func tileWrite(_ key: CFString, _ value: Bool?) {
+    // nil deletes the key (restores "absent"); a Bool writes the CFBoolean.
+    let v: CFPropertyList? = value.map { $0 ? kCFBooleanTrue : kCFBooleanFalse }
+    CFPreferencesSetValue(key, v, tileDomain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
+    CFPreferencesSynchronize(tileDomain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
+}
+func tileRestoreAll() { for e in tileRestore { tileWrite(e.key, e.prior) } }
+
+func tilecheck() {
+    setvbuf(stdout, nil, _IOLBF, 0)  // spike-05 F4: line-buffer for tail-ability
+    // Manual-recovery hint BEFORE any mutation (R1c): a SIGKILL runs neither the inline
+    // restore nor atexit, so a human needs the recovery command up front.
+    print("tilecheck: SAFETY — the 4 tiling keys are ABSENT (OS default) on this Mac; if this "
+        + "probe is hard-killed mid-round-trip, restore a stuck key with e.g. "
+        + "`defaults delete com.apple.WindowManager EnableTilingByEdgeDrag`")
+    print("tilecheck: macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
+
+    // (1) Enumerate live state via the REAL TermTileCore resolver.
+    var storedMap: [NativeTilingToggle: Bool?] = [:]
+    for t in NativeTilingToggle.allCases {
+        let stored = tileRead(t.rawValue as CFString)
+        storedMap[t] = stored
+        let resolved = NativeTilingSettings.isEnabled(t, storedValue: stored)
+        print("tilecheck: \(t.rawValue) stored=\(stored.map(String.init) ?? "absent") "
+            + "resolved=\(resolved) isAutoSnapPath=\(NativeTilingToggle.autoSnapPaths.contains(t))")
+    }
+    let anyActive = NativeTilingSettings.anyAutoSnapPathActive(storedMap)
+    print("tilecheck: anyAutoSnapPathActive=\(anyActive) (REAL com.apple.WindowManager read)")
+
+    // (2) Round-trip ALL FOUR keys ONE AT A TIME (min blast radius, R3).
+    atexit { tileRestoreAll() }  // belt-and-suspenders to the inline restore (R1b)
+    var allOK = true
+    for t in NativeTilingToggle.allCases {
+        let key = t.rawValue as CFString
+        let prior = tileRead(key)
+        tileRestore = [(key, prior)]           // arm atexit for THIS key's window
+        tileWrite(key, false)                  // suppress
+        let afterSet = tileRead(key)
+        tileWrite(key, prior)                  // restore (inline; nil deletes)
+        let afterRestore = tileRead(key)
+        tileRestore = []                       // window closed — nothing left to restore
+        let setOK = (afterSet == false)
+        let restoreOK = (afterRestore == prior)
+        allOK = allOK && setOK && restoreOK
+        print("tilecheck: roundtrip \(t.rawValue) prior=\(prior.map(String.init) ?? "absent") "
+            + "afterSetFalse=\(afterSet.map(String.init) ?? "absent") "
+            + "afterRestore=\(afterRestore.map(String.init) ?? "absent") "
+            + "setOK=\(setOK) restoreOK=\(restoreOK)")
+    }
+    // PASS iff every key round-tripped (writable + restored) AND the live read showed the
+    // expected all-default-on auto-snap state (Q2: suppression surface is controllable).
+    print("tilecheck: PASS=\(allOK && anyActive)")
+    exit(allOK && anyActive ? 0 : 1)
+}
+
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "tilecheck" {
+    tilecheck()
 }
 
 if CommandLine.arguments.count >= 4, CommandLine.arguments[1] == "dragprobe",

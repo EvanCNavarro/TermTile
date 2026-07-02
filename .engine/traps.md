@@ -104,3 +104,31 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   this session — batch-reading via cat is fine for inspection but does NOT satisfy the edit
   precondition. Not mechanically checkable from repo state (harness-interaction discipline,
   no artifact).
+
+### TRAP-12: C `exit()` skips Swift `defer` — restore/cleanup in an exit()-terminating tool never runs
+- what happened: spike-07's plan mitigated a "leaves a system pref disabled if the probe dies
+  mid-round-trip" risk with a `defer`-guaranteed restore. A compiled micro-probe
+  (/tmp/deferexit: `defer { print("DEFER-RAN") }; exit(0)`) proved `exit()` SKIPS `defer`
+  entirely — only `atexit` handlers run. The skeptic then found a LIVE instance already
+  shipped: AXProbe `dragprobe` set `defer { restore AXEnhancedUserInterface }` then
+  `exit(pass ? … )`, so iTerm2's enhanced-UI was silently left OFF after every dragprobe run.
+- warning: in any tool that terminates via `exit()` (all of AXProbe), NEVER rely on `defer`
+  for restore/cleanup — it is a latent no-op. Restore INLINE before the single terminal
+  `exit()` (belt: register via `atexit`, which DOES run; plus a printed manual-recovery
+  command since neither fires on SIGKILL/crash). Enforced by
+  .engine/checks/axprobe-no-defer.sh (exit non-zero iff a `defer {` statement appears in
+  Sources/AXProbe/main.swift).
+
+### TRAP-13: cycle_close.py il7 gate false-fails on the literal Swift keyword `defer`/`skip`
+- what happened: closing spike-07 (a beat whose SUBJECT is the Swift `defer` bug), the
+  il7_skip_recommendation gate emitted `ready_to_bubble: false` — "11 skip-recommendations
+  lack RISK/CORRECTNESS/DEPENDENCY justification (TRAP-044)". All 11 hits were the literal
+  Swift keyword `defer` in the receipt (documenting the bug fix), NOT work-deferrals. The
+  gate's skip-lexicon (cycle_close.py:638-642 `\bskip\b|\bdefer\b|\bpostpone\b|…`) collides
+  with code tokens. The REAL deferral gates (il_capture_deferrals, il12, row7) all PASSED.
+- warning: when a beat's subject is one of the skip-lexicon words as CODE (`defer`, `skip`,
+  `postpone`), il7 will false-fail. The correct response is a DOCUMENTED false-positive
+  OVERRIDE at bubble (18/19 pass + PROVE live + real-deferral gates green) — NEVER edit the
+  receipt to strip accurate `defer`/`skip` references to dodge the scanner; that corrupts the
+  durable record. Not a repo-state check (gate-tooling behavior); fix path is teaching il7 to
+  exempt inline-code tokens, out of scope for the beat that hits it.

@@ -69,7 +69,16 @@ committed; findings notes are the durable output.
   mouse-up reception recorded UNVERIFIED [needs human-in-loop]. Plan: .engine/state/stoke-plan-6.md.)
   blocked-by #5. Read Rectangle + Amethyst source first (Trace), then probe both; pick
   with evidence. Also verify self-move tagging (ignore our own AX writes).
-#7 · Spike: macOS native tiling interference — AX frame sets vs Sequoia/Tahoe snap · S0
+#7 · Spike: macOS native tiling interference — AX frame sets vs Sequoia/Tahoe snap · DONE
+  (2026-07-02: swift test 44/44 green [8 new NativeTilingSettings] + invert-check red; PROVE
+  live on real com.apple.WindowManager — tilecheck exercises the REAL Core resolver + round-trips
+  ALL 4 Sequoia tiling keys write-false→readback→restore, PASS=true, domain fully restored [all
+  keys absent pre AND post]. Findings: Q1 native tiling is user-gesture-only → does NOT contest
+  AX writes [auto case inherits spike-04's stable readback; manual-tile-resist UNVERIFIED,
+  human-in-loop]; Q2 global suppression = 4 WindowManager keys [proven controllable], NO per-app
+  opt-out API. Fixed pre-existing dragprobe defer-restore bug [exit() skips defer → TRAP-12 +
+  axprobe-no-defer.sh]. Findings: docs/research/spikes/07-native-tiling-interference.md; plan:
+  .engine/state/stoke-plan-7.md. Phase A grounding COMPLETE.)
   blocked-by #4. Findings: does native tiling fight programmatic frames; per-app or
   global suppression options.
 
