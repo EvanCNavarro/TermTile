@@ -536,6 +536,107 @@ func livecheckIDs(bundleID: String, ids: [CGWindowID], axVisible: CGRect, outPNG
     exit(allSnapped ? 0 : 1)
 }
 
+// #19b mode: LIVE PROVE of the REAL AXObserver→AsyncStream event bridge (adapter.events()) + the
+// new-window snap (FL-1). Consent-free: the SHELL creates+closes the throwaway iTerm2 window (so a
+// rebuilt ad-hoc AXProbe with reset AppleEvents consent doesn't hit a blocking dialog, spike-02);
+// AXProbe only OBSERVES + AX-writes (Accessibility trust, terminal-attributed). AXProbe ARMS
+// `adapter.events()` ON MAIN (observer on the main run loop), prints "armed", then the shell creates
+// ONE window. A `Task.detached` consumer runs the REAL `TilingActor` over `adapter.events()`: the
+// real `.created` event snaps the new window to a 1-window grid; its size→pos→size echoes classify
+// `.internal` (ledger) and never re-tile; on close a real `.destroyed` event carries the RIGHT id
+// (resolved via `WindowIDMap`, NOT -25201/0). Main PUMPS the run loop (NEVER sem.wait — TRAP-14) so
+// the callback fires. Exit 0 iff a real `.created` (id≠0, non-nil frame) snapped within EPS AND a
+// real `.destroyed` (id≠0 via the map) for the SAME id arrived.
+// Lock-guarded probe bookkeeping: written by the detached consumer (pool thread), read by main after
+// each pump. (This is the PROBE's own state; the bridge's continuation/WindowIDMap confinement lives
+// inside the adapter.)
+let evLock = NSLock()
+nonisolated(unsafe) var evCreatedID: CGWindowID?
+nonisolated(unsafe) var evDestroyedID: CGWindowID?
+nonisolated(unsafe) var evSnapOK = false
+nonisolated(unsafe) var evReadback = CGRect.null
+
+func livecheckEvents(bundleID: String, axVisible: CGRect, outPNG: String) {
+    setvbuf(stdout, nil, _IOLBF, 0)  // spike-05 F4: line-buffer for tail-ability
+    guard axVisible != .null else { print("livecheck-events: no screen"); exit(1) }
+    let gap: CGFloat = 12, eps: CGFloat = 2
+    let adapter = AXWindowSystem(bundleID: bundleID)
+    let config = TileConfig(isEnabled: true, visibleFrame: axVisible, gap: gap)
+    let actor = TilingActor(system: adapter, config: config, epsilon: eps, ttlSeconds: 5)
+    let expectedTarget = TileLayout.frames(count: 1, visibleFrame: axVisible, gap: gap)[0]
+
+    // ARM ON MAIN: events() installs the AXObserver on CFRunLoopGetMain() synchronously, so "armed"
+    // is truthful — the shell may create the window only after this line (AXObserver does NOT queue
+    // notifications that fired before registration; an earlier create would be missed forever).
+    let stream = adapter.events()
+    print("livecheck-events: armed epochUs=\(nowEpochUs()) expectedTarget=\(rectStr(expectedTarget)) "
+        + "— create ONE iTerm2 window now")
+
+    // Detached consumer (TRAP-14: detached, NOT bare Task): run the REAL actor over the real event
+    // stream and record the proof. The .created snap runs through the actual reduce→TileEngine→
+    // writeFrame path; echoes flow back and classify internal (no re-tile).
+    // Terminal windows quantize their size to whole character cells, so the snap asserts an EXACT
+    // origin (tiling-critical, spike-04 integer-exact) but a cell-tolerant size (#19a used origin
+    // only; here a lone window needs the SIZE too to prove the write acted — birth is ~665×458, the
+    // full-grid target is ~1704×1009, so a real snap is unmistakable within one char cell).
+    let sizeTol: CGFloat = 24
+    let consumer = Task.detached {
+        for await ev in stream {
+            stderrLog("event: kind=\(ev.kind) id=\(ev.windowID) frame=\(ev.frame.map(rectStr) ?? "nil")")
+            switch ev.kind {
+            case .created:
+                evLock.withLock { if evCreatedID == nil { evCreatedID = ev.windowID } }
+                try? await Task.sleep(nanoseconds: 500_000_000)   // settle the FRESH window before snapping (spike-04)
+                let pre = await adapter.readFrame(ev.windowID) ?? .null
+                await actor.handle(ev)                            // snap: reduce → TileEngine → writeFrame
+                try? await Task.sleep(nanoseconds: 400_000_000)   // settle the size→pos→size writes
+                let back = await adapter.readFrame(ev.windowID) ?? .null
+                let dOrigin = max(abs(back.origin.x - expectedTarget.origin.x),
+                                  abs(back.origin.y - expectedTarget.origin.y))
+                let dSize = max(abs(back.width - expectedTarget.width),
+                                abs(back.height - expectedTarget.height))
+                let ok = ev.frame != nil && ev.windowID != 0 && dOrigin <= eps && dSize <= sizeTol
+                evLock.withLock { evReadback = back; evSnapOK = ok }
+                stderrLog("snap: id=\(ev.windowID) pre=\(rectStr(pre)) target=\(rectStr(expectedTarget)) "
+                    + "readback=\(rectStr(back)) dOrigin=\(Int(dOrigin)) dSize=\(Int(dSize)) snapOK=\(ok)")
+                let cap = Process()
+                cap.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                cap.arguments = ["-x", outPNG]
+                try? cap.run(); cap.waitUntilExit()
+            case .destroyed:
+                await actor.handle(ev)                            // remove by id (resolved via the map)
+                evLock.withLock { evDestroyedID = ev.windowID }
+            case .moved, .resized:
+                await actor.handle(ev)                            // echoes of our own snap → reduce classifies internal
+            }
+        }
+    }
+
+    // PUMP main so the observer callback fires (the source is on CFRunLoopGetMain()). Deadline loop;
+    // early-exit once the full create→snap→destroy lifecycle is observed.
+    let deadline = Date().addingTimeInterval(20)
+    while Date() < deadline {
+        _ = CFRunLoopRunInMode(.defaultMode, 0.1, false)
+        let (c, d) = evLock.withLock { (evCreatedID, evDestroyedID) }
+        if c != nil, d != nil { break }
+    }
+    consumer.cancel()
+
+    let (createdID, destroyedID, snapOK, back) = evLock.withLock {
+        (evCreatedID, evDestroyedID, evSnapOK, evReadback)
+    }
+
+    let createdOK = (createdID ?? 0) != 0                 // bridge delivered a real .created id
+    let destroyedOK = (destroyedID ?? 0) != 0             // WindowIDMap resolved destroy (NOT -25201/0)
+    let destroyedMatches = destroyedID == createdID       // same window, round-tripped through the map
+    let pass = createdOK && snapOK && destroyedOK && destroyedMatches
+    print("livecheck-events: createdID=\(createdID.map(String.init) ?? "nil") snapOK=\(snapOK) "
+        + "readback=\(rectStr(back)) destroyedID=\(destroyedID.map(String.init) ?? "nil") "
+        + "destroyedMatchesCreated=\(destroyedMatches)")
+    print("livecheck-events: PASS=\(pass) → \(outPNG)")
+    exit(pass ? 0 : 1)
+}
+
 // Spike #7 mode: macOS Sequoia native-tiling interference / suppression surface. Exercises
 // the REAL TermTileCore.NativeTilingSettings resolver against the REAL com.apple.WindowManager
 // preference domain — (1) enumerates the 4 tiling toggles' live state, (2) proves the GLOBAL
@@ -647,6 +748,17 @@ if CommandLine.arguments.count >= 5, CommandLine.arguments[1] == "livecheck-ids"
         sem.signal()
     }
     sem.wait()
+}
+
+// livecheck-events <bundle-id> [outPNG] — #19b LIVE PROVE of the AXObserver event bridge. Runs on
+// MAIN (top-level is @MainActor): resolve axVisible (a @MainActor NSScreen read) HERE, arm the
+// observer on the main run loop, then PUMP main inside livecheckEvents (no sem.wait — TRAP-14; the
+// consumer is a Task.detached inside). Consent-free: the caller shell creates+closes the window.
+if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "livecheck-events" {
+    let png = CommandLine.arguments.count >= 4
+        ? CommandLine.arguments[3] : "docs/verification/task19b-events.png"
+    let axVisible = originAXVisibleFrame()
+    livecheckEvents(bundleID: CommandLine.arguments[2], axVisible: axVisible, outPNG: png)
 }
 
 if CommandLine.arguments.count >= 4, CommandLine.arguments[1] == "dragprobe",

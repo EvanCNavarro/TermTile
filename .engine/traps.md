@@ -150,3 +150,18 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   write stage markers to `FileHandle.standardError` (unbuffered), don't trust `setvbuf` line-mode
   on a pipe. Enforced by .engine/checks/axprobe-detached-task.sh (exit non-zero iff a bare `Task {`
   appears in Sources/AXProbe/main.swift — the sync-main entry must use `Task.detached`).
+
+### TRAP-15: live-effect PROVE passed on a value-match that COINCIDED with the pre-action state
+- what happened: #19b's first live event-bridge PROVE reported PASS=true, but the snapped window's
+  readback (12,50 665×458) was IDENTICAL to its birth frame — the window never actually moved. The
+  snap criterion asserted only `dOrigin <= eps`, and a fresh iTerm2 window is born at ~(12,50), which
+  by coincidence equals the 1-window grid target origin — so the origin check was a rubber stamp while
+  the size (665×458, never the target 1704×1009) proved the writeFrame had no lasting effect (a
+  no-settle snap of a ~250ms-old window races the app's own layout and gets reverted). An origin-only
+  proof of a lone window is spoofable by the birth position.
+- warning: a live-effect PROVE must require a DELTA from the PRE-action state (compare readback to the
+  frame captured BEFORE the action) OR assert the full target including the dimension the action is
+  supposed to change (here: the SIZE) — never assert only `post == target` on a coordinate that could
+  already hold that value. Also: settle a freshly-created window (spike-04 ~400-500ms) BEFORE an AX
+  frame write, or the write silently no-ops. Not mechanically checkable from repo state (proof-design
+  discipline, per-probe/transient) — no compiled check; this warning is the guard.

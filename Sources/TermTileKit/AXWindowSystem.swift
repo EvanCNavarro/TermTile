@@ -77,10 +77,47 @@ public actor AXWindowSystem: WindowSystem {
         return s1 == .success && p == .success && s2 == .success
     }
 
-    /// #19b bridges the real AXObserver here; #19a returns a finished-empty stream so the
-    /// port is satisfied and `TilingActor.run()` terminates immediately.
+    /// #19b — the REAL AXObserver→AsyncStream bridge (ADR-0001 rule 4; the ONLY place AX callbacks
+    /// live). `nonisolated` because a `@convention(c)` callback can't capture `self`: the bridge
+    /// state (continuation + `WindowIDMap` + the retained `AXObserver`) is module-global, written
+    /// ONLY on the run-loop (main) thread — single-writer, the proven spike-05/06 shape.
+    ///
+    /// The source is added to `CFRunLoopGetMain()` in `CFRunLoopCommonModes` (NOT `GetCurrent()` —
+    /// this runs on the actor executor, a pool thread whose loop never pumps; NOT `.defaultMode`
+    /// only — NSApp switches to eventTracking/modal during menu & drag). Production (MenuBarExtra,
+    /// #12) pumps main via NSApp; the AXProbe `livecheck-events` PROVE PUMPS main (never `sem.wait`,
+    /// TRAP-14). A not-running target returns a finished-empty stream — no observer, no hang.
     public nonisolated func events() -> AsyncStream<WindowEvent> {
-        AsyncStream { $0.finish() }
+        // Resolve the pid WITHOUT touching actor-isolated state (`appElement()` is isolated;
+        // `bundleID` is an immutable `let` → nonisolated-readable). Not running → finished-empty.
+        guard let app = NSRunningApplication
+            .runningApplications(withBundleIdentifier: bundleID).first else {
+            return AsyncStream { $0.finish() }
+        }
+        let pid = app.processIdentifier
+
+        return AsyncStream { continuation in
+            teardownEventObserver()                 // clean re-arm (single production adapter)
+            var observer: AXObserver?
+            guard AXObserverCreate(pid, axEventCallback, &observer) == .success,
+                  let obs = observer else { continuation.finish(); return }
+
+            // Publish bridge state BEFORE adding the source — no callback can fire until then, so
+            // the callback thread never observes a nil continuation / stale observer (WCGW8).
+            gEventContinuation = continuation
+            gWindowIDMap = WindowIDMap()            // create-seed only this beat (F3 → #12)
+            gEventObserver = obs                    // RETAIN — AddSource retains the source, not the
+                                                    // observer; without this ARC frees it → 0 events.
+
+            let appEl = AXUIElementCreateApplication(pid)
+            for name in ["AXWindowCreated", "AXWindowMoved", "AXWindowResized", "AXUIElementDestroyed"] {
+                _ = AXObserverAddNotification(obs, appEl, name as CFString, nil)   // spike-05: app-level fires all 4
+            }
+            CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .commonModes)
+
+            // Teardown on cancel/finish: remove the source + release the observer (no leak, safe re-arm).
+            continuation.onTermination = { _ in teardownEventObserver() }
+        }
     }
 
     // MARK: - AX helpers (promoted from AXProbe)
@@ -100,6 +137,55 @@ public actor AXWindowSystem: WindowSystem {
 private func _AXUIElementGetWindow(_ el: AXUIElement, _ id: UnsafeMutablePointer<CGWindowID>) -> AXError
 
 private let kAXEnhancedUserInterface = "AXEnhancedUserInterface"
+
+// MARK: - #19b AXObserver→AsyncStream bridge (module-global; a @convention(c) callback can't
+// capture self). ALL three are written ONLY on the run-loop (main) thread — single-writer, the
+// proven spike-05/06 shape. `gEventObserver` is the mandatory strong ref (CFRunLoopAddSource
+// retains the SOURCE, not the observer — without this the observer deallocs and no events fire).
+
+private nonisolated(unsafe) var gEventContinuation: AsyncStream<WindowEvent>.Continuation?
+private nonisolated(unsafe) var gWindowIDMap = WindowIDMap()
+private nonisolated(unsafe) var gEventObserver: AXObserver?
+
+/// Remove the source + release the observer + reset the bridge state. Called on stream
+/// termination and on re-arm. Removing a source from main's run loop off-thread is legal.
+private func teardownEventObserver() {
+    if let obs = gEventObserver {
+        CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .commonModes)
+    }
+    gEventObserver = nil
+    gEventContinuation = nil
+    gWindowIDMap = WindowIDMap()
+}
+
+/// The no-capture `@convention(c)` AX callback (spike-05: a closure literal with no captures
+/// converts to `AXObserverCallback`; the observer arrives as param 1 for on-the-fly re-registration).
+/// Maps the notification → `WindowEventKind`, resolves the CGWindowID (alive: direct
+/// `_AXUIElementGetWindow` + create-seed the map; destroy: `consumeDestroy` since the AX id is
+/// -25201/0 then, spike-05), reads a NON-nil frame for frame-bearing kinds (A5 — else reduce
+/// no-ops), and yields the `WindowEvent`. Unknown/deduped destroy → dropped (no phantom removal).
+private let axEventCallback: AXObserverCallback = { observer, element, notification, _ in
+    guard let kind = WindowEventKind(axNotification: notification as String) else { return }
+    let hash = CFHash(element)                       // UInt, stable dead-or-alive (spike-05)
+    let resolvedID: CGWindowID?
+    let windowFrame: CGRect?
+    switch kind {
+    case .created, .moved, .resized:
+        guard let id = windowID(of: element) else { return }   // alive → resolvable
+        resolvedID = id
+        windowFrame = frame(of: element)             // A5: non-nil frame so reduce can retile
+        if kind == .created {
+            gWindowIDMap.record(hash: hash, id: id)
+            // Belt (spike-05 (b)): also register destroyed on the new window; -25209 dup is benign.
+            _ = AXObserverAddNotification(observer, element, "AXUIElementDestroyed" as CFString, nil)
+        }
+    case .destroyed:
+        resolvedID = gWindowIDMap.consumeDestroy(hash: hash)   // -25201 → resolve via the map (once)
+        windowFrame = nil
+    }
+    guard let id = resolvedID else { return }        // unknown / duplicate destroy → drop
+    gEventContinuation?.yield(WindowEvent(windowID: id, kind: kind, frame: windowFrame))
+}
 
 private func copyAttr(_ el: AXUIElement, _ attr: String) -> CFTypeRef? {
     var value: CFTypeRef?

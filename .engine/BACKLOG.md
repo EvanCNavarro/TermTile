@@ -178,7 +178,23 @@ committed; findings notes are the durable output.
   events() = finished empty stub this beat. PROVE (FL-1): AXProbe `livecheck` creates throwaway
   iTerm2 windows, the REAL adapter writeFrames them to a real TileLayout grid, readback snaps;
   screencapture → docs/verification/. Plan: .engine/state/stoke-plan-19.md.
-#19b · AX adapter EVENT BRIDGE (AXObserver→AsyncStream) + LIVE new-window snap PROVE · S0
+#19b · AX adapter EVENT BRIDGE (AXObserver→AsyncStream) + LIVE new-window snap PROVE · DONE
+  (2026-07-03: swift test 91/91 green [+5 WindowIDMap] + invert-check red [consumeDestroy dedupe
+  dropped → keystone once-then-nil fails, restored green]; PROVE LIVE on real iTerm2 — AXProbe
+  livecheck-events armed the REAL adapter.events() on the main run loop; a shell-created window (80589)
+  fired a real .created through the bridge; the running TilingActor snapped it 665×458→1704×1009 EXACT
+  [dOrigin=0 dSize=0]; the snap's .resized echo classified .internal [ONE echo, no re-tile — loop break
+  live]; on close a real .destroyed carried the RIGHT id via WindowIDMap [not -25201/0,
+  destroyedMatchesCreated=true]; screencapture docs/verification/task19b-events.png, PASS=true rc=0,
+  session restored to 17. WindowIDMap [pure Core, CoreGraphics-only] + real AXWindowSystem.events()
+  [three module-global nonisolated(unsafe): continuation + WindowIDMap + RETAINED AXObserver — audit F1
+  BLOCKER: AddSource retains the source not the observer; @convention(c) callback on CFRunLoopGetMain()
+  in CFRunLoopCommonModes; onTermination teardown; not-running→finished-empty] + AXProbe livecheck-events
+  [consent-free, Task.detached + main-pump, TRAP-14] land; core-purity + axprobe-detached-task PASS.
+  Skeptic caught F1 BLOCKER [observer retention] + F2 [arm-before-create] + F3 [map create-seed-only,
+  enumerate-seed → #12] pre-build. Hit TRAP-15 [first run false-passed origin-only/no-settle → fixed:
+  settle-before-snap + size assertion]. Plan: .engine/state/stoke-plan-19b.md; receipt: receipt.md Row 8.
+  DEFERRED: WindowIDMap enumerate-seed → #12; cross-Space/fullscreen + clamp-compensation → #15.)
   blocked-by #19a. Owns: the run-loop-thread-confined WindowIDMap (create-seed + destroy-resolve
   via spike-05 -25201 + dedupe), the module-global continuation bridge (ADR rule 4 — a
   @convention(c) callback can't capture self), the internal-echo-swallow loop proven LIVE, AND the

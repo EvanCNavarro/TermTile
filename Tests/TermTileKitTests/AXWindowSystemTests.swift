@@ -3,12 +3,13 @@ import Testing
 @testable import TermTileKit
 import TermTileCore
 
-/// #19a — the production `AXWindowSystem` adapter's non-live, deterministic invariants. Live AX
-/// behavior (real iTerm2 enumerate + grid snap) is proven by the `AXProbe livecheck` harness +
-/// screencapture (FL-1, the beat's PROVE), not here — an AX read needs a running target app and
-/// Accessibility trust. What IS unit-testable without either: a not-running target yields an
-/// empty enumeration (no crash, no permission required — the guard short-circuits before any AX
-/// call), and `events()` is a finished-empty stub this beat (the real bridge is #19b).
+/// #19a/#19b — the production `AXWindowSystem` adapter's non-live, deterministic invariants. Live
+/// AX behavior (real iTerm2 enumerate + grid snap + the #19b AXObserver event bridge) is proven by
+/// the `AXProbe livecheck*` harnesses + screencapture (FL-1, the beats' PROVE), not here — an AX
+/// read/observe needs a running target app and Accessibility trust. What IS unit-testable without
+/// either: a not-running target yields an empty enumeration (no crash, no permission required — the
+/// guard short-circuits before any AX call), and `events()` on a not-running target returns a
+/// finished-empty stream (no observer is installed, so the `for await` returns at once — no hang).
 @Suite("AXWindowSystem — adapter invariants (non-live)")
 struct AXWindowSystemTests {
     @Test("not-running target: tileableWindows is empty, readFrame is nil")
@@ -25,11 +26,11 @@ struct AXWindowSystemTests {
         #expect(ok == false)
     }
 
-    @Test("events() stub finishes immediately (#19b wires the real AXObserver bridge)")
-    func eventsStubFinishes() async {
+    @Test("not-running target: events() returns a finished-empty stream (no observer, no hang)")
+    func eventsNotRunningFinishes() async {
         let adapter = AXWindowSystem(bundleID: "dev.ecn.apps.termtile.no-such-app")
         var count = 0
         for await _ in adapter.events() { count += 1 }
-        #expect(count == 0)   // finished-empty stream → the for-await returns at once
+        #expect(count == 0)   // no running target → no observer installed → for-await returns at once
     }
 }
