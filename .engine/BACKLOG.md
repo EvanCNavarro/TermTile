@@ -96,15 +96,31 @@ committed; findings notes are the durable output.
   AccessibilityTrust into their targets, and adds .engine/checks/core-purity.sh.
   columns=ceil(N/2), even widths, last column 1 window if N odd; property tests across
   N=1..12 + edge frames. TDD showcase task.
-#9 · Window state model: reducer + expectation ledger (ADR-0001 rules 3-4) · S0
+#9 · Window state model: reducer + expectation ledger (ADR-0001 rules 3-4) · DONE
+  (2026-07-02: swift test 59/59 green [+15 WindowStateReducer] + invert-check red [.internal→
+  .external flip fails 5 classification tests incl. keystone, restored green]; PURE Core [rule 3
+  delivered], core-purity.sh PASS. WindowState/TrackedWindow/WindowEvent/FrameCommand/
+  WindowStateReducer land in TermTileCore. Skeptic caught: consume-by-frame-match [not first-for-
+  window — MoveClassifier returns no match index], non-invertible external test [rewrote to assert
+  pending-survives], deferral-reason-wrong [was FL-1, corrected to port-co-design+no-commands-to-
+  write]. Spike-05 anomaly guards tested: destroyed/moved unknown-id no-op, nil-frame no-op. Plan:
+  .engine/state/stoke-plan-9.md; receipt: .engine/state/receipt.md Row 8.)
   blocked-by #3, #5, #8 (needs the target split). Pure reducer (State, WindowEvent) →
   (State, [FrameCommand]) in Core; pending-expectation ledger (CGWindowID → frame ±
-  epsilon + deadline) classifies moves internal/external as a pure function; TilingActor
-  in Kit owns the AX adapter + cached snapshot (instant reads, serialized async writes,
-  ~1s AX messaging timeout). Swindler = pattern reference only, never a dependency.
+  epsilon + deadline) classifies moves internal/external as a pure function. Swindler =
+  pattern reference only, never a dependency.
+  DEFERRED to #10: TilingActor + WindowSystem port + AX adapter + in-memory fake
+  [DEP: shape — port shape is adapter-driven and #9's reducer emits no commands, so the actor's
+  write path is un-exercisable until #10's adapter+cases] → #10. Recorded run-loop-hosting DESIGN
+  decision (spike-05:62/103): app-level AXObserver registration (one CFRunLoopSource/pid, low
+  event rate 6-14ms) bridged into an AsyncStream<WindowEvent> on the MAIN run loop is sufficient;
+  move to a dedicated run-loop thread ONLY if main-thread contention is observed live.
 #10 · Tiling engine: toggle-on retile + auto-retile on create/destroy · S0
-  blocked-by #4, #5, #8, #9. PROVE: live iTerm2 windows snap to grid on toggle and on
-  new-window; screencapture evidence.
+  blocked-by #4, #5, #8, #9. ALSO builds (from #9): TilingActor in Kit owns the AX adapter +
+  cached WindowState snapshot (instant reads, serialized async writes, ~1s AX messaging timeout),
+  the WindowSystem port + in-memory fake, and the element(hash)→CGWindowID map + destroy-dedupe
+  (spike-05: ids unresolvable at destroy). Adds the command-emitting reducer CASES (retile). PROVE:
+  live iTerm2 windows snap to grid on toggle and on new-window; screencapture evidence.
 #11 · Drag snap-reorder: nearest-slot assignment on drag end + shuffle · S0
   blocked-by #6, #10.
 #12 · Menu-bar app shell: toggle, target-app picker, launch-at-login, settings · S0
