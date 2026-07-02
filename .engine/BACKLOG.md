@@ -131,7 +131,17 @@ committed; findings notes are the durable output.
   command-emission on an actual window-set change when enabled. Records no pendings (the actor
   does, per AX write). PROVE = swift test + invert-check (pure Core, like #8/#9); the live-AX
   grid-snap proof is #19.
-#18 · Tiling shell: WindowSystem port + in-memory fake + TilingActor · S0
+#18 · Tiling shell: WindowSystem port + in-memory fake + TilingActor · DONE
+  (2026-07-02: swift test 78/78 green [+7 TilingActor] + invert-check red [apply records only the
+  final target → keystone pending==9 fails, 3 recorded; restored green]; PROVE = Kit-with-fake, the
+  actor executes in-process against the real Core reducer/engine. WindowSystem port [async
+  enumerate/read/write + AsyncStream<WindowEvent>], InMemoryWindowSystem fake, TilingActor land in
+  TermTileKit; core-purity.sh PASS [Kit, not Core]. Keystone: activate→3 writes at slot targets→9
+  pendings [size→pos→size trio per window]→replayed echoes classify internal, drain to empty, ZERO
+  re-write [ADR rule-3 feedback break]. Skeptic caught R1 BLOCKER [sync Sendable port can't be
+  witnessed by an actor fake → async port], R2 [created-4th → 2 writes: id3 retarget + id4], R3/R4/R5.
+  Plan: .engine/state/stoke-plan-18.md; receipt: .engine/state/receipt.md Row 8.
+  AX adapter + element→id map + destroy-dedupe + messaging-timeout + LIVE grid-snap PROVE = #19.)
   blocked-by #10. Builds (absorbed from the old #10, un-exercisable until #10's commands landed):
   the WindowSystem port (enumerate/readFrame/writeFrame + AsyncStream<WindowEvent>), an in-memory
   fake for tests, and TilingActor in Kit owning the AX adapter handle + a cached TermTileCore.
