@@ -1,0 +1,13 @@
+{
+  "name": "termtile",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"Select a framework adapter before running dev\"",
+    "build": "echo \"Select a framework adapter before running build\"",
+    "lint": "echo \"No linter configured yet\"",
+    "typecheck": "echo \"No typechecker configured yet\"",
+    "test": "node --test",
+    "check": "npm run lint && npm run typecheck && npm test"
+  }
+}
