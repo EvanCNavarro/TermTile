@@ -82,3 +82,15 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   assertion line explicitly), restore, run (capture green) — never fuse them; proof that
   isn't visibly in the output is not proof (FL-1). Not mechanically checkable from repo
   state (transient process discipline).
+
+### TRAP-10: gate parsers read the FIRST PHYSICAL LINE only (recurrence class of TRAP-2)
+- what happened: cycle_close.py's il10 gate failed twice on reorient.md because the
+  `← .engine/BACKLOG.md:N` citation was wrapped onto the line AFTER "Next task:"; the
+  gate (like TRAP-2's row7 deferral parser) only inspects the first physical line.
+  Bonus: re-running the script manually without `--task-refs-path .engine/state/
+  task-refs.json` false-failed il_capture_deferrals.
+- warning: in ALL .engine/state gate artifacts, machine-read tokens (`← source` on the
+  "Next task:" line, `[DEP: …] → #N` on deferral bullets) must sit on the SAME physical
+  line as their anchor — wrap prose, never tokens. Always invoke cycle_close.py with
+  `--task-refs-path .engine/state/task-refs.json`. Enforced by
+  .engine/checks/reorient-next-task-cited.sh.
