@@ -42,12 +42,16 @@ public struct UserDefaultsSettingsStore: SettingsStore {
     public func load() -> AppSettings {
         let d = defaults
         return AppSettings(
-            targetBundleID: d.string(forKey: Key.targetBundleID) ?? AppSettings.defaults.targetBundleID)
+            targetBundleID: d.string(forKey: Key.targetBundleID) ?? AppSettings.defaults.targetBundleID,
+            // `object(forKey:) as? Bool` (NOT bool(forKey:)) so an absent key falls back to false
+            // rather than reading as a stored false — the per-key discipline this store mandates.
+            wasTrusted: d.object(forKey: Key.wasTrusted) as? Bool ?? AppSettings.defaults.wasTrusted)
     }
 
     public func save(_ settings: AppSettings) {
         let d = defaults
         d.set(settings.targetBundleID, forKey: Key.targetBundleID)
+        d.set(settings.wasTrusted, forKey: Key.wasTrusted)
     }
 
     /// The domain name is the suite when named (tests) or the app's bundleID for `.standard`
@@ -60,5 +64,6 @@ public struct UserDefaultsSettingsStore: SettingsStore {
     /// per-key-fallback test).
     private enum Key {
         static let targetBundleID = "targetBundleID"
+        static let wasTrusted = "wasTrusted"
     }
 }

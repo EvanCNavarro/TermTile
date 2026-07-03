@@ -24,10 +24,22 @@ public final class MenuBarViewModel {
     public private(set) var targetBundleID: String
     /// The apps the picker offers, snapshotted at init from the provider.
     public private(set) var availableApps: [TargetApp]
-    /// Whether Accessibility (TCC) trust is granted — gates the permission fix-it row.
+    /// Whether Accessibility (TCC) trust is granted — gates the "Rearrange now" button.
     public private(set) var isAccessibilityTrusted: Bool
+    /// Whether the user has EVER granted Accessibility — a tracked mirror of the persisted flag,
+    /// loaded once at init and latched by `syncTrust()`. Drives `accessibilityState`; read from here
+    /// (not `settings.load()`) so Observation tracks it and the view recomputes on change (#23 S1).
+    public private(set) var wasTrusted: Bool
     /// Whether the app is registered to launch at login (source of truth = `LoginItem.status`).
     public private(set) var launchAtLogin: Bool
+
+    /// The fix-it row's state (#23): trusted → no row; never granted → first-grant prompt; untrusted
+    /// but previously granted → the honest grant-BROKEN message (moved/duplicate bundle). Computed
+    /// over the two tracked vars, so it's Observation-reactive.
+    public var accessibilityState: AccessibilityState {
+        if isAccessibilityTrusted { return .trusted }
+        return wasTrusted ? .grantBroken : .needsFirstGrant
+    }
 
     // Injected seams (untracked — not observable UI state). `settings` is internal so the
     // @testable suite can assert persistence; the executable never reads it directly.
@@ -66,9 +78,22 @@ public final class MenuBarViewModel {
         self.uninstaller = uninstaller
         self.targetBundleID = loaded.targetBundleID
         self.availableApps = appsProvider.runningTargetApps()
-        self.isAccessibilityTrusted = isTrustedProbe()
+        self.isAccessibilityTrusted = false   // set by syncTrust() below (single source)
+        self.wasTrusted = loaded.wasTrusted
         self.launchAtLogin = loginItem.status == .enabled
         self.actor = makeActor(loaded.targetBundleID)
+        syncTrust()   // probe + latch at init — catches the trusted-at-launch / migrating case (#23 B2)
+    }
+
+    /// Re-read the trust probe and LATCH `wasTrusted` the first time trust is observed (guarded on
+    /// the persisted flag, NOT a probe edge — so it fires for a user already trusted at launch, the
+    /// common case #23 B2 exists for). Single source for `isAccessibilityTrusted` (init + refresh).
+    private func syncTrust() {
+        isAccessibilityTrusted = isTrustedProbe()
+        if isAccessibilityTrusted && !wasTrusted {
+            wasTrusted = true
+            persist()
+        }
     }
 
     /// Run the uninstall (About panel's Uninstall action). Returns the outcome for the UI to render
@@ -104,10 +129,10 @@ public final class MenuBarViewModel {
         launchAtLogin = loginItem.status == .enabled
     }
 
-    /// Re-read the trust probe — called when the menu re-opens, so the fix-it row disappears once
-    /// the user grants Accessibility in System Settings.
+    /// Re-read the trust probe (and latch `wasTrusted`) — called when the menu re-opens, so the
+    /// fix-it row disappears once the user grants Accessibility in System Settings.
     public func refreshTrust() {
-        isAccessibilityTrusted = isTrustedProbe()
+        syncTrust()
     }
 
     /// "Rearrange now": tile the target app's windows onto the grid immediately — the one verb
@@ -118,8 +143,10 @@ public final class MenuBarViewModel {
         await actor.activate(config: TileConfig(isEnabled: true, visibleFrame: visibleFrame, gap: gap))
     }
 
+    /// One persist for ALL writes — carries the live `wasTrusted` so an unrelated save (e.g. a
+    /// target-app change) never clobbers the latch back to false (#23 B1).
     private func persist() {
-        settings.save(AppSettings(targetBundleID: targetBundleID))
+        settings.save(AppSettings(targetBundleID: targetBundleID, wasTrusted: wasTrusted))
     }
 
     /// The PRODUCTION Accessibility-trust probe for the composition root to inject. Defined in Kit

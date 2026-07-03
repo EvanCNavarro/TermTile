@@ -40,14 +40,19 @@ struct MenuBarContent: View {
                 get: { viewModel.launchAtLogin },
                 set: { viewModel.setLaunchAtLogin($0) }))
 
-            if !viewModel.isAccessibilityTrusted {
-                Divider()
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Accessibility access required").font(.subheadline).bold()
-                    Text("TermTile needs Accessibility permission to arrange windows.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Link("Open Accessibility Settings…", destination: viewModel.accessibilitySettingsURL)
-                }
+            switch viewModel.accessibilityState {
+            case .trusted:
+                EmptyView()
+            case .needsFirstGrant:
+                fixItRow("Accessibility access required",
+                         "TermTile needs Accessibility permission to arrange windows.")
+            case .grantBroken:
+                // Honest about the moved/duplicate-bundle break AND an intentional revoke (the two
+                // are indistinguishable via AXIsProcessTrusted) — the "if you didn't turn it off"
+                // conditional covers both.
+                fixItRow("Accessibility access is off",
+                         "If you didn't turn it off, TermTile may have moved or a duplicate copy ran. "
+                         + "Remove any old TermTile entries in Accessibility settings, then re-add this one.")
             }
 
             Divider()
@@ -101,6 +106,18 @@ struct MenuBarContent: View {
         // open; re-probe then (cheap, read-only).
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             viewModel.refreshTrust()
+        }
+    }
+
+    /// The Accessibility fix-it row — one shape, two messages (needs-grant vs grant-broken). The
+    /// deep-link is the shared authority (`accessibilitySettingsURL` → `AccessibilityTrust`).
+    @ViewBuilder
+    private func fixItRow(_ title: String, _ body: String) -> some View {
+        Divider()
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.subheadline).bold()
+            Text(body).font(.caption).foregroundStyle(.secondary)
+            Link("Open Accessibility Settings…", destination: viewModel.accessibilitySettingsURL)
         }
     }
 

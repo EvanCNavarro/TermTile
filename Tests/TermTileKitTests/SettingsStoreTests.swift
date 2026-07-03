@@ -20,7 +20,7 @@ struct SettingsStoreTests {
     @Test("in-memory fake round-trips a saved value")
     func fakeRoundTrip() {
         let store = InMemorySettingsStore()
-        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty")
+        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false)
         store.save(saved)
         #expect(store.load() == saved)
     }
@@ -31,7 +31,7 @@ struct SettingsStoreTests {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
 
-        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty")
+        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false)
         UserDefaultsSettingsStore(suiteName: suite).save(saved)
 
         let loaded = UserDefaultsSettingsStore(suiteName: suite).load()   // a NEW instance
@@ -57,7 +57,7 @@ struct SettingsStoreTests {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         let store = UserDefaultsSettingsStore(suiteName: suite)
-        store.save(AppSettings(targetBundleID: "com.example.other"))
+        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false))
         #expect(store.load().targetBundleID == "com.example.other")
 
         store.purge()
@@ -69,8 +69,25 @@ struct SettingsStoreTests {
     @Test("in-memory fake purge resets to defaults")
     func inMemoryPurge() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.example.other"))
+        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: true))
         store.purge()
         #expect(store.load() == .defaults)
+    }
+
+    // #23 — wasTrusted persists (distinguishes first-grant from a broken grant). Absent → false
+    // (defaults + migrating users); round-trips true across distinct instances.
+    @Test("defaults.wasTrusted is false")
+    func defaultsWasTrustedFalse() {
+        #expect(AppSettings.defaults.wasTrusted == false)
+    }
+
+    @Test("wasTrusted absent falls back to false; round-trips true")
+    func wasTrustedPersists() {
+        let suite = "dev.ecn.apps.termtile.tests.wastrusted"
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        #expect(UserDefaultsSettingsStore(suiteName: suite).load().wasTrusted == false)   // absent → false
+        UserDefaultsSettingsStore(suiteName: suite).save(AppSettings(targetBundleID: "com.x", wasTrusted: true))
+        #expect(UserDefaultsSettingsStore(suiteName: suite).load().wasTrusted == true)     // new instance
     }
 }

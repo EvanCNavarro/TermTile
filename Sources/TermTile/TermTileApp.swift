@@ -74,14 +74,31 @@ struct TermTileApp: App {
         }
 
         if isGallery {
-            Self.showGallery(MenuBarContent(viewModel: viewModel, updater: updater, appInfo: appInfo))
+            let vm = ProcessInfo.processInfo.environment["TERMTILE_GALLERY_BROKEN"] != nil
+                ? Self.brokenGalleryVM(loginItem: loginItem, visibleFrame: visibleFrame, gap: gap, eps: eps)
+                : viewModel
+            Self.showGallery(MenuBarContent(viewModel: vm, updater: updater, appInfo: appInfo))
         }
     }
 
-    /// DEBUG gallery hook (RememBar's REMEMBAR_GALLERY pattern): show the REAL MenuBarContent panel in
-    /// a normal window (interactive controls draw faithfully, unlike an offscreen ImageRenderer) — the
-    /// FL-9 rendered-reality check for the About/Uninstall UI on a native app (no Chrome DevTools).
-    /// LSUIElement apps have no windows, so flip to `.regular`.
+    /// A VM forced into the `grantBroken` state (untrusted probe + seeded `wasTrusted`) so the
+    /// grant-break fix-it copy can be render-validated (#23). Throwaway suite; never the real domain.
+    private static func brokenGalleryVM(loginItem: any LoginItem, visibleFrame: CGRect,
+                                        gap: CGFloat, eps: CGFloat) -> MenuBarViewModel {
+        let store = UserDefaultsSettingsStore(suiteName: "dev.ecn.apps.termtile.gallery")
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true))
+        return MenuBarViewModel(settings: store, loginItem: loginItem,
+            appsProvider: WorkspaceTargetAppsProvider(), isTrustedProbe: { false },
+            visibleFrame: visibleFrame, gap: gap, epsilon: eps,
+            makeActor: { bid in TilingActor(system: AXWindowSystem(bundleID: bid), config: .disabled, epsilon: eps) })
+    }
+
+    /// Gallery hook (RememBar's REMEMBAR_GALLERY pattern): show the REAL MenuBarContent panel in a
+    /// normal window (interactive controls draw faithfully, unlike an offscreen ImageRenderer) — the
+    /// FL-9 rendered-reality check for the About/Uninstall/trust UI on a native app (no Chrome
+    /// DevTools). Env-gated and present in release too (same posture as SELFTEST/TILE_ONCE) — a user
+    /// won't trip it without setting the var; the broken variant nils the uninstaller + uses a
+    /// throwaway suite. LSUIElement apps have no windows, so flip to `.regular`.
     private static func showGallery(_ content: MenuBarContent) {
         Task { @MainActor in
             NSApplication.shared.setActivationPolicy(.regular)

@@ -72,7 +72,7 @@ struct MenuBarViewModelTests {
     @Test("init loads persisted target")
     func initLoadsPersistedSettings() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.example.other"))
+        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false))
         let (vm, _) = makeVM(store: store)
         #expect(vm.targetBundleID == "com.example.other")
     }
@@ -174,5 +174,81 @@ struct MenuBarViewModelTests {
     func uninstallNilWhenAbsent() {
         let (vm, _) = makeVM()   // no uninstaller
         #expect(vm.uninstall() == nil)
+    }
+
+    // #23 — a save-counting SettingsStore spy, to assert the wasTrusted latch fires exactly once.
+    final class SaveSpyStore: SettingsStore, @unchecked Sendable {
+        private let lock = NSLock()
+        private var current: AppSettings?
+        private(set) var saveCount = 0
+        init(_ initial: AppSettings? = nil) { current = initial }
+        func load() -> AppSettings { lock.withLock { current ?? .defaults } }
+        func save(_ s: AppSettings) { lock.withLock { current = s; saveCount += 1 } }
+        func purge() { lock.withLock { current = nil } }
+    }
+
+    // B2 fix — a trusted-at-launch user (incl. migrating users: wasTrusted key absent → false)
+    // latches wasTrusted=true ONCE at init, so a later grant-break is recognised as grantBroken.
+    @Test("latches wasTrusted at init when already trusted")
+    func latchesAtInit() {
+        let spy = SaveSpyStore()  // wasTrusted absent → false
+        let (vm, _) = makeVM(store: spy, trusted: true)
+        #expect(vm.accessibilityState == .trusted)
+        #expect(spy.saveCount == 1)                 // latched exactly once
+        #expect(spy.load().wasTrusted == true)
+    }
+
+    // Idempotent on the PERSISTED flag — repeated refreshTrust after true writes nothing more.
+    @Test("latch is idempotent")
+    func latchIdempotent() {
+        let spy = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true))
+        let (vm, _) = makeVM(store: spy, trusted: true)
+        let base = spy.saveCount                    // 0 — already true, no init latch
+        vm.refreshTrust(); vm.refreshTrust()
+        #expect(spy.saveCount == base)
+    }
+
+    // Untrusted never writes; state is needsFirstGrant (never granted) or grantBroken (was granted).
+    @Test("untrusted: needsFirstGrant vs grantBroken, never writes")
+    func untrustedStates() {
+        let spy1 = SaveSpyStore()
+        let (vm1, _) = makeVM(store: spy1, trusted: false)
+        #expect(vm1.accessibilityState == .needsFirstGrant)
+        #expect(spy1.saveCount == 0)
+        let spy2 = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true))
+        let (vm2, _) = makeVM(store: spy2, trusted: false)
+        #expect(vm2.accessibilityState == .grantBroken)
+    }
+
+    // THE named scenario — a grant that BREAKS at runtime (moved/duplicate bundle): start trusted
+    // (latch), the probe flips false, refreshTrust → grantBroken, wasTrusted STAYS true, no rewrite.
+    @Test("runtime revoke: wasTrusted stays true → grantBroken, no rewrite")
+    func revokeBecomesGrantBroken() {
+        let flag = Flag(true)
+        let spy = SaveSpyStore()
+        let fake = InMemoryWindowSystem(windows: [])
+        let vm = MenuBarViewModel(
+            settings: spy, loginItem: InMemoryLoginItem(),
+            appsProvider: InMemoryTargetAppsProvider(seed: []),
+            isTrustedProbe: { flag.value },
+            visibleFrame: visible, gap: gap, epsilon: eps,
+            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps, ttlSeconds: 100) })
+        #expect(vm.accessibilityState == .trusted)
+        let afterLatch = spy.saveCount            // 1 — latched at init
+        flag.value = false                        // the grant breaks
+        vm.refreshTrust()
+        #expect(vm.accessibilityState == .grantBroken)   // honest state, not needsFirstGrant
+        #expect(spy.load().wasTrusted == true)           // latch survives the break
+        #expect(spy.saveCount == afterLatch)             // revoke writes nothing
+    }
+
+    // B1 guard — setTarget must NOT clobber a latched wasTrusted back to false.
+    @Test("setTarget preserves wasTrusted")
+    func setTargetPreservesWasTrusted() async {
+        let spy = SaveSpyStore()
+        let (vm, _) = makeVM(store: spy, trusted: true)   // latches wasTrusted=true at init
+        await vm.setTarget("com.example.other")
+        #expect(spy.load().wasTrusted == true)            // not wiped
+        #expect(spy.load().targetBundleID == "com.example.other")
     }
 }
