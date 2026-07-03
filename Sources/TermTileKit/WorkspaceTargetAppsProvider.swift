@@ -10,13 +10,25 @@ public struct WorkspaceTargetAppsProvider: TargetAppsProviding {
     public init() {}
 
     public func runningTargetApps() -> [TargetApp] {
-        NSWorkspace.shared.runningApplications
+        Self.deduped(NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular }
             .compactMap { app -> TargetApp? in
                 guard let bundleID = app.bundleIdentifier,
                       let name = app.localizedName else { return nil }
                 return TargetApp(bundleID: bundleID, name: name)
-            }
+            })
+    }
+
+    /// Dedupe by bundleID, keeping the first occurrence, then sort by localized name. One app can
+    /// have several running `.regular` instances that share a bundle id (e.g. multiple Chrome
+    /// profiles = four `com.google.Chrome` processes) — the picker must show it ONCE. Also required
+    /// for correctness, not just tidiness: `TargetApp` is `Identifiable` by `bundleID`, and a
+    /// SwiftUI `Picker`/`ForEach` over duplicate ids is undefined behavior (glitched selection).
+    /// Pure + static so it is unit-tested without touching `NSWorkspace`.
+    static func deduped(_ apps: [TargetApp]) -> [TargetApp] {
+        var seen = Set<String>()
+        return apps
+            .filter { seen.insert($0.bundleID).inserted }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 }
