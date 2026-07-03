@@ -325,7 +325,10 @@ committed; findings notes are the durable output.
   blocked-by #13a (DONE). Kit-adjacent CI config (no production Swift logic change; 2 comment-only lines
   in AXWindowSystem for the inline lint exemption). LIVE GitHub-Actions execution is external → #20.
   DEFERRED: live workflow runs on GitHub runners (check/semgrep green + tag→release with secrets) + GH-Actions schema validation (actionlint/yamllint absent, no-network to install; ruby proves well-formedness only) [DEP: external — a live CI run needs GitHub runners + configured secrets + a push, all outside a no-network/no-push loop beat] → #20
-#13c · Stable signing identity (Developer ID / self-signed cert) so .app TCC grants survive rebuilds · S0
+#13c · Stable signing identity (Developer ID / self-signed cert) so .app TCC grants survive rebuilds · DONE
+  (2026-07-03: self-signed 'TermTile Dev Signing' cert in login keychain; designated requirement
+  binds to bundle-id + cert root, so the Accessibility grant survives rebuilds — verified via TCC.db.
+  Developer ID/notarization deferred to public-distribution decision.)
   blocked-by #13a. Spike 02 proved ad-hoc cdhash pinning voids the Accessibility grant on every rebuild
   (fatal UX for an AX tiler). Establish a stable codesigning identity and re-sign the bundle with it.
   [DEP: external — zero codesigning identities on this machine (security find-identity → 0 valid);
