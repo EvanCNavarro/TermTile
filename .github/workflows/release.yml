@@ -56,6 +56,25 @@ jobs:
           ( cd dist && shasum -a 256 "TermTile-${GITHUB_REF_NAME}.zip" | tee "TermTile-${GITHUB_REF_NAME}.zip.sha256" )
           echo "zip=${ZIP}" >> "${GITHUB_OUTPUT}"
 
+      # Single-source release notes (RememBar-audit §7): release-notes/<version>.md, authored before
+      # the tag, feeds BOTH the Sparkle "What's new" dialog (embedded below) AND the GitHub release
+      # body (last step). Stage it named to match the archive basename so generate_appcast attaches
+      # it to THIS item.
+      - name: Stage release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          SRC="release-notes/${VERSION}.md"
+          if [ -f "$SRC" ]; then
+            cp "$SRC" "dist/TermTile-${GITHUB_REF_NAME}.md"   # matches TermTile-<tag>.zip basename
+            echo "src=${SRC}" >> "${GITHUB_OUTPUT}"
+            echo "has_notes=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "has_notes=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::No ${SRC} — release ships without a 'What's new' section."
+          fi
+
       # Sparkle appcast: sign the zip with the EdDSA private key (from the repo secret) and emit
       # appcast.xml. The public key baked into Info.plist (SUPublicEDKey) verifies it on the client;
       # an unsigned/tampered update is refused. `generate_appcast` scans the dist dir for the zip.
@@ -74,11 +93,17 @@ jobs:
           # Write the private key to a file for --ed-key-file, remove it immediately after.
           KEYFILE="$WORK/ed_private.key"
           printf '%s' "${SPARKLE_ED_PRIVATE_KEY}" > "$KEYFILE"
+          # --embed-release-notes inlines the staged TermTile-<tag>.md into the item's <description>
+          # (markdown) so Sparkle's "What's new" shows it. Without it, a .md becomes an external
+          # releaseNotesLink pointing at an asset we don't upload — a 404.
           "$GEN" --ed-key-file "$KEYFILE" \
+            --embed-release-notes \
             --download-url-prefix "https://github.com/EvanCNavarro/TermTile/releases/download/${GITHUB_REF_NAME}/" \
             dist/
           rm -f "$KEYFILE"
           test -f dist/appcast.xml || { echo "appcast.xml not produced" >&2; exit 1; }
+          # The notes are embedded now — don't ship the loose .md as a release asset.
+          rm -f "dist/TermTile-${GITHUB_REF_NAME}.md"
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4
@@ -114,7 +139,14 @@ jobs:
         run: |
           set -euo pipefail
           ZIP="${{ steps.package.outputs.zip }}"
+          # Same release-notes/<version>.md that fed Sparkle's "What's new" is the release body
+          # (single source). Fall back to auto-generated notes only when the file is absent.
+          if [ "${{ steps.notes.outputs.has_notes }}" = "true" ]; then
+            NOTES_ARGS=(--notes-file "${{ steps.notes.outputs.src }}")
+          else
+            NOTES_ARGS=(--generate-notes)
+          fi
           gh release create "${GITHUB_REF_NAME}" \
             "${ZIP}" "${ZIP}.sha256" dist/appcast.xml \
             --title "${GITHUB_REF_NAME}" \
-            --generate-notes
+            "${NOTES_ARGS[@]}"
