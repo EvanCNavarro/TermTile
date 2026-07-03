@@ -20,8 +20,6 @@ import TermTileCore
 @MainActor
 @Observable
 public final class MenuBarViewModel {
-    /// The menu toggle (spec-draft:17). Persisted; drives `activate`.
-    public private(set) var isEnabled: Bool
     /// The picker selection — the bundle id the AX adapter targets (spec-draft:18). Persisted.
     public private(set) var targetBundleID: String
     /// The apps the picker offers, snapshotted at init from the provider.
@@ -60,7 +58,6 @@ public final class MenuBarViewModel {
         self.gap = gap
         self.epsilon = epsilon
         self.makeActor = makeActor
-        self.isEnabled = loaded.isEnabled
         self.targetBundleID = loaded.targetBundleID
         self.availableApps = appsProvider.runningTargetApps()
         self.isAccessibilityTrusted = isTrustedProbe()
@@ -72,23 +69,13 @@ public final class MenuBarViewModel {
     /// `AccessibilityTrust` so the executable's view needs no direct dependency on it).
     public var accessibilitySettingsURL: URL { AccessibilityTrust.settingsDeepLink }
 
-    /// Toggle the tiler. Persists `isEnabled`, then AWAITS `activate` (R2 — never fire-and-forget,
-    /// so the effect is complete when this returns): on → tile everything onto the grid; off →
-    /// `.disabled` config, which `TileEngine.retileCommands` proves inert (zero writes, no untile).
-    public func setEnabled(_ on: Bool) async {
-        isEnabled = on
-        persist()
-        await actor.activate(config: currentConfig)
-    }
-
-    /// Change the target app. Persists `targetBundleID`, rebuilds the actor over a fresh adapter
-    /// for the new target, and — when enabled — tiles the new target's windows. (Live re-target
-    /// tiling against real windows is #14; here the rebuilt actor tiles via the injected factory.)
+    /// Change the target app. Persists `targetBundleID` and rebuilds the actor over a fresh adapter
+    /// for the new target. Does NOT auto-tile — TermTile is a manual tool: the user picks the app,
+    /// then presses "Rearrange now" when they want the grid.
     public func setTarget(_ bundleID: String) async {
         targetBundleID = bundleID
         persist()
         actor = makeActor(bundleID)
-        if isEnabled { await actor.activate(config: currentConfig) }
     }
 
     /// Register / unregister as a login item, then refresh `launchAtLogin` from the authoritative
@@ -109,24 +96,16 @@ public final class MenuBarViewModel {
         isAccessibilityTrusted = isTrustedProbe()
     }
 
-    /// One-shot "Rearrange now": tile the target's windows onto the grid immediately, regardless
-    /// of the `isEnabled` mode toggle, without persisting or flipping any setting. The explicit
-    /// verb button for "just organize my windows" — mode stays whatever the user chose.
-    /// Re-probes trust first: the fix-it row must never show stale (a grant made while the
-    /// panel's view stayed alive was rendering as still-required).
+    /// "Rearrange now": tile the target app's windows onto the grid immediately — the one verb
+    /// the app does. Re-probes trust first so the fix-it row never shows stale (a grant made while
+    /// the panel's view stayed alive was rendering as still-required).
     public func rearrangeNow() async {
         refreshTrust()
         await actor.activate(config: TileConfig(isEnabled: true, visibleFrame: visibleFrame, gap: gap))
     }
 
-    /// The config `activate` gets: `isEnabled` gates it (false ⇒ `retileCommands` returns `[]`),
-    /// so this single expression serves both toggle directions.
-    private var currentConfig: TileConfig {
-        TileConfig(isEnabled: isEnabled, visibleFrame: visibleFrame, gap: gap)
-    }
-
     private func persist() {
-        settings.save(AppSettings(isEnabled: isEnabled, targetBundleID: targetBundleID))
+        settings.save(AppSettings(targetBundleID: targetBundleID))
     }
 
     /// The PRODUCTION Accessibility-trust probe for the composition root to inject. Defined in Kit

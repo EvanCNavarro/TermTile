@@ -46,11 +46,6 @@ public actor AXWindowSystem: WindowSystem {
         }
     }
 
-    public func readFrame(_ id: CGWindowID) async -> CGRect? {
-        guard let win = windowElement(id) else { return nil }
-        return frame(of: win)
-    }
-
     /// Move + resize `id` to `target` via the size→position→size decomposition (spike-04 /
     /// Rectangle: guards against cross-display size clamping). `AXEnhancedUserInterface` is
     /// disabled around the writes and restored via `defer` — this is a normally-returning actor

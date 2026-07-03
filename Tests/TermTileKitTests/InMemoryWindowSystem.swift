@@ -24,8 +24,6 @@ actor InMemoryWindowSystem: WindowSystem {
 
     func tileableWindows() -> [TrackedWindow] { seeded }
 
-    func readFrame(_ id: CGWindowID) -> CGRect? { seeded.first { $0.id == id }?.frame }
-
     func writeFrame(_ id: CGWindowID, to target: CGRect) -> Bool {
         recordedWrites.append((id, target))
         return true

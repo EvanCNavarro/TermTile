@@ -10,7 +10,7 @@ import TermTileCore
 /// LIVE app-launch + status-item enumeration is the beat's PROVE (docs/verification/task12c-*.md).
 ///
 /// R1 (audit): `visibleFrame` is INJECTED, never read from a real `NSScreen`, so the keystone is
-/// deterministic and asserts EXACT grid targets. R2: `setEnabled` AWAITS `activate`, so the fake's
+/// deterministic and asserts EXACT grid targets. R2: `rearrangeNow` AWAITS `activate`, so the fake's
 /// `recordedWrites` is committed by the time a `@MainActor` test reads it. R3: #12c drives only
 /// `activate()` — no `run()`/live events (that leak-prone path is #14).
 @MainActor
@@ -48,45 +48,29 @@ struct MenuBarViewModelTests {
         return (vm, fake)
     }
 
-    // KEYSTONE — toggle ON persists isEnabled AND drives TilingActor.activate: the fake receives
-    // writes AT THE GRID TARGETS. This is the toggle→activate wire (the one flip that reddens it:
-    // make setEnabled always activate(.disabled) → zero writes).
-    @Test("keystone: toggle-on persists and tiles at grid targets")
-    func toggleOnPersistsAndTiles() async {
+    // KEYSTONE — "Rearrange now" drives TilingActor.activate: the fake receives writes AT THE GRID
+    // TARGETS. This is the button→activate wire (the flip that reddens it: make rearrangeNow
+    // activate(.disabled) → zero writes).
+    @Test("keystone: rearrange-now tiles at grid targets")
+    func rearrangeNowTilesAtGridTargets() async {
         let seed = [off(1), off(2), off(3)]
         let (vm, fake) = makeVM(windows: seed)
         let t = targets(3)
         for k in 0..<3 { #expect(seed[k].frame != t[k]) }  // genuinely off-grid → writes provable
 
-        await vm.setEnabled(true)
+        await vm.rearrangeNow()
 
-        #expect(vm.isEnabled)
-        #expect(vm.settings.load().isEnabled)              // persisted through the port
         let writes = await fake.recordedWrites
         #expect(writes.count == 3)
         #expect(Set(writes.map(\.id)) == Set([1, 2, 3]))
         for w in writes { #expect(w.target == t[Int(w.id) - 1]) }  // EXACT targets (R1)
     }
 
-    // Toggle OFF is inert (TileEngine.retileCommands line-21 guard): a fresh default-disabled vm
-    // that goes false issues ZERO writes (no untile, "Off = no rigid behavior at all").
-    @Test("toggle-off is inert — zero writes")
-    func toggleOffIsInert() async {
-        let seed = [off(1), off(2)]
-        let (vm, fake) = makeVM(windows: seed)
-        await vm.setEnabled(false)
-        #expect(!vm.isEnabled)
-        #expect(!vm.settings.load().isEnabled)
-        let writes = await fake.recordedWrites
-        #expect(writes.isEmpty)
-    }
-
-    @Test("init loads persisted settings")
+    @Test("init loads persisted target")
     func initLoadsPersistedSettings() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(isEnabled: true, targetBundleID: "com.example.other"))
+        store.save(AppSettings(targetBundleID: "com.example.other"))
         let (vm, _) = makeVM(store: store)
-        #expect(vm.isEnabled)
         #expect(vm.targetBundleID == "com.example.other")
     }
 
@@ -96,25 +80,15 @@ struct MenuBarViewModelTests {
         #expect(vm.targetBundleID == "com.googlecode.iterm2")
     }
 
-    @Test("set target persists and, when enabled, re-tiles")
-    func setTargetPersistsAndReTiles() async {
-        let seed = [off(1), off(2)]
-        let (vm, fake) = makeVM(windows: seed)
-        await vm.setEnabled(true)
-        let before = await fake.recordedWrites.count
-        await vm.setTarget("com.example.other")
-        #expect(vm.targetBundleID == "com.example.other")
-        #expect(vm.settings.load().targetBundleID == "com.example.other")
-        let after = await fake.recordedWrites.count
-        #expect(after > before)  // enabled → the rebuilt actor re-tiled the new target's windows
-    }
-
-    @Test("set target persists but does NOT tile when disabled")
-    func setTargetNoTileWhenDisabled() async {
+    // Manual model: set target persists + rebuilds the actor, but does NOT tile — tiling only
+    // happens when the user presses "Rearrange now".
+    @Test("set target persists and does NOT auto-tile")
+    func setTargetPersistsNoTile() async {
         let seed = [off(1)]
         let (vm, fake) = makeVM(windows: seed)
         await vm.setTarget("com.example.other")
         #expect(vm.targetBundleID == "com.example.other")
+        #expect(vm.settings.load().targetBundleID == "com.example.other")
         let writes = await fake.recordedWrites
         #expect(writes.isEmpty)
     }
@@ -167,23 +141,13 @@ struct MenuBarViewModelTests {
             .contains("Privacy_Accessibility"))
     }
 
-    // "Rearrange now" — the one-shot verb button: tiles at grid targets even with the mode
-    // toggle OFF, and neither flips isEnabled nor persists any settings change.
-    @Test("rearrangeNow tiles while disabled and leaves mode/persistence untouched")
-    func rearrangeNowTilesWhileDisabled() async {
+    // "Rearrange now" persists nothing — it's a pure action, not a setting.
+    @Test("rearrangeNow does not persist any settings change")
+    func rearrangeNowPersistsNothing() async {
         let store = InMemorySettingsStore()
-        let seed = [off(1), off(2), off(3)]
-        let (vm, fake) = makeVM(windows: seed, store: store)
-        #expect(vm.isEnabled == false)
+        let (vm, _) = makeVM(windows: [off(1)], store: store)
         let before = store.load()
-
         await vm.rearrangeNow()
-
-        let t = targets(3)
-        let writes = await fake.recordedWrites
-        #expect(writes.count == 3)
-        for (k, w) in writes.enumerated() { #expect(w.target == t[k]) }
-        #expect(vm.isEnabled == false)                    // mode untouched
-        #expect(store.load().isEnabled == before.isEnabled) // nothing persisted
+        #expect(store.load() == before)
     }
 }

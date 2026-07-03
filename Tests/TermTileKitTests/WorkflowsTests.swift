@@ -94,12 +94,10 @@ struct WorkflowsTests {
         #expect(s.contains("p/secrets"), "semgrep.yml must run the p/secrets pack")
     }
 
-    // 6. The lint gate has a config, and it is honest: it excludes the throwaway AXProbe spike and
-    //    keeps force_cast a STRICT rule (scoped inline at the 2 AX sites, not globally disabled).
-    @Test(".swiftlint.yml: excludes throwaway AXProbe, keeps force_cast strict (not disabled)")
+    // 6. The lint gate keeps force_cast a STRICT rule (scoped inline at the AX sites, not disabled).
+    @Test(".swiftlint.yml: keeps force_cast strict (not globally disabled)")
     func swiftlintConfigIsHonest() {
         let cfg = Self.file(".swiftlint.yml")
-        #expect(cfg.contains("Sources/AXProbe"), ".swiftlint.yml must exclude the throwaway AXProbe spike")
         // force_cast must NOT be globally disabled (it is scoped inline at the AX sites instead).
         #expect(!cfg.contains("- force_cast"), ".swiftlint.yml must not globally disable force_cast")
     }

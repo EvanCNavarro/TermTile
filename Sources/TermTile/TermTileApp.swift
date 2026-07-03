@@ -77,11 +77,10 @@ struct TermTileApp: App {
     /// Env-gated live wiring PROVE (`TERMTILE_SELFTEST=1`), analogous to RememBar's `REMEMBAR_*`
     /// dev hooks. Runs on the LIVE NSApp run loop — NO `sem.wait`/blocking (TRAP-14; the deadlock
     /// there is sync-`main.swift`-specific, this loop is pumped). Proves the composition + the real
-    /// toggle→persist wire executes in-process: a fresh-false dedicated suite (default
-    /// `isEnabled=false`) is toggled to `true` and read back cross-instance (a real false→true
-    /// delta, not a stale rubber-stamp — R5/TRAP-15). Targets a NON-running bundle first so
-    /// `activate` is inert and ZERO real windows move (the live tile is #14). NOT proven here: the
-    /// SwiftUI button→VM binding (code-review-only residual).
+    /// target→persist wire executes in-process: a dedicated suite's target is changed and read back
+    /// cross-instance (a real delta, not a stale rubber-stamp — R5/TRAP-15). Targets a NON-running
+    /// bundle so `rearrangeNow` is inert and ZERO real windows move. NOT proven here: the SwiftUI
+    /// button→VM binding (code-review-only residual).
     private static func runSelftest(viewModel: MenuBarViewModel) {
         // Markers go to UNBUFFERED stderr (TRAP-14: print() to a pipe/file is block-buffered and
         // is lost on SIGTERM — the first live-prove run captured nothing this way). The "start"
@@ -89,12 +88,12 @@ struct TermTileApp: App {
         // MainActor Task runs once NSApp's main executor starts.
         func mark(_ s: String) { FileHandle.standardError.write(Data((s + "\n").utf8)) }
         let store = UserDefaultsSettingsStore(suiteName: selftestSuite)
-        mark("SELFTEST start pid=\(ProcessInfo.processInfo.processIdentifier) pre isEnabled=\(store.load().isEnabled)")
+        mark("SELFTEST start pid=\(ProcessInfo.processInfo.processIdentifier) pre target=\(store.load().targetBundleID)")
         Task { @MainActor in
             await viewModel.setTarget("dev.ecn.apps.termtile.selftest-none")  // non-running → inert
-            await viewModel.setEnabled(true)                                   // the real toggle wire
+            await viewModel.rearrangeNow()                                     // the real button wire
             let post = UserDefaultsSettingsStore(suiteName: selftestSuite).load()
-            mark("SELFTEST persisted isEnabled=\(post.isEnabled) target=\(post.targetBundleID)")
+            mark("SELFTEST persisted target=\(post.targetBundleID)")
             mark("SELFTEST done")
         }
     }

@@ -24,10 +24,6 @@ struct MenuBarContent: View {
             .buttonStyle(.borderedProminent)
             .disabled(!viewModel.isAccessibilityTrusted)
 
-            Toggle("Tiling enabled", isOn: Binding(
-                get: { viewModel.isEnabled },
-                set: { on in Task { await viewModel.setEnabled(on) } }))
-
             Picker("Target app", selection: Binding(
                 get: { viewModel.targetBundleID },
                 set: { id in Task { await viewModel.setTarget(id) } })) {
