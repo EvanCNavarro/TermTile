@@ -32,7 +32,10 @@ jobs:
         id: build
         run: |
           set -euo pipefail
-          APP_PATH="$(scripts/build-app.sh | tail -1)"
+          # Marketing version (CFBundleShortVersionString) = the tag minus its leading "v", so every
+          # release reports its own version — NOT build-app.sh's hardcoded default. CFBundleVersion
+          # (what Sparkle compares) stays the monotonic git rev-list count.
+          APP_PATH="$(SHORT_VERSION="${GITHUB_REF_NAME#v}" scripts/build-app.sh | tail -1)"
           echo "app_path=${APP_PATH}" >> "${GITHUB_OUTPUT}"
 
       - name: Package + checksum
