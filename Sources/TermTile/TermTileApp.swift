@@ -17,6 +17,9 @@ struct TermTileApp: App {
     private let viewModel: MenuBarViewModel
     private let updater = Updater()
     private let appInfo: AppInfo
+    /// Retained for the app's lifetime so the hotkey stays registered (#25); its `deinit` cleans up
+    /// if it's ever dropped.
+    private let hotKeyMonitor: HotKeyMonitor
 
     init() {
         let isSelftest = ProcessInfo.processInfo.environment["TERMTILE_SELFTEST"] != nil
@@ -60,6 +63,21 @@ struct TermTileApp: App {
         // Menu-bar utility: no dock icon, never takes window focus. Set here (init is reliable);
         // the delegate re-asserts it as a belt.
         NSApplication.shared.setActivationPolicy(.accessory)
+
+        // Global hotkey ⌃⌥⌘R → the same rearrangeNow() the menu button invokes (#25). Registered on
+        // the normal path only (not selftest/gallery, where a global hotkey would interfere). onFire
+        // hops to the main actor to respect rearrangeNow()'s isolation. TERMTILE_HOTKEY_LOG emits
+        // stderr markers so a live prove can confirm registration + real-keypress routing.
+        let vmForHotKey = viewModel
+        let logHotKey = ProcessInfo.processInfo.environment["TERMTILE_HOTKEY_LOG"] != nil
+        hotKeyMonitor = HotKeyMonitor(onFire: {
+            if logHotKey { FileHandle.standardError.write(Data("HOTKEY fired\n".utf8)) }
+            Task { @MainActor in await vmForHotKey.rearrangeNow() }
+        })
+        if !isSelftest && !isGallery {
+            let ok = hotKeyMonitor.start()
+            if logHotKey { FileHandle.standardError.write(Data("HOTKEY registered=\(ok)\n".utf8)) }
+        }
 
         if isSelftest { Self.runSelftest(viewModel: viewModel) }
 
