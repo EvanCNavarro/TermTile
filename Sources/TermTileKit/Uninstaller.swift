@@ -90,8 +90,7 @@ public struct Uninstaller {
         var removed: [URL] = []
         var failed: [(url: URL, error: Error)] = []
         for url in ownedPaths.dataPaths where FileManager.default.fileExists(atPath: url.path) {
-            do { try trash(url); removed.append(url) }
-            catch { failed.append((url, error)) }
+            do { try trash(url); removed.append(url) } catch { failed.append((url, error)) }
         }
         return (removed, failed)
     }
@@ -100,14 +99,12 @@ public struct Uninstaller {
     /// are mapped to `.needsManual` so the UI can offer a Finder reveal.
     public func removeBundle() -> BundleOutcome {
         guard let bundleURL, FileManager.default.fileExists(atPath: bundleURL.path) else { return .noBundle }
-        do { try trash(bundleURL); return .trashed(bundleURL) }
-        catch { return .needsManual(bundleURL) }
+        do { try trash(bundleURL); return .trashed(bundleURL) } catch { return .needsManual(bundleURL) }
     }
 
     /// Deregister the login item, surfacing any throw (unsigned build) rather than swallowing it.
     public func deregisterLoginItem() -> DeregResult {
-        do { try loginItem.unregister(); return .ok }
-        catch { return .failed(error) }
+        do { try loginItem.unregister(); return .ok } catch { return .failed(error) }
     }
 
     /// The full flow in the safe order: unregister (while the bundle resolves) → purge+trash data
