@@ -15,6 +15,15 @@ struct MenuBarContent: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(AppIdentity.appName).font(.headline)
 
+            Button {
+                Task { await viewModel.rearrangeNow() }
+            } label: {
+                Label("Rearrange now", systemImage: "rectangle.grid.2x2")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!viewModel.isAccessibilityTrusted)
+
             Toggle("Tiling enabled", isOn: Binding(
                 get: { viewModel.isEnabled },
                 set: { on in Task { await viewModel.setEnabled(on) } }))

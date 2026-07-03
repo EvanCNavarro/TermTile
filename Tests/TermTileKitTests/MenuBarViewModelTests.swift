@@ -166,4 +166,24 @@ struct MenuBarViewModelTests {
         #expect(vm.accessibilitySettingsURL.absoluteString
             .contains("Privacy_Accessibility"))
     }
+
+    // "Rearrange now" — the one-shot verb button: tiles at grid targets even with the mode
+    // toggle OFF, and neither flips isEnabled nor persists any settings change.
+    @Test("rearrangeNow tiles while disabled and leaves mode/persistence untouched")
+    func rearrangeNowTilesWhileDisabled() async {
+        let store = InMemorySettingsStore()
+        let seed = [off(1), off(2), off(3)]
+        let (vm, fake) = makeVM(windows: seed, store: store)
+        #expect(vm.isEnabled == false)
+        let before = store.load()
+
+        await vm.rearrangeNow()
+
+        let t = targets(3)
+        let writes = await fake.recordedWrites
+        #expect(writes.count == 3)
+        for (k, w) in writes.enumerated() { #expect(w.target == t[k]) }
+        #expect(vm.isEnabled == false)                    // mode untouched
+        #expect(store.load().isEnabled == before.isEnabled) // nothing persisted
+    }
 }

@@ -42,6 +42,16 @@ struct TermTileApp: App {
         NSApplication.shared.setActivationPolicy(.accessory)
 
         if isSelftest { Self.runSelftest(viewModel: viewModel) }
+
+        // One-shot demo/E2E hook: TERMTILE_TILE_ONCE=1 fires the same rearrangeNow() the panel's
+        // button invokes, against the persisted target, on the live run loop. No settings change.
+        if ProcessInfo.processInfo.environment["TERMTILE_TILE_ONCE"] != nil {
+            let vm = viewModel
+            Task { @MainActor in
+                await vm.rearrangeNow()
+                FileHandle.standardError.write(Data("TILE_ONCE done\n".utf8))
+            }
+        }
     }
 
     var body: some Scene {

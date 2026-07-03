@@ -109,6 +109,13 @@ public final class MenuBarViewModel {
         isAccessibilityTrusted = isTrustedProbe()
     }
 
+    /// One-shot "Rearrange now": tile the target's windows onto the grid immediately, regardless
+    /// of the `isEnabled` mode toggle, without persisting or flipping any setting. The explicit
+    /// verb button for "just organize my windows" — mode stays whatever the user chose.
+    public func rearrangeNow() async {
+        await actor.activate(config: TileConfig(isEnabled: true, visibleFrame: visibleFrame, gap: gap))
+    }
+
     /// The config `activate` gets: `isEnabled` gates it (false ⇒ `retileCommands` returns `[]`),
     /// so this single expression serves both toggle directions.
     private var currentConfig: TileConfig {
