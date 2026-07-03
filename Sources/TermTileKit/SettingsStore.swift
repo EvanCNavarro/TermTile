@@ -36,20 +36,17 @@ public struct UserDefaultsSettingsStore: SettingsStore {
     public func load() -> AppSettings {
         let d = defaults
         return AppSettings(
-            isEnabled: d.object(forKey: Key.isEnabled) as? Bool ?? AppSettings.defaults.isEnabled,
             targetBundleID: d.string(forKey: Key.targetBundleID) ?? AppSettings.defaults.targetBundleID)
     }
 
     public func save(_ settings: AppSettings) {
         let d = defaults
-        d.set(settings.isEnabled, forKey: Key.isEnabled)
         d.set(settings.targetBundleID, forKey: Key.targetBundleID)
     }
 
     /// The UserDefaults key names — the persistence contract (also raw-referenced by the
     /// per-key-fallback test).
     private enum Key {
-        static let isEnabled = "isEnabled"
         static let targetBundleID = "targetBundleID"
     }
 }

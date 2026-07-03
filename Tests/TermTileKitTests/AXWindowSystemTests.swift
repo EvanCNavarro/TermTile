@@ -12,11 +12,10 @@ import TermTileCore
 /// finished-empty stream (no observer is installed, so the `for await` returns at once — no hang).
 @Suite("AXWindowSystem — adapter invariants (non-live)")
 struct AXWindowSystemTests {
-    @Test("not-running target: tileableWindows is empty, readFrame is nil")
+    @Test("not-running target: tileableWindows is empty")
     func notRunningIsEmpty() async {
         let adapter = AXWindowSystem(bundleID: "dev.ecn.apps.termtile.no-such-app")
         #expect(await adapter.tileableWindows().isEmpty)
-        #expect(await adapter.readFrame(12345) == nil)
     }
 
     @Test("not-running target: writeFrame fails cleanly (no window to write)")

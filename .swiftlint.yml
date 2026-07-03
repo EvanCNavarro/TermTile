@@ -3,7 +3,6 @@
 # safety rules (force_cast, large_tuple) stay STRICT on shipped code.
 excluded:
   - .build
-  - Sources/AXProbe   # throwaway spike probe (BACKLOG Phase A: "throwaway-quality but committed")
   - Tests             # gate protects SHIPPED code; test fixtures use 3-member tuples legitimately
 disabled_rules:
   - trailing_comma    # Swift 6.1 permits trailing commas; the codebase uses them in collection literals

@@ -20,9 +20,6 @@ public protocol WindowSystem: Sendable {
     /// seed.
     func tileableWindows() async -> [TrackedWindow]
 
-    /// The window's current frame, or `nil` if unresolvable (window gone / AX read failed).
-    func readFrame(_ id: CGWindowID) async -> CGRect?
-
     /// Move + resize the window to `target`. The adapter performs the size→position→size write
     /// (with `AXEnhancedUserInterface` disabled) — that decomposition is the adapter's job.
     /// Returns `true` on success. The CALLER (`TilingActor`) predicts and records the per-write

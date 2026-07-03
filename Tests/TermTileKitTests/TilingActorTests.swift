@@ -155,14 +155,12 @@ struct TilingActorTests {
         #expect(await fake.recordedWrites.count == 1)          // the created window was tiled
     }
 
-    // Fake conformance sanity: enumerate/read return the seed; unknown id reads nil.
-    @Test("fake returns seeded windows and frames")
+    // Fake conformance sanity: enumerate returns the seed.
+    @Test("fake returns seeded windows")
     func fakeConformance() async {
         let w = off(1)
         let fake = InMemoryWindowSystem(windows: [w])
         #expect(await fake.tileableWindows() == [w])
-        #expect(await fake.readFrame(1) == w.frame)
-        #expect(await fake.readFrame(99) == nil)
     }
 
     // #11 — drag snap-reorder at drag END. A mid-drag `.moved` alone must NOT reorder (the
