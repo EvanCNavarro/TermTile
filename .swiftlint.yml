@@ -1,0 +1,13 @@
+# SwiftLint config - the CI lint gate (#13b). Tuned to THIS codebase's real, legitimate
+# conventions, never to silence a real defect. Every relaxation is justified inline; production
+# safety rules (force_cast, large_tuple) stay STRICT on shipped code.
+excluded:
+  - .build
+  - Sources/AXProbe   # throwaway spike probe (BACKLOG Phase A: "throwaway-quality but committed")
+  - Tests             # gate protects SHIPPED code; test fixtures use 3-member tuples legitimately
+disabled_rules:
+  - trailing_comma    # Swift 6.1 permits trailing commas; the codebase uses them in collection literals
+identifier_name:
+  min_length:
+    warning: 1        # geometry/layout math uses single-letter names (x, y, a, b, i, j, k, dx, dy)
+    error: 1

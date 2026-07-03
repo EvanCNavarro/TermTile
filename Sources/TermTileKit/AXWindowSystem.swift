@@ -205,9 +205,11 @@ private func windowID(of win: AXUIElement) -> CGWindowID? {
 private func frame(of win: AXUIElement) -> CGRect {
     var pos = CGPoint.zero, size = CGSize.zero
     if let pv = copyAttr(win, kAXPositionAttribute), CFGetTypeID(pv) == AXValueGetTypeID() {
+        // swiftlint:disable:next force_cast - CFTypeID checked above; AXValueGetValue needs AXValue (AX idiom)
         _ = AXValueGetValue(pv as! AXValue, .cgPoint, &pos)
     }
     if let sv = copyAttr(win, kAXSizeAttribute), CFGetTypeID(sv) == AXValueGetTypeID() {
+        // swiftlint:disable:next force_cast - CFTypeID checked above; AXValueGetValue needs AXValue (AX idiom)
         _ = AXValueGetValue(sv as! AXValue, .cgSize, &size)
     }
     return CGRect(origin: pos, size: size)

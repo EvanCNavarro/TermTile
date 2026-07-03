@@ -1,9 +1,7 @@
 version: 2
 updates:
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: weekly
+  # SwiftPM has no Dependabot ecosystem and the package has no third-party deps; github-actions
+  # keeps the CI workflow action pins current (the npm entry was removed with the npm CI - #13b).
   - package-ecosystem: github-actions
     directory: /
     schedule:

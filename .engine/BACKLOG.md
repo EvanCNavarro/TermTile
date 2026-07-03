@@ -303,13 +303,28 @@ committed; findings notes are the durable output.
   launch Contents/MacOS/TermTile, System Events "status menu" AND bundle-identifier-of-PID ==
   dev.ecn.apps.termtile (discriminator vs bare binary), CGWindowList layer-25 (TRAP-1 not pixels),
   screencapture archival. Icon deferred (LSUIElement = no dock icon, YAGNI). Plan: stoke-plan-13a.md.
-#13b · CI wiring: swift test in check.yml + SwiftLint/Semgrep + release.yml · S0
-  blocked-by #13a. Replace the placeholder npm check.yml (package.json is scaffolding: echo-lint +
-  node --test over zero test files = trivial pass — audit §8.1 gap) with a macOS `swift test` job gating
-  the build; add SwiftLint + Semgrep (p/security-audit + p/secrets) workflows; release.yml (tag v* →
-  build-app.sh → VirusTotal + attest-build-provenance + SHA-256 + gh release, swift test gated).
-  [DEP: external — no-network/no-push in loop beats; workflows are authored + static-validated
-  (actionlint/yamllint) locally, but a LIVE run is provable only on GitHub Actions runners with secrets] → #13b
+#13b · CI wiring: swift test in check.yml + SwiftLint/Semgrep + release.yml · DONE
+  (2026-07-03: swift test 134/134 green [+6 WorkflowsTests] + THREE invert-checks red [one per workflow
+  file — check.yml swift→npm reddens swift-test-gate+npm-absence; release.yml drop scripts/build-app.sh
+  reddens the full-path call; semgrep.yml drop p/secrets reddens the pack], restored green; all 10
+  .engine/checks PASS. LOCALLY PROVEN what a no-network beat can prove: the GATED COMMANDS run green on
+  THIS repo — `swift test` 134/134 (exactly what check.yml runs) + `swiftlint --strict` rc=0 0-violations
+  (exactly what the lint step runs) — and all workflow YAMLs are well-formed via `ruby -ryaml`. check.yml
+  REWRITTEN [macos-15; swift build/test + swiftlint --strict; KEEPS name:Check + permissions:contents:read
+  per REPOSITORY_POLICY.md, npm placeholder removed] + semgrep.yml [p/security-audit + p/secrets, PR +
+  weekly] + release.yml [tag v* → swift test gate → CALLS scripts/build-app.sh → ditto+SHA-256 →
+  attest-build-provenance@v4 → VirusTotal via curl+secret → gh release; appcast dropped → #16] +
+  .swiftlint.yml [excludes throwaway AXProbe + Tests, trailing_comma off (Swift 6.1), identifier_name
+  min_length 1 (geometry math); force_cast kept STRICT, scoped inline at AXWindowSystem.swift:208,211] +
+  Tests/TermTileKitTests/WorkflowsTests.swift [6 line-scoped POSITIVE invariants]. dependabot npm entry
+  dropped (npm CI gone). Skeptic SAFE-WITH-FIXES [F1 attest@v4, F2 preserve name/permissions+doc-drift,
+  F3 invert-per-file, F4 scope force_cast inline, F5 drop npm dependabot — ALL folded]. Fixed a
+  self-inflicted too-crude secret invariant [flagged `github.token` — narrowed to require a `${{ }}`
+  context]. Plan: .engine/state/stoke-plan-13b.md; receipt: receipt.md Row 8; verification:
+  docs/verification/task13b-ci-wiring.md.)
+  blocked-by #13a (DONE). Kit-adjacent CI config (no production Swift logic change; 2 comment-only lines
+  in AXWindowSystem for the inline lint exemption). LIVE GitHub-Actions execution is external → #20.
+  DEFERRED: live workflow runs on GitHub runners (check/semgrep green + tag→release with secrets) + GH-Actions schema validation (actionlint/yamllint absent, no-network to install; ruby proves well-formedness only) [DEP: external — a live CI run needs GitHub runners + configured secrets + a push, all outside a no-network/no-push loop beat] → #20
 #13c · Stable signing identity (Developer ID / self-signed cert) so .app TCC grants survive rebuilds · S0
   blocked-by #13a. Spike 02 proved ad-hoc cdhash pinning voids the Accessibility grant on every rebuild
   (fatal UX for an AX tiler). Establish a stable codesigning identity and re-sign the bundle with it.
@@ -330,3 +345,10 @@ committed; findings notes are the durable output.
   [DEP: blocked-by #13]
 #17 · Gap/padding settings UI + per-app profiles · S0
   [DEP: shape — post-MVP polish]
+#20 · Live CI verification: check/semgrep/release workflows execute green on GitHub Actions · S0
+  blocked-by #13b. The #13b workflows are authored + locally static-validated (swift test + swiftlint
+  proven green on this repo; YAML well-formed via ruby); this task PROVES them on real runners: check.yml
+  green on a PR, semgrep.yml clean, and a `v*` tag drives release.yml (build-app.sh → attest → VirusTotal
+  → gh release) with `secrets.VIRUSTOTAL_API_KEY` configured. Also run actionlint/yamllint for GH-Actions
+  schema validation (absent locally in the loop). Needs #13c's signing identity for a shippable release.
+  [DEP: external — requires GitHub runners + a push + configured repo secrets, none available in a no-network/no-push loop beat] → #20

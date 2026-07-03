@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Least privilege, widened only for what a release needs: create the release + attest provenance.
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # build-app.sh derives CFBundleVersion from git rev-list --count (full history)
+      - name: Select Xcode (Swift 6 toolchain)
+        run: sudo xcode-select -switch /Applications/Xcode.app
+
+      # Gate the release on the SAME test suite as check.yml (audit: no release without green tests).
+      - name: Test
+        run: swift test
+
+      # CALL the packaging script (do not duplicate the build - audit "CI should call the scripts").
+      # build-app.sh prints the built .app path as its LAST stdout line.
+      - name: Build .app
+        id: build
+        run: |
+          set -euo pipefail
+          APP_PATH="$(scripts/build-app.sh | tail -1)"
+          echo "app_path=${APP_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Package + checksum
+        id: package
+        run: |
+          set -euo pipefail
+          APP_PATH="${{ steps.build.outputs.app_path }}"
+          ZIP="dist/TermTile-${GITHUB_REF_NAME}.zip"
+          ditto -c -k --keepParent "${APP_PATH}" "${ZIP}"
+          shasum -a 256 "${ZIP}" | tee "${ZIP}.sha256"
+          echo "zip=${ZIP}" >> "${GITHUB_OUTPUT}"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: ${{ steps.package.outputs.zip }}
+
+      # VirusTotal via the public API + curl (no unverified third-party action; secret stays in context).
+      - name: VirusTotal scan
+        env:
+          VT_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        run: |
+          set -euo pipefail
+          ZIP="${{ steps.package.outputs.zip }}"
+          RESP="$(curl -sS --fail-with-body \
+            --request POST 'https://www.virustotal.com/api/v3/files' \
+            --header "x-apikey: ${VT_API_KEY}" \
+            --form "file=@${ZIP}")"
+          ANALYSIS_ID="$(echo "${RESP}" | python3 -c 'import sys, json; print(json.load(sys.stdin)["data"]["id"])')"
+          echo "VirusTotal analysis: https://www.virustotal.com/gui/file-analysis/${ANALYSIS_ID}" \
+            | tee -a "${GITHUB_STEP_SUMMARY}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ZIP="${{ steps.package.outputs.zip }}"
+          gh release create "${GITHUB_REF_NAME}" \
+            "${ZIP}" "${ZIP}.sha256" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes

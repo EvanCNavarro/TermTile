@@ -11,19 +11,19 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install dependencies from lockfile
-        if: ${{ hashFiles('package-lock.json') != '' }}
-        run: npm ci
-      - name: Install dependencies without lockfile
-        if: ${{ hashFiles('package-lock.json') == '' }}
-        run: npm install --package-lock=false
-      - name: Run project checks
-        run: npm run check
+      - name: Select Xcode (Swift 6 toolchain)
+        run: sudo xcode-select -switch /Applications/Xcode.app
+      - name: Report Swift version
+        run: swift --version
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint --strict

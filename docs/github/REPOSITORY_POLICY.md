@@ -2,7 +2,7 @@
 
 ## GitHub Baseline
 
-Generated git-backed projects include a check workflow, Dependabot configuration, and pull request template. The workflow follows GitHub's least-privilege guidance by setting `permissions: contents: read` and running `npm run check`. It uses `npm ci` when a lockfile exists and a no-lock install fallback while the blank initializer has no dependencies.
+Generated git-backed projects include a check workflow, Dependabot configuration, and pull request template. The workflow follows GitHub's least-privilege guidance by setting `permissions: contents: read`. For this Swift package the check workflow runs on a macOS runner and gates the build on `swift build`, `swift test`, and `swiftlint --strict` (the npm placeholder was replaced in #13b). A tag-triggered `release.yml` builds the signed `.app`, attests build provenance, runs a VirusTotal scan, and publishes a GitHub release; a `semgrep.yml` runs the `p/security-audit` and `p/secrets` rule packs on PRs and weekly.
 
 Sources:
 
