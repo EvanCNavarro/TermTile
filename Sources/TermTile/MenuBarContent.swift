@@ -10,6 +10,7 @@ import TermTileKit
 /// without clicking (verified by code review; see docs/verification/task12c-menubar-shell.md).
 struct MenuBarContent: View {
     let viewModel: MenuBarViewModel
+    let updater: Updater
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -47,6 +48,8 @@ struct MenuBarContent: View {
             }
 
             Divider()
+            Button("Check for Updates…") { updater.checkForUpdates() }
+                .disabled(!updater.canCheckForUpdates)
             Button("Quit TermTile") { NSApplication.shared.terminate(nil) }
         }
         .padding(12)

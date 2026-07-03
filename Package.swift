@@ -16,8 +16,19 @@ let package = Package(
         .target(name: "TermTileCore"),
         // The window-system port + AX adapters (ADR-0001). Depends on Core.
         .target(name: "TermTileKit", dependencies: ["TermTileCore"]),
-        // Thin shell: MenuBarExtra UI + composition root. Depends on Kit and Core.
-        .executableTarget(name: "TermTile", dependencies: ["TermTileKit", "TermTileCore"]),
+        // Thin shell: MenuBarExtra UI + composition root. Depends on Kit and Core, plus Sparkle
+        // for auto-updates. The runtime rpath lets the bundled binary find Sparkle.framework that
+        // build-app.sh embeds in Contents/Frameworks — linking Sparkle WITHOUT this + the embed =
+        // dyld crash (RememBar-audit §1).
+        .executableTarget(
+            name: "TermTile",
+            dependencies: ["TermTileKit", "TermTileCore", "Sparkle"],
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
+            ]),
+        // Local binaryTarget (SPM's remote artifact downloader hangs in some sandboxes). The
+        // xcframework is gitignored + vendored by scripts/fetch-sparkle.sh — run it once after clone.
+        .binaryTarget(name: "Sparkle", path: "Vendor/Sparkle.xcframework"),
         .testTarget(name: "TermTileCoreTests", dependencies: ["TermTileCore"]),
         .testTarget(name: "TermTileKitTests", dependencies: ["TermTileKit"])
     ]

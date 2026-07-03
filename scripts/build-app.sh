@@ -15,6 +15,12 @@ CONFIGURATION="${CONFIGURATION:-release}"
 SHORT_VERSION="${SHORT_VERSION:-0.1.0}"
 DIST_DIR="${DIST_DIR:-dist}"
 ICON_SRC="${ICON_SRC:-Resources/AppIcon.png}"
+# Sparkle appcast URL (Info.plist SUFeedURL) — 404s until the first release publishes appcast.xml.
+SU_FEED_URL="${SU_FEED_URL:-https://github.com/EvanCNavarro/TermTile/releases/latest/download/appcast.xml}"
+# Sparkle EdDSA PUBLIC key — safe to commit. The matching private key lives in the login Keychain
+# (svce https://sparkle-project.org) and signs each update via sign_update; a bad/missing signature
+# is refused by Sparkle.
+SU_PUBLIC_ED_KEY="${SU_PUBLIC_ED_KEY:-mIAUkTNj+kRPNqkAX1Z1EaqFqyLaFQ37pwEIGduj4Zs=}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -52,6 +58,8 @@ cat > "$PLIST" <<PLIST_EOF
 	<key>LSUIElement</key><true/>
 	<key>NSPrincipalClass</key><string>NSApplication</string>
 	<key>NSHighResolutionCapable</key><true/>
+	<key>SUFeedURL</key><string>$SU_FEED_URL</string>
+	<key>SUPublicEDKey</key><string>$SU_PUBLIC_ED_KEY</string>
 </dict>
 </plist>
 PLIST_EOF
@@ -68,11 +76,30 @@ if [ -f "$ICON_SRC" ]; then
 	/usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$PLIST" >&2 || true
 fi
 
-# Inside-out sign (no --deep). Sign the inner Mach-O first, then the bundle; verify strict.
-# TERMTILE_SIGN_IDENTITY selects a stable keychain identity (#13c) so TCC grants survive
-# rebuilds; default "-" stays ad-hoc (per-build cdhash, grant resets every rebuild).
+# Embed Sparkle.framework — REQUIRED whenever the binary links Sparkle: a linked
+# @rpath/Sparkle.framework with nothing in Contents/Frameworks dyld-crashes at launch (audit §1).
+# `ditto` preserves the framework's version symlinks.
+SPARKLE_FRAMEWORK="$ROOT/Vendor/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+[ -d "$SPARKLE_FRAMEWORK" ] || "$(dirname "${BASH_SOURCE[0]}")/fetch-sparkle.sh" >&2
+[ -d "$SPARKLE_FRAMEWORK" ] || { echo "Sparkle.framework missing (run scripts/fetch-sparkle.sh)" >&2; exit 1; }
+FRAMEWORKS_DIR="$APP/Contents/Frameworks"
+SPARKLE_DST="$FRAMEWORKS_DIR/Sparkle.framework"
+SPARKLE_V="$SPARKLE_DST/Versions/B"
+mkdir -p "$FRAMEWORKS_DIR"
+ditto "$SPARKLE_FRAMEWORK" "$SPARKLE_DST"
+
+# Inside-out sign (no --deep). Sign the deepest nested Sparkle code FIRST (its XPC services /
+# helpers individually — --deep can corrupt those signatures, per Sparkle's docs), then the
+# framework, then the app binary, then the bundle; verify strict.
+# TERMTILE_SIGN_IDENTITY selects a stable keychain identity (#13c) so TCC grants survive rebuilds;
+# default "-" stays ad-hoc (per-build cdhash, grant resets every rebuild).
 SIGN_IDENTITY="${TERMTILE_SIGN_IDENTITY:--}"
 xattr -cr "$APP"
+codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/XPCServices/Downloader.xpc" >&2
+codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/XPCServices/Installer.xpc" >&2
+codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/Autoupdate" >&2
+codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/Updater.app" >&2
+codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_DST" >&2
 codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/$APP_NAME" >&2
 codesign --force --sign "$SIGN_IDENTITY" "$APP" >&2
 codesign --verify --deep --strict "$APP" >&2

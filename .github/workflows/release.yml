@@ -45,6 +45,30 @@ jobs:
           shasum -a 256 "${ZIP}" | tee "${ZIP}.sha256"
           echo "zip=${ZIP}" >> "${GITHUB_OUTPUT}"
 
+      # Sparkle appcast: sign the zip with the EdDSA private key (from the repo secret) and emit
+      # appcast.xml. The public key baked into Info.plist (SUPublicEDKey) verifies it on the client;
+      # an unsigned/tampered update is refused. `generate_appcast` scans the dist dir for the zip.
+      - name: Generate signed appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          # Fetch the Sparkle CLI tools (generate_appcast) — the tarball dist, not the SPM zip.
+          WORK="$(mktemp -d)"
+          curl -fsSL --max-time 180 \
+            "https://github.com/sparkle-project/Sparkle/releases/download/2.9.3/Sparkle-2.9.3.tar.xz" \
+            -o "$WORK/s.tar.xz"
+          tar -xf "$WORK/s.tar.xz" -C "$WORK"
+          GEN="$(find "$WORK" -name generate_appcast -type f | head -1)"
+          # Write the private key to a file for --ed-key-file, remove it immediately after.
+          KEYFILE="$WORK/ed_private.key"
+          printf '%s' "${SPARKLE_ED_PRIVATE_KEY}" > "$KEYFILE"
+          "$GEN" --ed-key-file "$KEYFILE" \
+            --download-url-prefix "https://github.com/EvanCNavarro/TermTile/releases/download/${GITHUB_REF_NAME}/" \
+            dist/
+          rm -f "$KEYFILE"
+          test -f dist/appcast.xml || { echo "appcast.xml not produced" >&2; exit 1; }
+
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4
         with:
@@ -72,6 +96,6 @@ jobs:
           set -euo pipefail
           ZIP="${{ steps.package.outputs.zip }}"
           gh release create "${GITHUB_REF_NAME}" \
-            "${ZIP}" "${ZIP}.sha256" \
+            "${ZIP}" "${ZIP}.sha256" dist/appcast.xml \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes

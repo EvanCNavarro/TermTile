@@ -15,6 +15,7 @@ import TermTileKit
 struct TermTileApp: App {
     @NSApplicationDelegateAdaptor(TermTileAppDelegate.self) private var appDelegate
     private let viewModel: MenuBarViewModel
+    private let updater = Updater()
 
     init() {
         let isSelftest = ProcessInfo.processInfo.environment["TERMTILE_SELFTEST"] != nil
@@ -56,7 +57,7 @@ struct TermTileApp: App {
 
     var body: some Scene {
         MenuBarExtra(AppIdentity.appName) {
-            MenuBarContent(viewModel: viewModel)
+            MenuBarContent(viewModel: viewModel, updater: updater)
         }
         .menuBarExtraStyle(.window)
     }

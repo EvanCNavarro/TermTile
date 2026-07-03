@@ -12,3 +12,7 @@ build/
 .build/
 .wrangler/
 .engine/events.jsonl
+
+# Sparkle (vendored by scripts/fetch-sparkle.sh)
+Vendor/
+.sparkle-tools/
