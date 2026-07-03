@@ -2,7 +2,7 @@
 
 ## Repository Expectations
 
-- Use `npm run check` before claiming project health.
+- Run `swift build && swift test && swiftlint --strict` before claiming project health.
 - Keep secrets out of commits.
 - Put durable decisions in `docs/decisions/`.
 - Keep generated caches out of source control.

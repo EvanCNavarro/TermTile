@@ -6,7 +6,7 @@
 
 ## Verification
 
-- [ ] `npm run check`
+- [ ] `swift build && swift test && swiftlint --strict`
 - [ ] Report or screenshot evidence attached when UI, generated reports, or browser-visible artifacts changed
 
 ## Security notes

@@ -14,9 +14,12 @@ API to move and resize the real windows — so it works with the terminal you al
 nothing until you ask it to.
 
 - **One target app at a time** — iTerm2 by default; pick any running app from the menu.
-- **On-demand** — it only rearranges when you press the button. Your windows are yours the rest of
-  the time.
+- **On-demand** — it only rearranges when you press the button (or a **global hotkey**, ⌘⌥T by
+  default, which you can re-record in the menu). Your windows are yours the rest of the time.
+- **Adjustable gap** — set the spacing between tiled windows from the menu.
 - **Auto-updates** — a built-in **Check for Updates…** keeps you current.
+- **Clean uninstall** — an **About** panel with a one-click uninstall that removes the app and its
+  data (and tells you the one thing it can't: revoking the Accessibility grant).
 
 ## Install
 
@@ -80,7 +83,7 @@ in `TermTileCore`, the Accessibility adapter in `TermTileKit`, a thin SwiftUI me
 - **Notarization** — releases are ad-hoc signed today (hence the Gatekeeper step above). A signed +
   notarized build (removing the warning) lands with an Apple Developer ID.
 - **Intel Macs** — the build is Apple Silicon only for now.
-- Multi-display / Spaces awareness and a gap/padding settings UI are on the roadmap.
+- Multi-display / Spaces awareness is on the roadmap.
 
 ## Releasing
 
