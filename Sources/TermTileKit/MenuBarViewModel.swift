@@ -39,6 +39,10 @@ public final class MenuBarViewModel {
     @ObservationIgnored private let epsilon: CGFloat
     @ObservationIgnored private let makeActor: @Sendable (String) -> TilingActor
     @ObservationIgnored private var actor: TilingActor
+    /// The Uninstaller — injected by the composition root (which supplies the real library +
+    /// bundle URL), so the VM never touches `FileManager`/`Bundle.main` and stays test-injected.
+    /// Optional: unbundled/test contexts leave it nil (uninstall is a no-op there).
+    @ObservationIgnored private let uninstaller: Uninstaller?
 
     public init(
         settings: any SettingsStore,
@@ -48,7 +52,8 @@ public final class MenuBarViewModel {
         visibleFrame: CGRect,
         gap: CGFloat,
         epsilon: CGFloat,
-        makeActor: @escaping @Sendable (String) -> TilingActor
+        makeActor: @escaping @Sendable (String) -> TilingActor,
+        uninstaller: Uninstaller? = nil
     ) {
         let loaded = settings.load()
         self.settings = settings
@@ -58,11 +63,20 @@ public final class MenuBarViewModel {
         self.gap = gap
         self.epsilon = epsilon
         self.makeActor = makeActor
+        self.uninstaller = uninstaller
         self.targetBundleID = loaded.targetBundleID
         self.availableApps = appsProvider.runningTargetApps()
         self.isAccessibilityTrusted = isTrustedProbe()
         self.launchAtLogin = loginItem.status == .enabled
         self.actor = makeActor(loaded.targetBundleID)
+    }
+
+    /// Run the uninstall (About panel's Uninstall action). Returns the outcome for the UI to render
+    /// (removed / partial failures / Finder-reveal / the TCC-reset guidance), or nil if no
+    /// uninstaller was injected (unbundled). The caller quits with `exit(0)` after the user
+    /// dismisses the outcome — NOT `NSApp.terminate` (which would re-flush the purged prefs domain).
+    public func uninstall() -> Uninstaller.UninstallOutcome? {
+        uninstaller?.uninstall()
     }
 
     /// The Privacy_Accessibility deep link the fix-it row opens (re-exported from the internal

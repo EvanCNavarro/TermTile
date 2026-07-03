@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 @testable import TermTileKit
 import TermTileCore
@@ -33,7 +34,8 @@ struct MenuBarViewModelTests {
         store: any SettingsStore = InMemorySettingsStore(),
         login: any LoginItem = InMemoryLoginItem(),
         apps: [TargetApp] = [TargetApp(bundleID: "com.googlecode.iterm2", name: "iTerm2")],
-        trusted: Bool = false
+        trusted: Bool = false,
+        uninstaller: Uninstaller? = nil
     ) -> (vm: MenuBarViewModel, fake: InMemoryWindowSystem) {
         let fake = InMemoryWindowSystem(windows: windows)
         let vm = MenuBarViewModel(
@@ -44,7 +46,8 @@ struct MenuBarViewModelTests {
             visibleFrame: visible,
             gap: gap,
             epsilon: eps,
-            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps, ttlSeconds: 100) })
+            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps, ttlSeconds: 100) },
+            uninstaller: uninstaller)
         return (vm, fake)
     }
 
@@ -149,5 +152,27 @@ struct MenuBarViewModelTests {
         let before = store.load()
         await vm.rearrangeNow()
         #expect(store.load() == before)
+    }
+
+    // uninstall() forwards to the injected Uninstaller and returns its outcome; nil when none.
+    @Test("uninstall routes to the injected uninstaller")
+    func uninstallRoutes() throws {
+        let lib = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vm-uninstall-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: lib, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: lib) }
+        let u = Uninstaller(ownedPaths: OwnedPaths(library: lib), loginItem: InMemoryLoginItem(),
+                            settings: InMemorySettingsStore(), bundleURL: nil, trash: { _ in })
+        let (vm, _) = makeVM(uninstaller: u)
+        let outcome = vm.uninstall()
+        #expect(outcome != nil)
+        #expect(outcome?.tccResetBundleID == AppIdentity.bundleID)
+        #expect(outcome?.isClean == true)   // nothing to remove in the empty temp lib → clean
+    }
+
+    @Test("uninstall is a no-op (nil) when no uninstaller is injected")
+    func uninstallNilWhenAbsent() {
+        let (vm, _) = makeVM()   // no uninstaller
+        #expect(vm.uninstall() == nil)
     }
 }

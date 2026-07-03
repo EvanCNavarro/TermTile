@@ -16,6 +16,7 @@ struct TermTileApp: App {
     @NSApplicationDelegateAdaptor(TermTileAppDelegate.self) private var appDelegate
     private let viewModel: MenuBarViewModel
     private let updater = Updater()
+    private let appInfo: AppInfo
 
     init() {
         let isSelftest = ProcessInfo.processInfo.environment["TERMTILE_SELFTEST"] != nil
@@ -26,9 +27,26 @@ struct TermTileApp: App {
         let eps: CGFloat = 2
         let visibleFrame = Self.originAXVisibleFrame()
 
+        // Construct the shared persistence + login-item ONCE so the Uninstaller acts on the SAME
+        // instances the VM uses (it must deregister the real login item + purge the real defaults).
+        let settings = UserDefaultsSettingsStore(suiteName: suiteName)
+        let loginItem = SMAppServiceLoginItem()
+        // The real ~/Library (non-sandboxed → the user's real home; TermTile can't be sandboxed).
+        let library = (try? FileManager.default.url(for: .libraryDirectory, in: .userDomainMask,
+                                                    appropriateFor: nil, create: false))
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library", isDirectory: true)
+        // NEVER arm the real uninstaller in a debug run (selftest/gallery) — a dev clicking Uninstall
+        // in the interactive gallery would trash the user's REAL prefs/caches + the bundle. The VM
+        // treats a nil uninstaller as a safe no-op; the button still renders for gallery validation.
+        let isGallery = ProcessInfo.processInfo.environment["TERMTILE_GALLERY"] != nil
+        let uninstaller: Uninstaller? = (isSelftest || isGallery) ? nil
+            : Uninstaller(ownedPaths: OwnedPaths(library: library), loginItem: loginItem,
+                          settings: settings, bundleURL: Bundle.main.bundleURL)
+
+        appInfo = AppInfo.fromBundle()
         viewModel = MenuBarViewModel(
-            settings: UserDefaultsSettingsStore(suiteName: suiteName),
-            loginItem: SMAppServiceLoginItem(),
+            settings: settings,
+            loginItem: loginItem,
             appsProvider: WorkspaceTargetAppsProvider(),
             isTrustedProbe: MenuBarViewModel.liveTrustProbe,
             visibleFrame: visibleFrame,
@@ -36,7 +54,8 @@ struct TermTileApp: App {
             epsilon: eps,
             makeActor: { bundleID in
                 TilingActor(system: AXWindowSystem(bundleID: bundleID), config: .disabled, epsilon: eps)
-            })
+            },
+            uninstaller: uninstaller)
 
         // Menu-bar utility: no dock icon, never takes window focus. Set here (init is reliable);
         // the delegate re-asserts it as a belt.
@@ -53,11 +72,34 @@ struct TermTileApp: App {
                 FileHandle.standardError.write(Data("TILE_ONCE done\n".utf8))
             }
         }
+
+        if isGallery {
+            Self.showGallery(MenuBarContent(viewModel: viewModel, updater: updater, appInfo: appInfo))
+        }
+    }
+
+    /// DEBUG gallery hook (RememBar's REMEMBAR_GALLERY pattern): show the REAL MenuBarContent panel in
+    /// a normal window (interactive controls draw faithfully, unlike an offscreen ImageRenderer) — the
+    /// FL-9 rendered-reality check for the About/Uninstall UI on a native app (no Chrome DevTools).
+    /// LSUIElement apps have no windows, so flip to `.regular`.
+    private static func showGallery(_ content: MenuBarContent) {
+        Task { @MainActor in
+            NSApplication.shared.setActivationPolicy(.regular)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 460),
+                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false   // programmatic NSWindow defaults true → ARC double-free
+            window.title = "TermTile — panel (gallery)"
+            window.contentView = NSHostingView(rootView: content)
+            window.center()
+            window.makeKeyAndOrderFront(nil)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            FileHandle.standardError.write(Data("GALLERY shown\n".utf8))
+        }
     }
 
     var body: some Scene {
         MenuBarExtra(AppIdentity.appName) {
-            MenuBarContent(viewModel: viewModel, updater: updater)
+            MenuBarContent(viewModel: viewModel, updater: updater, appInfo: appInfo)
         }
         .menuBarExtraStyle(.window)
     }

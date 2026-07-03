@@ -25,7 +25,9 @@ public struct AppInfo: Sendable {
         // Canonical links — the single Swift-side source (build scripts hold their own copies).
         self.repoURL = URL(string: "https://github.com/EvanCNavarro/TermTile")!
         self.releasesURL = URL(string: "https://github.com/EvanCNavarro/TermTile/releases/latest")!
-        self.licenseURL = URL(string: "https://github.com/EvanCNavarro/TermTile/blob/master/LICENSE")!
+        // `HEAD` (not a branch name) — GitHub resolves it to the default branch, so a branch rename
+        // never 404s this link.
+        self.licenseURL = URL(string: "https://github.com/EvanCNavarro/TermTile/blob/HEAD/LICENSE")!
     }
 
     /// Pure derivation from an Info-plist dictionary — the testable seam (no disk, no real `Bundle`).

@@ -38,6 +38,6 @@ struct AppInfoTests {
         let info = AppInfo(version: "x", build: "y")
         #expect(info.repoURL.absoluteString == "https://github.com/EvanCNavarro/TermTile")
         #expect(info.releasesURL.absoluteString == "https://github.com/EvanCNavarro/TermTile/releases/latest")
-        #expect(info.licenseURL.absoluteString == "https://github.com/EvanCNavarro/TermTile/blob/master/LICENSE")
+        #expect(info.licenseURL.absoluteString == "https://github.com/EvanCNavarro/TermTile/blob/HEAD/LICENSE")
     }
 }
