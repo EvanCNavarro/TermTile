@@ -1,23 +1,37 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-This project is pre-release until a real app adapter and deploy path are selected. Treat the default branch as the only supported line unless a release process says otherwise.
+The **latest [release](https://github.com/EvanCNavarro/TermTile/releases/latest)** is the supported
+line. Fixes ship in a new release; there are no back-ported patch branches.
 
-## Vulnerability Response
+## Reporting a vulnerability
 
-Record suspected vulnerabilities in a private issue, security advisory, or direct owner handoff before public disclosure. Include affected files, reproduction steps, data exposure risk, and mitigation status.
+Please report privately via a
+[GitHub security advisory](https://github.com/EvanCNavarro/TermTile/security/advisories/new) rather
+than a public issue. Include affected version, reproduction steps, and the impact (what an attacker
+gains). You'll get an acknowledgement and, once fixed, a released version.
 
-## Reference Standards For Future Gates
+## What TermTile can and can't touch
 
-These references guide future CI and supply-chain buckets. Bucket 2 only creates and verifies the security documentation surface.
+TermTile uses the macOS **Accessibility** API to move and resize a chosen app's windows. It reads
+window lists and frames and writes new positions — it does **not** read window contents, keystrokes,
+the clipboard, files, or the network. Its only outbound request is the signed update check (fetching
+the appcast from this repo's releases). There is no telemetry.
 
-- NIST SSDF: https://csrc.nist.gov/pubs/sp/800/218/final
-- OWASP SAMM: https://owasp.org/www-project-samm/
-- OpenSSF Scorecard: https://scorecard.dev/
-- SLSA: https://slsa.dev/
+## Supply-chain integrity
 
-## Required Local Checks
+- **Releases are built by this repo's GitHub Actions**, not a personal machine.
+- **Build provenance attestation** — verify a download came from this repo's CI untampered:
+  `gh attestation verify TermTile-<version>.zip --repo EvanCNavarro/TermTile`.
+- **SHA-256** checksum published beside each release zip.
+- **EdDSA-signed auto-updates** — Sparkle refuses an update whose signature doesn't verify against
+  the public key baked into the app.
+- **Dependabot** keeps CI action versions current; **Semgrep** (`p/security-audit`, `p/secrets`) and
+  **SwiftLint** run on every push.
 
-- Run `npm run check` before claiming security-relevant changes are complete.
-- Keep dependency, workflow, and deploy security gates visible in project docs until CI is implemented.
+## Known limitations
+
+Releases are currently **ad-hoc signed, not notarized** — macOS Gatekeeper shows an "unidentified
+developer" warning on first launch (see the README install steps). A Developer ID + notarization —
+which adds Apple's own malware scan and removes the warning — is planned for public distribution.
