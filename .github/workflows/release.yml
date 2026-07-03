@@ -22,6 +22,11 @@ jobs:
       - name: Select Xcode (Swift 6 toolchain)
         run: sudo xcode-select -switch /Applications/Xcode.app
 
+      # Sparkle is a local binaryTarget vendored into gitignored Vendor/ — fetch it before ANY
+      # swift build/test (build-app.sh also fetches lazily, but the Test step runs first).
+      - name: Vendor Sparkle
+        run: scripts/fetch-sparkle.sh
+
       # Gate the release on the SAME test suite as check.yml (audit: no release without green tests).
       - name: Test
         run: swift test

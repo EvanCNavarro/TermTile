@@ -19,6 +19,10 @@ jobs:
         run: sudo xcode-select -switch /Applications/Xcode.app
       - name: Report Swift version
         run: swift --version
+      # Sparkle is a local binaryTarget vendored into gitignored Vendor/ — fetch it before ANY
+      # swift build/test, or the binary target has no artifact and the build fails.
+      - name: Vendor Sparkle
+        run: scripts/fetch-sparkle.sh
       - name: Build
         run: swift build
       - name: Test
