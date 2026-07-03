@@ -253,7 +253,22 @@ committed; findings notes are the durable output.
   registration is observable only from a bundled .app.
   [DEP: blocked-by #13 — SMAppService.mainApp requires the packaged .app + login-item domain; a
   `swift run` binary can't register a real login item, so the LIVE prove needs #13's bundle] → #13
-#12c · MenuBarExtra shell wiring: toggle→TilingActor.activate, target-app picker, permission fix-it row · S0
+#12c · MenuBarExtra shell wiring: toggle→TilingActor.activate, target-app picker, permission fix-it row · DONE
+  (2026-07-03: swift test 122/122 green [+10 MenuBarViewModel] + invert-check red [break
+  toggle→activate wire → keystone writes.count 0==3, restored]; PROVEN LIVE — real .build/debug/
+  TermTile launched accessory/no-focus: PROCESS-ALIVE, AX "status menu" [menu bar 2], CGWindowList
+  layer-25 status window [TRAP-1: AX+layer not pixels — item parked off-screen X:-4777 by a menu-bar
+  manager], and an in-process TERMTILE_SELFTEST proving the REAL setEnabled(true)→UserDefaults
+  persist [fresh false→true delta, non-running target so activate inert — zero windows moved].
+  MenuBarViewModel [@MainActor @Observable, Kit — injected visibleFrame seam R1, awaits activate R2,
+  public liveTrustProbe keeps AccessibilityTrust internal R6] + TargetApp/TargetAppsProviding +
+  WorkspaceTargetAppsProvider + fake + MenuBarContent SwiftUI + TermTileApp composition root land.
+  No run()/live-event obs here [module-global AXObserver bridge can't host two adapters across a
+  target-switch → #14, R3]. HONEST residual: SwiftUI control→VM bindings code-review-only [.window
+  popover can't be scripted]; click-to-tile E2E → #14. Skeptic SAFE-WITH-FIXES [7 folded, no split].
+  Hit TRAP-17 [buffered-stdout markers lost on SIGTERM → unbuffered stderr; new check]. Plan:
+  .engine/state/stoke-plan-12c.md; receipt: receipt.md Row 8; verification:
+  docs/verification/task12c-menubar-shell.md.)
   blocked-by #12a, #12b, #19b (needs the full engine incl. events()). SwiftUI MenuBarExtra
   `.window` style (RememBar; init() is the reliable delegate hook). Composes SettingsStore +
   LoginItem + AccessibilityTrust probe + Privacy_Accessibility deep link into the shell. PROVE =

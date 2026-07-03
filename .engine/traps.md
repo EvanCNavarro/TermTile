@@ -177,3 +177,19 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   zero-match filter EXITS 0, so "0 tests" during an invert-check is a false green, not a red — always
   confirm the filter actually selected the intended test. Not mechanically checkable from repo state
   (transient CLI-invocation discipline) — no compiled check; this warning is the guard.
+
+### TRAP-17: live-prove markers via `print()` to a pipe are block-buffered → lost on SIGTERM (TRAP-14 class)
+- what happened: #12c's first live PROVE launched the real TermTile app with `TERMTILE_SELFTEST=1`,
+  redirecting stdout+stderr to a file, then SIGTERM'd it after 3s. The selftest's `print("SELFTEST
+  …")` markers NEVER appeared (empty capture) — stdout to a FILE/PIPE (not a TTY) is fully
+  block-buffered, so the prints sat in the unflushed buffer and were discarded when the process was
+  killed. The AX "status menu" + CGWindowList layer-25 proofs succeeded; only the in-process wiring
+  markers were lost, forcing a re-run. Same buffering-on-a-pipe family as TRAP-14's masking bug
+  (`setvbuf _IOLBF` size-0 doesn't line-buffer a pipe), in a NEW context (a SwiftUI-app env-selftest,
+  not AXProbe's sync main).
+- warning: any live-PROVE marker a harness captures from a process it later KILLS must go to
+  UNBUFFERED `FileHandle.standardError.write(Data(...))`, never `print()`/stdout — buffered stdout on
+  a pipe is invisible until a clean exit or buffer-full, and a killed prove exits neither way. (Belt:
+  emit a synchronous marker before any async work so "hook reached" is distinguishable from "async
+  ran".) Enforced by .engine/checks/selftest-stderr-markers.sh (exit non-zero iff a `print(`
+  containing `SELFTEST` appears in Sources/TermTile/TermTileApp.swift).
