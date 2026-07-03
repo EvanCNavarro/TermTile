@@ -331,10 +331,37 @@ committed; findings notes are the durable output.
   [DEP: external — zero codesigning identities on this machine (security find-identity → 0 valid);
   Developer ID needs an Apple Developer account (network), a self-signed identity needs Keychain UI —
   un-doable in an offline/non-interactive loop beat] → #13c
-#14 · E2E proof: fresh-boot flow — grant TCC, toggle on, spawn 5 terminals, verify grid, drag-reorder · S0
-  blocked-by #11, #13a, #19b. Recorded evidence (screencaptures) into docs/verification/. NOTE: durable
-  TCC across rebuilds needs #13c (signing identity) — but #14's one-shot E2E can run the ad-hoc build
-  granted once, so #14 is NOT hard-blocked on the cert-blocked #13c (skeptic-confirmed).
+#14 · E2E proof: fresh-boot flow — grant TCC, toggle on, spawn 5 terminals, verify grid, drag-reorder —
+  SPLIT by stoke-plan-14a.md brutal audit (verdict SPLIT-FURTHER) into #14a/#14b/#14c by PROVE-surface
+  (automatable activate-to-grid / synthetic-CGEvent drag wiring / truly-human TCC+hardware; precedent
+  #19→a/b, #12→a/b/c, #13→a/b/c).
+#14a · Live E2E: real TilingActor.activate() tiles N real terminal windows to a grid (toggle's prod path) · DONE
+  (2026-07-03: swift test 135/135 [+1 activateReenumeratesOverStaleCache] + invert-check red [flip activate→
+  state.windows → 4 ✘, restored]; PROVEN LIVE on real WezTerm — the REAL TilingActor.activate() enumerated 5
+  windows [single pid] and tiled them to a 3-column column-of-2 grid, readback origin-EXACT [dOrigin=0] with
+  moved=true delta from birth [TRAP-15], lone 5th window full-height 560×1009, pending=15 [F8], PASS=true rc=0;
+  screencapture docs/verification/task14a-activate-grid.png visually confirms the grid. LIVE INVERT [idempotent
+  re-run → 0 pendings, moved=false → PASS=false rc=1] proves the guards aren't a rubber stamp. ZERO blast radius:
+  targeted not-running WezTerm [pgrep-guarded], Bobby's iTerm2 verified 17→17. new AXProbe activatecheck mode +
+  reseed/clearWrites fake helpers. Skeptic SPLIT-FURTHER [F1/F2 single-pid, F3 honesty-split, F4 invert-safety,
+  F5 settle, F7 single-display — all folded]. Hit TRAP-19 [PAI hook blocks ~/.claude path in Bash → afplay cues
+  directly]. Plan: stoke-plan-14a.md; receipt: receipt.md Row 8; verification: docs/verification/task14a-activate-grid.md.)
+  blocked-by #11, #13a, #19b (ALL DONE). The FIRST live exercise of the production activate() path
+  (enumerate-as-truth → TileEngine.retileCommands → pending-ledger apply) — closes #12c's "live activate
+  INERT" gap and #19a's "never a global activate()" gap. Unattended under terminal-attributed AX trust,
+  NO human/network/mouse. Live-proved against WezTerm (installed, NOT running → 0 windows → zero blast
+  radius to Bobby's running iTerm2; single-pid multi-window via `wezterm cli spawn`, F1). Red-first swift
+  test: activate re-enumerates over a stale cache. Plan: .engine/state/stoke-plan-14a.md.
+#14b · Drag-reorder wiring: CGEventTap mouse-up → TilingActor.handleDragEnd + synthetic-CGEvent live prove · S0
+  blocked-by #11, #19b, #14a. Builds the MISSING production wiring (handleDragEnd has ZERO callers today —
+  TilingActor.swift:60; deferred from #11 but never built by #12). The listen-only tap AXProbe/main.swift:387
+  becomes a wired production tap; a synthetic CGEventPost drag proves the reorder live unattended (audio-cued
+  per the computer-control rule). NOT a human DEP (skeptic F3 corrected the mislabel).
+#14c · Fresh-boot human E2E: real .app System-Settings TCC grant + hardware drag + manual-tile-resist · S0
+  blocked-by #14a, #14b, #13a. Also owns spike-07 manual-tile-resistance UNVERIFIED (human-in-loop).
+  [DEP: external — a SIP-protected System-Settings Accessibility grant of the ad-hoc .app (cdhash UI click,
+  spike-02) + a physical human at the machine for a real mouse drag + a manual native-tile gesture; none
+  possible in an unattended/no-focus loop beat] → #14c
 
 ## Phase C — deferred (do not pull forward without a reason)
 

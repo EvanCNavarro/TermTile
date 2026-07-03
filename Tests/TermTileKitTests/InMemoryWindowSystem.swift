@@ -33,6 +33,13 @@ actor InMemoryWindowSystem: WindowSystem {
 
     nonisolated func events() -> AsyncStream<WindowEvent> { stream }
 
+    /// Replace the enumerated window set — simulates the target app's windows changing out from
+    /// under the actor's cache (used to prove `activate()` re-enumerates as the source of truth).
+    func reseed(_ windows: [TrackedWindow]) { seeded = windows }
+
+    /// Drop the recorded-write trail so a later phase's writes can be asserted in isolation.
+    func clearWrites() { recordedWrites = [] }
+
     /// Inject one observed event into the stream (drives `TilingActor.run`).
     func emit(_ event: WindowEvent) { continuation.yield(event) }
 

@@ -637,6 +637,94 @@ func livecheckEvents(bundleID: String, axVisible: CGRect, outPNG: String) {
     exit(pass ? 0 : 1)
 }
 
+// #14a mode: LIVE PROVE of the REAL production toggle path — `TilingActor.activate()` (enumerate-
+// as-truth → `TileEngine.retileCommands` → pending-ledger `apply`) tiling N REAL windows to a grid.
+// Distinct from `livecheck` (#19a), which drove `adapter.writeFrame` DIRECTLY, bypassing `activate()`.
+// Consent-free (livecheck-ids model): the SHELL creates+settles+closes the throwaway windows. The
+// target is WezTerm — NOT running before the shell launches it, so EVERY window under its pid is a
+// throwaway and `activate()`'s global tile has ZERO blast radius to Bobby's running iTerm2 windows
+// (the shell's `pgrep -x wezterm-gui` pre-flight guarantees this). AXProbe only enumerates +
+// activates + reads back under terminal-attributed Accessibility trust. Slot k maps to the k-th
+// enumerated window (kAXWindows order is stable for a static set, spike-03), so the pre-activate
+// enumerate order fixes the expected targets. Exit 0 iff enumerated == count (single pid, F1/F2) AND
+// every readback origin snapped EXACT to its slot, size within one char-cell, AND readback != birth
+// (TRAP-15 delta guard — a snap must MOVE the window, never coincide) AND the ledger recorded
+// count*3 pendings (F8 — echo-drain is OUT of #14a scope, that is #19b's event surface).
+func activatecheck(bundleID: String, count: Int, axVisible: CGRect, outPNG: String) async {
+    setvbuf(stdout, nil, _IOLBF, 0)  // spike-05 F4: line-buffer for tail-ability
+    guard axVisible != .null else { print("activatecheck: no screen"); exit(1) }
+    let eps: CGFloat = 2, sizeTol: CGFloat = 24, gap: CGFloat = 12
+
+    let adapter = AXWindowSystem(bundleID: bundleID)
+    let config = TileConfig(isEnabled: true, visibleFrame: axVisible, gap: gap)
+    let actor = TilingActor(system: adapter, config: config, epsilon: eps, ttlSeconds: 5)
+
+    // (1) Enumerate the target's CURRENT windows — must be exactly `count`, all under the one pid
+    //     the adapter resolves (`.first`); a mismatch means the wrong creation mechanism (F1/F2).
+    stderrLog("stage: enumerate (expect \(count))")
+    let before = await adapter.tileableWindows()
+    print("activatecheck: enumerated \(before.count) window(s) (expect \(count)) — "
+        + "ids=\(before.map { String($0.id) }.joined(separator: ","))")
+    guard before.count == count else {
+        print("activatecheck: FAIL — enumerated \(before.count)/\(count) (creation mechanism? F1/F2)")
+        exit(1)
+    }
+
+    // (2) BIRTH frames for the TRAP-15 delta guard (a real snap MOVES the window, not coincides).
+    var birth: [CGWindowID: CGRect] = [:]
+    for w in before { birth[w.id] = w.frame }
+
+    // (3) Settle the fresh windows before the AX write — `activate()` has NO internal settle, and an
+    //     unsettled fresh window silently no-ops the write (F5 / TRAP-15 second lesson; livecheck:513).
+    usleep(500_000)
+
+    // (4) THE PRODUCTION TOGGLE PATH: activate() re-enumerates as truth, computes the grid via
+    //     TileEngine.retileCommands, and applies the size→pos→size trio per window (recording the
+    //     ledger). This is exactly what MenuBarViewModel's toggle triggers — first proven LIVE here.
+    stderrLog("stage: actor.activate()")
+    await actor.activate(config: config)
+    usleep(400_000)  // settle the size→pos→size writes
+
+    // (5) Read back each window via the REAL adapter; assert EXACT origin snap + cell-tolerant size
+    //     + a real delta from birth. Expected slot k = the k-th pre-activate enumerated window.
+    let targets = TileLayout.frames(count: count, visibleFrame: axVisible, gap: gap)
+    var allSnapped = true
+    for (k, w) in before.enumerated() {
+        let target = targets[k]
+        stderrLog("stage: readFrame id=\(w.id) (\(k + 1)/\(count))")
+        let back = await adapter.readFrame(w.id) ?? .null
+        let b = birth[w.id] ?? .null
+        let dOrigin = max(abs(back.origin.x - target.origin.x), abs(back.origin.y - target.origin.y))
+        let dSize = max(abs(back.width - target.width), abs(back.height - target.height))
+        let moved = abs(back.origin.x - b.origin.x) > eps || abs(back.origin.y - b.origin.y) > eps
+                 || abs(back.width - b.width) > eps || abs(back.height - b.height) > eps
+        let ok = dOrigin <= eps && dSize <= sizeTol && moved
+        allSnapped = allSnapped && ok
+        print("activatecheck: id=\(w.id) birth=\(rectStr(b)) target=\(rectStr(target)) "
+            + "readback=\(rectStr(back)) dOrigin=\(Int(dOrigin)) dSize=\(Int(dSize)) moved=\(moved) ok=\(ok)")
+    }
+
+    // (6) Ledger population (F8): count*3 pendings (size→pos→size per window). The echo-drain /
+    //     `.internal` classification is #19b's event surface — activatecheck runs no event stream.
+    let pending = await actor.snapshot.pending.count
+    let ledgerOK = pending == count * 3
+    print("activatecheck: pending=\(pending) (expect \(count * 3)) ledgerOK=\(ledgerOK)")
+
+    // (7) Screencapture the rendered grid — SEPARATE from the readback evidence (TRAP-9), unbuffered
+    //     stage markers (TRAP-17). Single-display machine: the origin screen IS the captured surface.
+    stderrLog("stage: screencapture → \(outPNG)")
+    usleep(300_000)
+    let cap = Process()
+    cap.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    cap.arguments = ["-x", outPNG]
+    try? cap.run(); cap.waitUntilExit()
+    print("activatecheck: screencapture rc=\(cap.terminationStatus) → \(outPNG)")
+
+    let pass = allSnapped && ledgerOK
+    print("activatecheck: PASS=\(pass)")
+    exit(pass ? 0 : 1)
+}
+
 // Spike #7 mode: macOS Sequoia native-tiling interference / suppression surface. Exercises
 // the REAL TermTileCore.NativeTilingSettings resolver against the REAL com.apple.WindowManager
 // preference domain — (1) enumerates the 4 tiling toggles' live state, (2) proves the GLOBAL
@@ -791,6 +879,24 @@ if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "livecheck-even
         ? CommandLine.arguments[3] : "docs/verification/task19b-events.png"
     let axVisible = originAXVisibleFrame()
     livecheckEvents(bundleID: CommandLine.arguments[2], axVisible: axVisible, outPNG: png)
+}
+
+// activatecheck <bundle-id> <count> [outPNG] — #14a LIVE PROVE of the production activate() path.
+// Consent-free: the caller shell creates+settles+closes the throwaway windows (WezTerm, not running
+// → all throwaways, zero blast radius). AXProbe enumerates + activates + reads back. Task.detached +
+// sem (TRAP-14): activate() is async — run it OFF the blocked main thread; axVisible pre-resolved
+// (a @MainActor NSScreen read must not hop back to the parked main thread).
+if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "activatecheck" {
+    let n = CommandLine.arguments.count >= 4 ? (Int(CommandLine.arguments[3]) ?? 5) : 5
+    let png = CommandLine.arguments.count >= 5
+        ? CommandLine.arguments[4] : "docs/verification/task14a-activate-grid.png"
+    let axVisible = originAXVisibleFrame()
+    let sem = DispatchSemaphore(value: 0)
+    Task.detached {
+        await activatecheck(bundleID: CommandLine.arguments[2], count: n, axVisible: axVisible, outPNG: png)
+        sem.signal()
+    }
+    sem.wait()
 }
 
 if CommandLine.arguments.count >= 4, CommandLine.arguments[1] == "dragprobe",

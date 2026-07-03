@@ -54,6 +54,35 @@ struct TilingActorTests {
         #expect(await fake.recordedWrites.count == 3)       // internal echoes never retile
     }
 
+    // #14a — activate() re-enumerates `system.tileableWindows()` as the source of truth. When the
+    // target app's window SET changes out from under the cache and the toggle is pressed again, the
+    // SECOND activate tiles the CURRENT windows and REPLACES the stale cached set — it reads the
+    // system, NOT `state.windows`. This is the exact property the live 5-window E2E (#14a) relies
+    // on: toggle-on tiles what is actually on screen NOW, not a stale snapshot. Distinct from the
+    // `.created` event path (which folds one window in); no existing test reseeds between two
+    // activates. INVERT (`activate` uses `state.windows`): the first activate reads the empty fresh
+    // cache → tiles nothing → the `[1, 2]` assertion reds immediately.
+    @Test("activate re-enumerates the current windows, replacing a stale cached set")
+    func activateReenumeratesOverStaleCache() async {
+        let fake = InMemoryWindowSystem(windows: [off(1), off(2)])
+        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        await actor.activate(config: enabled())
+        #expect(await actor.snapshot.windows.map(\.id) == [1, 2])   // first activate tiled {1,2}
+
+        // The window set changes (2 windows closed, 3 new opened); the toggle is pressed again.
+        await fake.reseed([off(3), off(4), off(5)])
+        await fake.clearWrites()                                    // isolate the second activate's writes
+        await actor.activate(config: enabled())
+
+        // Snapshot is the CURRENT set — the stale {1,2} is gone, replaced by the live enumerate.
+        #expect(await actor.snapshot.windows.map(\.id) == [3, 4, 5])
+        let t = targets(3)                                          // the new set's count=3 grid
+        let writes = await fake.recordedWrites
+        #expect(Set(writes.map(\.id)) == Set([3, 4, 5]))           // tiled exactly the current windows
+        for w in writes { #expect(w.target == t[Int(w.id) - 3]) }  // each snapped to its slot
+        #expect(await actor.snapshot.pending.count == 9)           // 3 windows × size→pos→size trio (F8)
+    }
+
     // Disabled config = inert: no writes even over off-grid windows (spec: "Off = no rigid behavior").
     @Test("disabled config: activate issues no writes")
     func disabledInert() async {

@@ -206,3 +206,15 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   (`->`, `--`). This bug is invisible until the code line RUNS with the var set, so a text-invariant
   test won't see it. Enforced by .engine/checks/scripts-ascii-only.sh (exit non-zero iff any
   scripts/*.sh contains a non-ASCII byte).
+
+### TRAP-19: referencing a `~/.claude/...` path in a Bash command trips the PAI hook and kills it
+- what happened: #14a's read-only pre-flight batch `ls -la ~/.claude/skills/iphone-mirror-control/
+  scripts/withsound.sh` (checking for the mandatory audio-cue helper) was BLOCKED wholesale by the
+  PreToolUse `security-validator` hook ("🚨 BLOCKED: PAI infrastructure protection triggered") — the
+  whole compound command died, including the harmless pgrep/ls checks chained before it.
+- warning: for the mandatory computer-control audio cue (3 Glass rings before / Submarine after),
+  do NOT invoke or `ls`/read the `~/.claude/skills/.../withsound.sh` helper from the Bash tool — any
+  `~/.claude` path reference trips the PAI-protection hook and blocks the command. Play the cue
+  DIRECTLY: `for i in 1 2 3; do afplay /System/Library/Sounds/Glass.aiff; done` before, and
+  `afplay /System/Library/Sounds/Submarine.aiff` after — same audible cue content, no PAI path. Not
+  mechanically checkable from repo state (harness-interaction discipline) — this warning is the guard.
