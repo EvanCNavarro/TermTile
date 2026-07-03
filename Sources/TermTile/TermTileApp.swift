@@ -142,8 +142,10 @@ struct TermTileApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra(AppIdentity.appName) {
+        MenuBarExtra {
             MenuBarContent(viewModel: viewModel, updater: updater, appInfo: appInfo)
+        } label: {
+            TermTileGlyph()   // the logo glyph, not the "TermTile" text
         }
         .menuBarExtraStyle(.window)
     }

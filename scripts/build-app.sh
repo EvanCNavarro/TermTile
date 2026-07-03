@@ -40,6 +40,12 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BINARY" "$APP/Contents/MacOS/$APP_NAME"
 
+# Menu-bar template glyph → Contents/Resources (a plain file, loaded via Bundle.main, sealed by the
+# app signature). NOT an SPM resource bundle: a flat .bundle in Contents/MacOS breaks codesign.
+GLYPH_SRC="$ROOT/Resources/TermTileMenuGlyph.pdf"
+[ -f "$GLYPH_SRC" ] || { echo "menu-bar glyph not found at $GLYPH_SRC" >&2; exit 1; }
+cp "$GLYPH_SRC" "$APP/Contents/Resources/TermTileMenuGlyph.pdf"
+
 # Info.plist (heredoc -> plutil -lint gate). Accessibility (AXIsProcessTrusted) needs NO usage-string.
 PLIST="$APP/Contents/Info.plist"
 cat > "$PLIST" <<PLIST_EOF
@@ -100,6 +106,8 @@ codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/XPCServices/Installer.xpc" 
 codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/Autoupdate" >&2
 codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/Updater.app" >&2
 codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_DST" >&2
+# NB: the SPM resource bundle (glyph) is a FLAT resource bundle (no Info.plist / no Mach-O), so it is
+# NOT code-signed on its own — the outer app signature below seals it as a resource.
 codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/$APP_NAME" >&2
 codesign --force --sign "$SIGN_IDENTITY" "$APP" >&2
 codesign --verify --deep --strict "$APP" >&2
