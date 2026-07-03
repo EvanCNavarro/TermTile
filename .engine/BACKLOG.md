@@ -428,9 +428,11 @@ committed; findings notes are the durable output.
   [DEP: shape — warranted only once #15 (multi-display) / #17 (gap/padding) add real config; Rectangle
   precedent. Defer until there's enough to configure; move config out of the inline menu then.]
 
-#25 · Global hotkey to trigger Rearrange now · S0
-  [DEP: shape — nice-to-have, Rectangle/Loop first-class; post-MVP]
-  [DEP: shape — post-MVP polish]
+#25 · Global hotkey to trigger Rearrange now · DONE
+  (2026-07-03: Carbon RegisterEventHotKey HotKeyMonitor [mirrors DragMonitor C-bridge] → default ⌃⌥⌘R
+  fires the existing rearrangeNow(); no AX grant needed; ID-matched dispatch. Impl review [Carbon correct +
+  leak-free; deinit + eventNotHandledErr fixes]. Red-first + LIVE-PROVEN [real bundle registered=true,
+  synthetic ⌃⌥⌘R routed through the real handler + fired, zero blast]. 170/170. Configurable combo → #24.)
 #20 · Live CI verification: check/semgrep/release workflows execute green on GitHub Actions · DONE
   (2026-07-03: fixed main→master trigger bug; Check run 28633905044 success (swift test on macos-15),
   Semgrep run 28633905055 success — both on real master push. Release fires on first v* tag → #16.)
