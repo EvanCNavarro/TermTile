@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - main
+      - master
   schedule:
     # Weekly full scan (Mondays 07:00 UTC) - catches new rule coverage on unchanged code.
     - cron: '0 7 * * 1'
