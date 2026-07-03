@@ -89,7 +89,8 @@ struct TermTileApp: App {
         // MainActor Task runs once NSApp's main executor starts.
         func mark(_ s: String) { FileHandle.standardError.write(Data((s + "\n").utf8)) }
         let store = UserDefaultsSettingsStore(suiteName: selftestSuite)
-        mark("SELFTEST start pid=\(ProcessInfo.processInfo.processIdentifier) pre target=\(store.load().targetBundleID)")
+        let pid = ProcessInfo.processInfo.processIdentifier
+        mark("SELFTEST start pid=\(pid) pre target=\(store.load().targetBundleID)")
         Task { @MainActor in
             await viewModel.setTarget("dev.ecn.apps.termtile.selftest-none")  // non-running → inert
             await viewModel.rearrangeNow()                                     // the real button wire
