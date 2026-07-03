@@ -211,4 +211,35 @@ struct TilingActorTests {
         #expect(await actor.snapshot.windows.map(\.id) == [1, 2])
         #expect(await actor.snapshot.pending.isEmpty)
     }
+
+    // #14b — the drag-identity hit-test. `DragMonitor` resolves the dragged window at mouse-DOWN
+    // (windows still tiled → NON-overlapping → unambiguous, skeptic B1) by asking the actor which
+    // tracked window's cached frame contains the cursor point. Discriminating (skeptic B3): the
+    // queried point is inside a NON-first window, so a "return windows[0]" bug reddens instead of
+    // coincidentally passing.
+    @Test("windowID(at:) resolves the window under the point — a NON-first window (discriminates pick-first)")
+    func windowIDAtResolvesUnderPoint() async {
+        let f = targets(4)
+        let seed = (0..<4).map { win(CGWindowID($0 + 1), f[$0]) }   // ids 1..4 on grid slots 0..3
+        let fake = InMemoryWindowSystem(windows: seed)
+        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        await actor.activate(config: enabled())                     // populate the cached snapshot
+
+        // A point inside slot-2's window (id3) — NOT windows[0]. A pick-first bug returns 1 → red.
+        #expect(await actor.windowID(at: CGPoint(x: f[2].midX, y: f[2].midY)) == 3)
+        // And slot-3's window (id4) resolves to 4, not 1.
+        #expect(await actor.windowID(at: CGPoint(x: f[3].midX, y: f[3].midY)) == 4)
+    }
+
+    // #14b — a point over no tracked window (a gap / off-screen) resolves to nil; DragMonitor then
+    // ignores that drag (no dragged id captured), so a drag that starts outside a managed window is
+    // never a reorder.
+    @Test("windowID(at:) is nil for a point over no tracked window (a gap)")
+    func windowIDAtMissIsNil() async {
+        let f = targets(2)
+        let fake = InMemoryWindowSystem(windows: [win(1, f[0]), win(2, f[1])])
+        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        await actor.activate(config: enabled())
+        #expect(await actor.windowID(at: CGPoint(x: -500, y: -500)) == nil)
+    }
 }

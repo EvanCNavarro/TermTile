@@ -352,11 +352,27 @@ committed; findings notes are the durable output.
   NO human/network/mouse. Live-proved against WezTerm (installed, NOT running → 0 windows → zero blast
   radius to Bobby's running iTerm2; single-pid multi-window via `wezterm cli spawn`, F1). Red-first swift
   test: activate re-enumerates over a stale cache. Plan: .engine/state/stoke-plan-14a.md.
-#14b · Drag-reorder wiring: CGEventTap mouse-up → TilingActor.handleDragEnd + synthetic-CGEvent live prove · S0
-  blocked-by #11, #19b, #14a. Builds the MISSING production wiring (handleDragEnd has ZERO callers today —
-  TilingActor.swift:60; deferred from #11 but never built by #12). The listen-only tap AXProbe/main.swift:387
-  becomes a wired production tap; a synthetic CGEventPost drag proves the reorder live unattended (audio-cued
-  per the computer-control rule). NOT a human DEP (skeptic F3 corrected the mislabel).
+#14b · Drag-reorder wiring: CGEventTap mouse-up → TilingActor.handleDragEnd + synthetic-CGEvent live prove · DONE
+  (2026-07-03: swift test 140/140 green [+5 — 2 windowID(at:) discriminating hit-test, 3 DragMonitor
+  click-vs-drag gate] + TWO invert-checks red [pick-windows[0] reddens the NON-first hit-test; remove the
+  travel-gate reddens the click test; restored]; PROVEN LIVE on real WezTerm — AXProbe `dragcheck` posted a
+  synthetic mouse-down→drag→up RECEIVED by the REAL TermTileKit.DragMonitor's own in-process session tap [A1],
+  which resolved the dragged id at mouse-DOWN via windowID(at:) [tap-delivered (435,61)==posted, A2 no flip]
+  and fired handleDragEnd [the ZERO-caller path] → a REAL AX reorder moving window 80801 slot0→slot2, grid
+  shuffled to [80798,80795,80801,80791], ALL readbacks dOrigin=0, PASS=true rc=0; LIVE-INVERT [synthetic CLICK
+  → travel-gate ate it, fired=false, ZERO reorder] PASS=true proves the tap isn't a rubber stamp. Zero blast
+  radius: not-running WezTerm [pgrep-guarded], iTerm2 17→17. windowID(at:) [Kit, B1 down-identity] + DragMonitor
+  [Kit, @convention(c) tap via userInfo, travel-gate B2, live-only surface] land; core-purity + all 10 checks
+  PASS. Skeptic BLOCK→SAFE-WITH-FIXES [B1 mouse-DOWN identity, B2 click-gate, B3 discriminating test, M4 run()-
+  freshness honesty, M5 blast radius, m6 A2-known, m7 sync-pump — ALL folded]. Fixed 2 probe flaws mid-prove
+  [TRAP-20 stray-armed-tap-poll, TRAP-21 stale-cache birth-frames after activate w/o run()]. Plan:
+  .engine/state/stoke-plan-14b.md; receipt: receipt.md Row 8; verification: docs/verification/task14b-drag-reorder.md.)
+  blocked-by #11, #19b, #14a (ALL DONE). Built the MISSING production wiring (handleDragEnd had ZERO callers —
+  TilingActor.swift:60). NOT a human DEP (skeptic F3 corrected the mislabel).
+  DEFERRED to #14c: A3 [synthetic titlebar drag PHYSICALLY moves a window as sole cache driver] + the run()→
+  echo-folding cache-freshness chain [load-bearing for BOTH drag identity and drop point; this beat feeds tiled
+  frames deterministically] + SwiftUI-app embedding of run()+DragMonitor across the VM actor-rebuild lifecycle
+  [DEP: blocked-by #14c — real drag physics + hardware + the run()/live-event lifecycle the VM defers need a bundled .app + human] → #14c
 #14c · Fresh-boot human E2E: real .app System-Settings TCC grant + hardware drag + manual-tile-resist · S0
   blocked-by #14a, #14b, #13a. Also owns spike-07 manual-tile-resistance UNVERIFIED (human-in-loop).
   [DEP: external — a SIP-protected System-Settings Accessibility grant of the ad-hoc .app (cdhash UI click,

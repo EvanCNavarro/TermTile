@@ -218,3 +218,45 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   DIRECTLY: `for i in 1 2 3; do afplay /System/Library/Sounds/Glass.aiff; done` before, and
   `afplay /System/Library/Sounds/Submarine.aiff` after — same audible cue content, no PAI path. Not
   mechanically checkable from repo state (harness-interaction discipline) — this warning is the guard.
+
+### TRAP-20: a live CGEventTap left ARMED during a multi-second verification poll eats stray events
+- what happened: #14b's dragcheck armed the DragMonitor tap, posted ONE synthetic drag, then POLLED the
+  actor snapshot for up to 6s WITH THE TAP STILL ARMED. A stray real mouse event during that window (the
+  cursor had just been warped by CGEventPost; Bobby's Mac) fired a SECOND handleDragEnd → the final order
+  was a contaminated double-reorder (finalOrder didn't match the single-gesture expectation), and the
+  osascript-quit cleanup then hung on a confirm dialog → 2-min timeout with throwaway windows left open.
+- warning: a live-input PROVE must DISARM the tap the instant the intended gesture's effect is observed —
+  wire a one-shot completion flag set inside the action closure, break the poll on it, then stop() the tap
+  BEFORE reading results; never poll for seconds with the tap live. And clean up throwaway apps with a
+  non-interactive `pkill -x` (never `osascript quit`, which can block on a confirm dialog) in a `trap …
+  EXIT`. Not mechanically checkable from repo state (transient probe-design discipline) — this is the guard.
+
+### TRAP-21: after activate() the actor cache holds BIRTH frames, not tiled slots, until run() folds echoes
+- what happened: #14b's dragcheck resolved the dragged window via `windowID(at: a slot-space point)` and
+  got the WRONG window twice — the tap delivered the exact posted point (A2 confirmed, no coordinate flip),
+  but `TilingActor.activate()` sets `state = WindowState(windows: enumerated)` with each window's PRE-tile
+  BIRTH frame and never updates those cached frames (apply() writes AX + records pendings; the cache frame
+  only refreshes when run()'s event stream folds the size→pos→size ECHOES). With no run() in the probe, the
+  cache still described the windows' scattered birth positions, so a hit-test against tiled-slot coordinates
+  matched whatever window happened to be born under that point.
+- warning: any cache-POSITION query after activate() (drag hit-test, nearest-slot, drop point) is only
+  correct once the tiling echoes have folded — in production that is run() consuming adapter.events(); in a
+  probe with no event stream, feed the real tiled frames back as `.moved` events (re-enumerate
+  adapter.tileableWindows() → actor.handle(.moved id frame) per window) to sync the cache first. The
+  run()→echo-freshness chain is load-bearing for drag IDENTITY, not just the drop point. Not mechanically
+  checkable from repo state (runtime-ordering semantics) — this warning is the guard.
+
+### TRAP-22: a prior beat marked a task DONE in BACKLOG but never committed — next beat inherits dirty tree
+- what happened: #14b's full work (DragMonitor.swift, windowID(at:)+handleDragEnd wiring, dragcheck
+  probe, +5 tests, TRAP-20/21, verification doc + 2 screenshots) was complete and the BACKLOG entry
+  was already marked DONE with a full live-prove note — but the prior beat never ran the commit. This
+  beat opened on a dirty working tree (5 modified + 5 untracked files) with the task already "done" on
+  paper. Cost a re-verification round (swift test 140/140 + all 10 checks) to confirm the uncommitted
+  work was sound before committing it as one #14b commit.
+- warning: at REORIENT, ALWAYS `git status` first — a dirty tree whose changes match an
+  already-DONE-marked BACKLOG task is prior-beat uncommitted work, not fresh scope; verify it green
+  (test_command + .engine/checks) then commit it before picking the next task. And per the loop's own
+  step 5: the beat that flips a `· S<n>` marker to `· DONE` MUST commit in the SAME beat — the FINAL
+  ACTION is not done until the commit lands. Not cleanly mechanically checkable (a mid-beat tree is
+  legitimately dirty, so a static "clean tree" gate would false-fire during normal work) — this
+  reorient-git-status habit is the guard.
