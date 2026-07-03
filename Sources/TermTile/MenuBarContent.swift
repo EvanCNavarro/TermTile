@@ -56,6 +56,12 @@ struct MenuBarContent: View {
         .padding(12)
         .frame(width: 280)
         .onAppear { viewModel.refreshTrust() }
+        // MenuBarExtra(.window) keeps this view alive across opens, so `.onAppear` fires once per
+        // process — a grant made later rendered a stale fix-it row. The panel becomes key on every
+        // open; re-probe then (cheap, read-only).
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            viewModel.refreshTrust()
+        }
     }
 
     /// The persisted target is always selectable even when it isn't currently running (so the
