@@ -392,6 +392,30 @@ committed; findings notes are the durable output.
   build/test/lint green in CI, 3 assets published, checksum verified, downloaded app launches,
   appcast resolves at SUFeedURL. Notarization deferred to Developer-ID decision.)
 #17 · Gap/padding settings UI + per-app profiles · S0
+  [DEP: shape — pairs with the Settings window (#24) once options exceed the inline menu]
+
+## Phase D — menu-bar utility completeness (from docs/research/menubar-app-features-research.md)
+
+#21 · About panel: version + what-it-is + author/credits + links (site/GitHub/license) · S0
+  MUST-HAVE. Every surveyed utility ships one. Copy RememBar's AboutPopover shape (an ⓘ control →
+  panel; ellipsis reveals Check-for-Updates + Uninstall). Version from CFBundleShortVersionString.
+#22 · Uninstall: clean self-removal (trash bundle + deregister login item + clear owned paths) · S0
+  MUST-HAVE for a non-App-Store app. Template: RememBar's RememBarUninstaller — trash the .app, unregister
+  the SMAppService login item, trash ONLY owned paths (~/Library/Application Support/TermTile,
+  Preferences/dev.ecn.apps.termtile.plist, Caches/dev.ecn.apps.termtile), EXACT-match never glob (a
+  neighbour dir must never be caught; make the trash op injectable so a test proves scope). CANNOT
+  revoke the TCC grant — guide the user (System Settings toggle / `sudo tccutil reset Accessibility
+  dev.ecn.apps.termtile`). Verify tccutil syntax vs the shipping macOS.
+#23 · First-run onboarding: Accessibility grant walkthrough + icon discoverability · S0
+  MUST-HAVE (whole app is grant-gated; the menu-bar icon can be hidden by Ice/Bartender). First launch:
+  what-it-is → grant Accessibility (deep link) → find the icon. Also handle the verified grant-break:
+  detect "untrusted but a TCC row exists" (moved/duplicate bundle) and warn/offer a fix.
+#24 · Settings window (Cmd-,): tabbed General + Shortcuts once options exceed the inline menu · S0
+  [DEP: shape — warranted only once #15 (multi-display) / #17 (gap/padding) add real config; Rectangle
+  precedent. Defer until there's enough to configure; move config out of the inline menu then.]
+
+#25 · Global hotkey to trigger Rearrange now · S0
+  [DEP: shape — nice-to-have, Rectangle/Loop first-class; post-MVP]
   [DEP: shape — post-MVP polish]
 #20 · Live CI verification: check/semgrep/release workflows execute green on GitHub Actions · DONE
   (2026-07-03: fixed main→master trigger bug; Check run 28633905044 success (swift test on macos-15),
