@@ -50,7 +50,10 @@ jobs:
           APP_PATH="${{ steps.build.outputs.app_path }}"
           ZIP="dist/TermTile-${GITHUB_REF_NAME}.zip"
           ditto -c -k --keepParent "${APP_PATH}" "${ZIP}"
-          shasum -a 256 "${ZIP}" | tee "${ZIP}.sha256"
+          # Checksum with a BASENAME-relative path (cd into dist/) so a user who downloads both
+          # files can verify with `shasum -a 256 -c TermTile-<tag>.zip.sha256` — a dist/ prefix
+          # would make -c fail to find the file even though the hash is right.
+          ( cd dist && shasum -a 256 "TermTile-${GITHUB_REF_NAME}.zip" | tee "TermTile-${GITHUB_REF_NAME}.zip.sha256" )
           echo "zip=${ZIP}" >> "${GITHUB_OUTPUT}"
 
       # Sparkle appcast: sign the zip with the EdDSA private key (from the repo secret) and emit

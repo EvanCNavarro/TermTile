@@ -384,8 +384,10 @@ committed; findings notes are the durable output.
 #15 · Multi-display + Spaces awareness · S0
   [DEP: shape — needs #19b's live engine surface; also owns the multi-display AXGeometry flip
   reference (#19a uses the single origin screen)]
-#16 · Sparkle auto-updates + release pipeline · S0
-  [DEP: blocked-by #13]
+#16 · Sparkle auto-updates + release pipeline · DONE
+  (2026-07-03: stock SPUStandardUpdaterController + signed appcast; v0.1.0 released end-to-end —
+  build/test/lint green in CI, 3 assets published, checksum verified, downloaded app launches,
+  appcast resolves at SUFeedURL. Notarization deferred to Developer-ID decision.)
 #17 · Gap/padding settings UI + per-app profiles · S0
   [DEP: shape — post-MVP polish]
 #20 · Live CI verification: check/semgrep/release workflows execute green on GitHub Actions · DONE
