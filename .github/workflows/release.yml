@@ -16,7 +16,7 @@ jobs:
     runs-on: macos-15
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0   # build-app.sh derives CFBundleVersion from git rev-list --count (full history)
       - name: Select Xcode (Swift 6 toolchain)

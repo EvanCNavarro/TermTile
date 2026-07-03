@@ -20,6 +20,6 @@ jobs:
     # Semgrep's own action is unavailable on schedule events without a PR context; run the CLI directly.
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Scan (security-audit + secrets)
         run: semgrep ci --config p/security-audit --config p/secrets
