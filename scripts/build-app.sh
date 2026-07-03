@@ -68,10 +68,13 @@ if [ -f "$ICON_SRC" ]; then
 	/usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$PLIST" >&2 || true
 fi
 
-# Ad-hoc, inside-out sign (no --deep). Sign the inner Mach-O first, then the bundle; verify strict.
+# Inside-out sign (no --deep). Sign the inner Mach-O first, then the bundle; verify strict.
+# TERMTILE_SIGN_IDENTITY selects a stable keychain identity (#13c) so TCC grants survive
+# rebuilds; default "-" stays ad-hoc (per-build cdhash, grant resets every rebuild).
+SIGN_IDENTITY="${TERMTILE_SIGN_IDENTITY:--}"
 xattr -cr "$APP"
-codesign --force --sign - "$APP/Contents/MacOS/$APP_NAME" >&2
-codesign --force --sign - "$APP" >&2
+codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/$APP_NAME" >&2
+codesign --force --sign "$SIGN_IDENTITY" "$APP" >&2
 codesign --verify --deep --strict "$APP" >&2
 
 # Last stdout line = the .app path, so callers can `tail -1` (RememBar convention).
