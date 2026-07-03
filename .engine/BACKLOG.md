@@ -372,7 +372,9 @@ committed; findings notes are the durable output.
   [DEP: blocked-by #13]
 #17 · Gap/padding settings UI + per-app profiles · S0
   [DEP: shape — post-MVP polish]
-#20 · Live CI verification: check/semgrep/release workflows execute green on GitHub Actions · S0
+#20 · Live CI verification: check/semgrep/release workflows execute green on GitHub Actions · DONE
+  (2026-07-03: fixed main→master trigger bug; Check run 28633905044 success (swift test on macos-15),
+  Semgrep run 28633905055 success — both on real master push. Release fires on first v* tag → #16.)
   blocked-by #13b. The #13b workflows are authored + locally static-validated (swift test + swiftlint
   proven green on this repo; YAML well-formed via ruby); this task PROVES them on real runners: check.yml
   green on a PR, semgrep.yml clean, and a `v*` tag drives release.yml (build-app.sh → attest → VirusTotal
