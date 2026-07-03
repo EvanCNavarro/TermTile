@@ -391,7 +391,14 @@ committed; findings notes are the durable output.
   (2026-07-03: stock SPUStandardUpdaterController + signed appcast; v0.1.0 released end-to-end —
   build/test/lint green in CI, 3 assets published, checksum verified, downloaded app launches,
   appcast resolves at SUFeedURL. Notarization deferred to Developer-ID decision.)
-#17 · Gap/padding settings UI + per-app profiles · S0
+#17 · Gap/padding settings UI + per-app profiles · SPLIT into #17a (gap-size setting) / #17b (per-app profiles)
+#17a · Gap-size setting: persisted AppSettings.gap + menu Stepper · DONE
+  (2026-07-03: gap graduated from injected seam to loaded user-state [Option A; B was broken — root re-passes
+  hardcoded 8]; clamp 0...40 both read+write via one clampedGap authority; default 8 upgrade-safe. Two plan
+  audits + impl review [load-path clamp hole fixed]. Red-first, 2 invert-checks + load-clamp invert; Stepper
+  render-validated. 166/166 tests.)
+#17b · Per-app tiling profiles (gap/target per app) · S0
+  [DEP: shape — pairs with the Settings window #24; defer until multiple apps + more per-app config exist]
   [DEP: shape — pairs with the Settings window (#24) once options exceed the inline menu]
 
 ## Phase D — menu-bar utility completeness (from docs/research/menubar-app-features-research.md)
