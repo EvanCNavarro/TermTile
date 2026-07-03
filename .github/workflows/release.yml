@@ -75,11 +75,19 @@ jobs:
           subject-path: ${{ steps.package.outputs.zip }}
 
       # VirusTotal via the public API + curl (no unverified third-party action; secret stays in context).
+      # Non-blocking: skipped cleanly when VIRUSTOTAL_API_KEY isn't set, and never fails the release
+      # (checksum + provenance attestation already make the download verifiable). Attach the key
+      # whenever via `gh secret set VIRUSTOTAL_API_KEY`.
       - name: VirusTotal scan
+        continue-on-error: true
         env:
           VT_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
         run: |
           set -euo pipefail
+          if [ -z "${VT_API_KEY}" ]; then
+            echo "VirusTotal: VIRUSTOTAL_API_KEY not set — skipping scan." | tee -a "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
           ZIP="${{ steps.package.outputs.zip }}"
           RESP="$(curl -sS --fail-with-body \
             --request POST 'https://www.virustotal.com/api/v3/files' \
