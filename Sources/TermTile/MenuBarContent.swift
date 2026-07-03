@@ -36,6 +36,13 @@ struct MenuBarContent: View {
                 }
             }
 
+            // Gap between tiled windows (#17a). Label renders viewModel.gap (the clamped truth);
+            // setGap is synchronous → no Task wrap. Step 4 lands on the 8-pt default.
+            Stepper("Gap: \(Int(viewModel.gap)) pt", value: Binding(
+                get: { viewModel.gap },
+                set: { viewModel.setGap($0) }),
+                in: MenuBarViewModel.gapRange, step: 4)
+
             Toggle("Launch at login", isOn: Binding(
                 get: { viewModel.launchAtLogin },
                 set: { viewModel.setLaunchAtLogin($0) }))

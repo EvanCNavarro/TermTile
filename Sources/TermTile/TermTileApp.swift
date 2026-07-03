@@ -23,9 +23,10 @@ struct TermTileApp: App {
         // Selftest writes to a dedicated suite so it never pollutes the user's real defaults.
         let suiteName: String? = isSelftest ? Self.selftestSuite : nil
 
-        let gap: CGFloat = 8
-        let eps: CGFloat = 2
+        let eps: CGFloat = 2   // AX readback tolerance (tuning constant, not user-facing)
         let visibleFrame = Self.originAXVisibleFrame()
+        // gap is no longer hardcoded here — it's persisted user-state the VM loads from `settings`
+        // (default 8), settable via the menu Stepper (#17a).
 
         // Construct the shared persistence + login-item ONCE so the Uninstaller acts on the SAME
         // instances the VM uses (it must deregister the real login item + purge the real defaults).
@@ -50,7 +51,6 @@ struct TermTileApp: App {
             appsProvider: WorkspaceTargetAppsProvider(),
             isTrustedProbe: MenuBarViewModel.liveTrustProbe,
             visibleFrame: visibleFrame,
-            gap: gap,
             epsilon: eps,
             makeActor: { bundleID in
                 TilingActor(system: AXWindowSystem(bundleID: bundleID), config: .disabled, epsilon: eps)
@@ -75,7 +75,7 @@ struct TermTileApp: App {
 
         if isGallery {
             let vm = ProcessInfo.processInfo.environment["TERMTILE_GALLERY_BROKEN"] != nil
-                ? Self.brokenGalleryVM(loginItem: loginItem, visibleFrame: visibleFrame, gap: gap, eps: eps)
+                ? Self.brokenGalleryVM(loginItem: loginItem, visibleFrame: visibleFrame, eps: eps)
                 : viewModel
             Self.showGallery(MenuBarContent(viewModel: vm, updater: updater, appInfo: appInfo))
         }
@@ -84,12 +84,12 @@ struct TermTileApp: App {
     /// A VM forced into the `grantBroken` state (untrusted probe + seeded `wasTrusted`) so the
     /// grant-break fix-it copy can be render-validated (#23). Throwaway suite; never the real domain.
     private static func brokenGalleryVM(loginItem: any LoginItem, visibleFrame: CGRect,
-                                        gap: CGFloat, eps: CGFloat) -> MenuBarViewModel {
+                                        eps: CGFloat) -> MenuBarViewModel {
         let store = UserDefaultsSettingsStore(suiteName: "dev.ecn.apps.termtile.gallery")
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8))
         return MenuBarViewModel(settings: store, loginItem: loginItem,
             appsProvider: WorkspaceTargetAppsProvider(), isTrustedProbe: { false },
-            visibleFrame: visibleFrame, gap: gap, epsilon: eps,
+            visibleFrame: visibleFrame, epsilon: eps,
             makeActor: { bid in TilingActor(system: AXWindowSystem(bundleID: bid), config: .disabled, epsilon: eps) })
     }
 

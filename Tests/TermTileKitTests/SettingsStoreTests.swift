@@ -20,7 +20,7 @@ struct SettingsStoreTests {
     @Test("in-memory fake round-trips a saved value")
     func fakeRoundTrip() {
         let store = InMemorySettingsStore()
-        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false)
+        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false, gap: 8)
         store.save(saved)
         #expect(store.load() == saved)
     }
@@ -31,7 +31,7 @@ struct SettingsStoreTests {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
 
-        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false)
+        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false, gap: 8)
         UserDefaultsSettingsStore(suiteName: suite).save(saved)
 
         let loaded = UserDefaultsSettingsStore(suiteName: suite).load()   // a NEW instance
@@ -57,7 +57,7 @@ struct SettingsStoreTests {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         let store = UserDefaultsSettingsStore(suiteName: suite)
-        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false))
+        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false, gap: 8))
         #expect(store.load().targetBundleID == "com.example.other")
 
         store.purge()
@@ -69,7 +69,7 @@ struct SettingsStoreTests {
     @Test("in-memory fake purge resets to defaults")
     func inMemoryPurge() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: true))
+        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: true, gap: 8))
         store.purge()
         #expect(store.load() == .defaults)
     }
@@ -87,7 +87,24 @@ struct SettingsStoreTests {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().wasTrusted == false)   // absent → false
-        UserDefaultsSettingsStore(suiteName: suite).save(AppSettings(targetBundleID: "com.x", wasTrusted: true))
+        UserDefaultsSettingsStore(suiteName: suite).save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8))
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().wasTrusted == true)     // new instance
+    }
+
+    // #17a — gap persists; absent → 8 (the hard invariant matching the old hardcoded value, so
+    // existing users' grids don't reflow on upgrade); round-trips a custom value.
+    @Test("defaults.gap is 8 (the upgrade-safe default)")
+    func defaultsGapIsEight() {
+        #expect(AppSettings.defaults.gap == 8)
+    }
+
+    @Test("gap absent falls back to 8; round-trips a custom value")
+    func gapPersists() {
+        let suite = "dev.ecn.apps.termtile.tests.gap"
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        #expect(UserDefaultsSettingsStore(suiteName: suite).load().gap == 8)   // absent → 8
+        UserDefaultsSettingsStore(suiteName: suite).save(AppSettings(targetBundleID: "com.x", wasTrusted: false, gap: 16))
+        #expect(UserDefaultsSettingsStore(suiteName: suite).load().gap == 16)  // new instance
     }
 }

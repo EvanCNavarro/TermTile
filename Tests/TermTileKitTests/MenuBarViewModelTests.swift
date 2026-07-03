@@ -44,7 +44,6 @@ struct MenuBarViewModelTests {
             appsProvider: InMemoryTargetAppsProvider(seed: apps),
             isTrustedProbe: { trusted },
             visibleFrame: visible,
-            gap: gap,
             epsilon: eps,
             makeActor: { _ in TilingActor(system: fake, epsilon: self.eps, ttlSeconds: 100) },
             uninstaller: uninstaller)
@@ -57,7 +56,11 @@ struct MenuBarViewModelTests {
     @Test("keystone: rearrange-now tiles at grid targets")
     func rearrangeNowTilesAtGridTargets() async {
         let seed = [off(1), off(2), off(3)]
-        let (vm, fake) = makeVM(windows: seed)
+        // Seed gap=10 (≠ the 8 default) into the store so the VM LOADS it — this also proves the
+        // #17a settings→VM→TileConfig→layout flow: the EXACT targets below use the same gap.
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: Double(gap)))
+        let (vm, fake) = makeVM(windows: seed, store: store)
         let t = targets(3)
         for k in 0..<3 { #expect(seed[k].frame != t[k]) }  // genuinely off-grid → writes provable
 
@@ -72,7 +75,7 @@ struct MenuBarViewModelTests {
     @Test("init loads persisted target")
     func initLoadsPersistedSettings() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false))
+        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false, gap: 8))
         let (vm, _) = makeVM(store: store)
         #expect(vm.targetBundleID == "com.example.other")
     }
@@ -122,7 +125,7 @@ struct MenuBarViewModelTests {
             loginItem: InMemoryLoginItem(),
             appsProvider: InMemoryTargetAppsProvider(seed: []),
             isTrustedProbe: { flag.value },
-            visibleFrame: visible, gap: gap, epsilon: eps,
+            visibleFrame: visible, epsilon: eps,
             makeActor: { _ in TilingActor(system: fake, epsilon: self.eps, ttlSeconds: 100) })
         #expect(!vm.isAccessibilityTrusted)     // probe false → fix-it row shows
         flag.value = true
@@ -201,7 +204,7 @@ struct MenuBarViewModelTests {
     // Idempotent on the PERSISTED flag — repeated refreshTrust after true writes nothing more.
     @Test("latch is idempotent")
     func latchIdempotent() {
-        let spy = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true))
+        let spy = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8))
         let (vm, _) = makeVM(store: spy, trusted: true)
         let base = spy.saveCount                    // 0 — already true, no init latch
         vm.refreshTrust(); vm.refreshTrust()
@@ -215,7 +218,7 @@ struct MenuBarViewModelTests {
         let (vm1, _) = makeVM(store: spy1, trusted: false)
         #expect(vm1.accessibilityState == .needsFirstGrant)
         #expect(spy1.saveCount == 0)
-        let spy2 = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true))
+        let spy2 = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8))
         let (vm2, _) = makeVM(store: spy2, trusted: false)
         #expect(vm2.accessibilityState == .grantBroken)
     }
@@ -231,7 +234,7 @@ struct MenuBarViewModelTests {
             settings: spy, loginItem: InMemoryLoginItem(),
             appsProvider: InMemoryTargetAppsProvider(seed: []),
             isTrustedProbe: { flag.value },
-            visibleFrame: visible, gap: gap, epsilon: eps,
+            visibleFrame: visible, epsilon: eps,
             makeActor: { _ in TilingActor(system: fake, epsilon: self.eps, ttlSeconds: 100) })
         #expect(vm.accessibilityState == .trusted)
         let afterLatch = spy.saveCount            // 1 — latched at init
@@ -250,5 +253,57 @@ struct MenuBarViewModelTests {
         await vm.setTarget("com.example.other")
         #expect(spy.load().wasTrusted == true)            // not wiped
         #expect(spy.load().targetBundleID == "com.example.other")
+    }
+
+    // #17a — gap loads from settings, clamps to gapRange, persists; manual model (no auto-tile).
+    @Test("gap loads from settings")
+    func gapLoadsFromSettings() {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 24))
+        let (vm, _) = makeVM(store: store)
+        #expect(vm.gap == 24)
+    }
+
+    // A tampered/downgraded plist could hold an out-of-range gap — it must be clamped on LOAD too,
+    // so a negative column width never reaches TileLayout.
+    @Test("out-of-range persisted gap is clamped on load")
+    func outOfRangeLoadedGapClamped() {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 9999))
+        let (vm, _) = makeVM(store: store)
+        #expect(vm.gap == 40)                             // clamped, not 9999
+    }
+
+    @Test("setGap clamps to range and persists")
+    func setGapClampsAndPersists() {
+        let store = InMemorySettingsStore()
+        let (vm, _) = makeVM(store: store)
+        vm.setGap(20)
+        #expect(vm.gap == 20)
+        #expect(store.load().gap == 20)                   // persisted
+        vm.setGap(-5);  #expect(vm.gap == 0)              // clamp low
+        vm.setGap(999); #expect(vm.gap == 40)             // clamp high
+        #expect(store.load().gap == 40)
+    }
+
+    // Manual model — setGap persists but does NOT auto-tile (like setTargetPersistsNoTile).
+    @Test("setGap does not auto-tile")
+    func setGapDoesNotAutoTile() async {
+        let (vm, fake) = makeVM(windows: [off(1)])
+        vm.setGap(16)
+        let writes = await fake.recordedWrites
+        #expect(writes.isEmpty)
+    }
+
+    // B1-style guard both ways — the single persist() carries all fields, no cross-clobber.
+    @Test("setGap preserves target + wasTrusted; setTarget preserves gap")
+    func persistCarriesAllFields() async {
+        let spy = SaveSpyStore()
+        let (vm, _) = makeVM(store: spy, trusted: true)   // latch wasTrusted=true
+        vm.setGap(12)
+        #expect(spy.load().wasTrusted == true)            // gap change didn't clobber the latch
+        #expect(spy.load().targetBundleID == "com.googlecode.iterm2")
+        await vm.setTarget("com.example.other")
+        #expect(spy.load().gap == 12)                     // target change didn't clobber gap
     }
 }

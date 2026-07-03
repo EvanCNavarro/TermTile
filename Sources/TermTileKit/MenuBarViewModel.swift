@@ -32,6 +32,9 @@ public final class MenuBarViewModel {
     public private(set) var wasTrusted: Bool
     /// Whether the app is registered to launch at login (source of truth = `LoginItem.status`).
     public private(set) var launchAtLogin: Bool
+    /// The tile gap in points (#17a) — loaded from settings, tracked so the Stepper live-updates.
+    /// Was an injected `let`; now user-state like `targetBundleID`. Clamped by `setGap`.
+    public private(set) var gap: CGFloat
 
     /// The fix-it row's state (#23): trusted → no row; never granted → first-grant prompt; untrusted
     /// but previously granted → the honest grant-BROKEN message (moved/duplicate bundle). Computed
@@ -47,7 +50,6 @@ public final class MenuBarViewModel {
     @ObservationIgnored private let loginItem: any LoginItem
     @ObservationIgnored private let isTrustedProbe: @Sendable () -> Bool
     @ObservationIgnored private let visibleFrame: CGRect
-    @ObservationIgnored private let gap: CGFloat
     @ObservationIgnored private let epsilon: CGFloat
     @ObservationIgnored private let makeActor: @Sendable (String) -> TilingActor
     @ObservationIgnored private var actor: TilingActor
@@ -62,7 +64,6 @@ public final class MenuBarViewModel {
         appsProvider: any TargetAppsProviding,
         isTrustedProbe: @escaping @Sendable () -> Bool,
         visibleFrame: CGRect,
-        gap: CGFloat,
         epsilon: CGFloat,
         makeActor: @escaping @Sendable (String) -> TilingActor,
         uninstaller: Uninstaller? = nil
@@ -72,7 +73,6 @@ public final class MenuBarViewModel {
         self.loginItem = loginItem
         self.isTrustedProbe = isTrustedProbe
         self.visibleFrame = visibleFrame
-        self.gap = gap
         self.epsilon = epsilon
         self.makeActor = makeActor
         self.uninstaller = uninstaller
@@ -80,6 +80,9 @@ public final class MenuBarViewModel {
         self.availableApps = appsProvider.runningTargetApps()
         self.isAccessibilityTrusted = false   // set by syncTrust() below (single source)
         self.wasTrusted = loaded.wasTrusted
+        // #17a — user-state loaded like targetBundleID. Clamped on READ too: a tampered/downgraded
+        // plist (gap=9999) would otherwise flow unclamped to TileLayout as a negative column width.
+        self.gap = Self.clampedGap(CGFloat(loaded.gap))
         self.launchAtLogin = loginItem.status == .enabled
         self.actor = makeActor(loaded.targetBundleID)
         syncTrust()   // probe + latch at init — catches the trusted-at-launch / migrating case (#23 B2)
@@ -117,6 +120,24 @@ public final class MenuBarViewModel {
         actor = makeActor(bundleID)
     }
 
+    /// The allowed tile-gap range (#17a): 0 = flush, 40 = generous. Every N=1..12 column layout
+    /// stays valid (positive widths) across this range on any real display (audited).
+    public static let gapRange: ClosedRange<CGFloat> = 0...40
+
+    /// The single clamp authority (#17a) — used on BOTH the write (`setGap`) and read (init from a
+    /// persisted value) paths, so no gap outside `gapRange` can ever reach `TileLayout`.
+    private static func clampedGap(_ points: CGFloat) -> CGFloat {
+        min(max(points, gapRange.lowerBound), gapRange.upperBound)
+    }
+
+    /// Change the tile gap (#17a). Clamps to `gapRange` and persists. Manual model — like `setTarget`,
+    /// it does NOT auto-tile; the new gap applies on the next "Rearrange now", avoiding an AX
+    /// write-storm on every increment.
+    public func setGap(_ points: CGFloat) {
+        gap = Self.clampedGap(points)
+        persist()
+    }
+
     /// Register / unregister as a login item, then refresh `launchAtLogin` from the authoritative
     /// `LoginItem.status`. Errors are swallowed and reflected as the real post-call status (the
     /// unsigned-binary throw path is observed live in #13, not surfaced as UI here).
@@ -146,7 +167,7 @@ public final class MenuBarViewModel {
     /// One persist for ALL writes — carries the live `wasTrusted` so an unrelated save (e.g. a
     /// target-app change) never clobbers the latch back to false (#23 B1).
     private func persist() {
-        settings.save(AppSettings(targetBundleID: targetBundleID, wasTrusted: wasTrusted))
+        settings.save(AppSettings(targetBundleID: targetBundleID, wasTrusted: wasTrusted, gap: Double(gap)))
     }
 
     /// The PRODUCTION Accessibility-trust probe for the composition root to inject. Defined in Kit
