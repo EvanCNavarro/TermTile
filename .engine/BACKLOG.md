@@ -429,6 +429,12 @@ committed; findings notes are the durable output.
   precedent. Defer until there's enough to configure; move config out of the inline menu then.]
 
 #25 · Global hotkey to trigger Rearrange now · DONE
+#25b · In-app shortcut recorder + configurable hotkey · DONE
+  (2026-07-04: self-contained focusable NSView recorder [SwiftUI Button+background failed popover capture];
+  AppSettings.hotKey persisted; HotKeyMonitor.reconfigure rollback; default ⌘⌥T. 2 plan BLOCKERs [B1
+  commit-on-success, B2 ⌥/⌃-required central in start()] + 2 impl SHOULD-FIX. Capture user-confirmed;
+  non-default combo live-proven load→register→fire. 178/178.)
+#25 · Global hotkey to trigger Rearrange now · DONE
   (2026-07-03: Carbon RegisterEventHotKey HotKeyMonitor [mirrors DragMonitor C-bridge] → default ⌃⌥⌘R
   fires the existing rearrangeNow(); no AX grant needed; ID-matched dispatch. Impl review [Carbon correct +
   leak-free; deinit + eventNotHandledErr fixes]. Red-first + LIVE-PROVEN [real bundle registered=true,
