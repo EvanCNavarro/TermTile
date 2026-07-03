@@ -1,4 +1,5 @@
 import Foundation
+import TermTileCore
 
 /// The persistence port for `AppSettings` (ADR-0001 imperative-shell seam). The production
 /// adapter is `UserDefaultsSettingsStore`; tests inject an in-memory fake. Synchronous by design
@@ -10,6 +11,11 @@ public protocol SettingsStore: Sendable {
     func load() -> AppSettings
     /// Persist `settings` (all keys).
     func save(_ settings: AppSettings)
+    /// Remove the ENTIRE persisted domain — the uninstall clear (#22b). This lives on the
+    /// persistence authority (not the Uninstaller) so "how we own our defaults" has one home. It
+    /// also stops `cfprefsd` from resurrecting a separately-trashed prefs plist on the next flush:
+    /// `removePersistentDomain` clears the in-memory registration AND the on-disk plist together.
+    func purge()
 }
 
 /// The production `SettingsStore`, backed by `UserDefaults`. Stores ONLY the `suiteName`
@@ -42,6 +48,12 @@ public struct UserDefaultsSettingsStore: SettingsStore {
     public func save(_ settings: AppSettings) {
         let d = defaults
         d.set(settings.targetBundleID, forKey: Key.targetBundleID)
+    }
+
+    /// The domain name is the suite when named (tests) or the app's bundleID for `.standard`
+    /// (production, where UserDefaults writes `~/Library/Preferences/<bundleID>.plist`).
+    public func purge() {
+        defaults.removePersistentDomain(forName: suiteName ?? AppIdentity.bundleID)
     }
 
     /// The UserDefaults key names — the persistence contract (also raw-referenced by the

@@ -47,4 +47,30 @@ struct SettingsStoreTests {
         let loaded = UserDefaultsSettingsStore(suiteName: suite).load()   // empty suite
         #expect(loaded.targetBundleID == AppSettings.defaults.targetBundleID)   // absent → default
     }
+
+    // #22b — purge() removes the whole persisted domain (so an uninstall's trashed prefs plist can't
+    // be resurrected by cfprefsd on the next flush). After purge, the domain is empty and load()
+    // falls back to defaults.
+    @Test("purge clears the persisted domain")
+    func purgeClearsDomain() {
+        let suite = "dev.ecn.apps.termtile.tests.purge"
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let store = UserDefaultsSettingsStore(suiteName: suite)
+        store.save(AppSettings(targetBundleID: "com.example.other"))
+        #expect(store.load().targetBundleID == "com.example.other")
+
+        store.purge()
+
+        #expect(store.load() == .defaults)   // domain cleared → per-key defaults
+        #expect((UserDefaults(suiteName: suite)?.persistentDomain(forName: suite) ?? [:]).isEmpty)
+    }
+
+    @Test("in-memory fake purge resets to defaults")
+    func inMemoryPurge() {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.example.other"))
+        store.purge()
+        #expect(store.load() == .defaults)
+    }
 }

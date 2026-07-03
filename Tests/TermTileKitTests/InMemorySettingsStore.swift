@@ -14,4 +14,5 @@ final class InMemorySettingsStore: SettingsStore, @unchecked Sendable {
 
     func load() -> AppSettings { lock.withLock { current ?? .defaults } }
     func save(_ settings: AppSettings) { lock.withLock { current = settings } }
+    func purge() { lock.withLock { current = nil } }
 }
