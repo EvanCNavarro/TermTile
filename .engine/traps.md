@@ -165,3 +165,15 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   already hold that value. Also: settle a freshly-created window (spike-04 ~400-500ms) BEFORE an AX
   frame write, or the write silently no-ops. Not mechanically checkable from repo state (proof-design
   discipline, per-probe/transient) — no compiled check; this warning is the guard.
+
+### TRAP-16: `swift test --filter` takes the test FUNCTION name, not the `@Suite` display string
+- what happened: #12b's invert-check first ran `swift test --filter "Launch-at-login"` (the
+  `@Suite("Launch-at-login — LoginItem port")` DISPLAY string) → "Executed 0 tests" (silent
+  no-match, exit 0 — looked like a spurious pass). Re-running with the test FUNCTION name
+  (`--filter statusMappingIsFaithful`) matched and showed the red `✘`.
+- warning: Swift Testing's `--filter` matches the Swift IDENTIFIER (the `func` name or the type
+  name), NOT the human `@Test`/`@Suite` display string. For a focused invert-check filter on a
+  `swift test`, pass the test function name (e.g. `statusMappingIsFaithful`) or the type name; a
+  zero-match filter EXITS 0, so "0 tests" during an invert-check is a false green, not a red — always
+  confirm the filter actually selected the intended test. Not mechanically checkable from repo state
+  (transient CLI-invocation discipline) — no compiled check; this warning is the guard.
