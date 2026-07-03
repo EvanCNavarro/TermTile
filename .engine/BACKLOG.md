@@ -396,10 +396,14 @@ committed; findings notes are the durable output.
 
 ## Phase D — menu-bar utility completeness (from docs/research/menubar-app-features-research.md)
 
-#21 · About panel: version + what-it-is + author/credits + links (site/GitHub/license) · S0
+#21 · About panel: version + what-it-is + links (site/GitHub/license) · DONE
+  (2026-07-03: AppInfo authority #21a + About row #21b + Uninstall wiring #21c; render-validated via
+  TERMTILE_GALLERY; code-reviewed plan+impl.)
   MUST-HAVE. Every surveyed utility ships one. Copy RememBar's AboutPopover shape (an ⓘ control →
   panel; ellipsis reveals Check-for-Updates + Uninstall). Version from CFBundleShortVersionString.
-#22 · Uninstall: clean self-removal (trash bundle + deregister login item + clear owned paths) · S0
+#22 · Uninstall: clean self-removal (trash bundle + deregister login item + clear owned paths) · DONE
+  (2026-07-03: OwnedPaths #22a + Uninstaller + SettingsStore.purge #22b; #22c uninstall UI absorbed into
+  #21's About panel. Scope-safety invert-checked; twice code-reviewed.)
   MUST-HAVE for a non-App-Store app. Template: RememBar's RememBarUninstaller — trash the .app, unregister
   the SMAppService login item, trash ONLY owned paths (~/Library/Application Support/TermTile,
   Preferences/dev.ecn.apps.termtile.plist, Caches/dev.ecn.apps.termtile), EXACT-match never glob (a
