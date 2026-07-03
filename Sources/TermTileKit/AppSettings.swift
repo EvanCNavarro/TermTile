@@ -16,14 +16,19 @@ public struct AppSettings: Equatable, Sendable {
     /// are the same 64-bit type). Absent key → 8, the value the shell hardcoded pre-#17a, so an
     /// existing user's grid does NOT reflow on upgrade. The VM clamps writes to `gapRange`.
     public var gap: Double
+    /// The global "Rearrange now" hotkey (#25b), user-settable via the menu recorder. Stored as its
+    /// two `UInt32` fields (keyCode + Carbon modifiers) → 2 Int keys. Absent → ⌘⌥T.
+    public var hotKey: HotKeyConfig
 
-    public init(targetBundleID: String, wasTrusted: Bool, gap: Double) {
+    public init(targetBundleID: String, wasTrusted: Bool, gap: Double, hotKey: HotKeyConfig) {
         self.targetBundleID = targetBundleID
         self.wasTrusted = wasTrusted
         self.gap = gap
+        self.hotKey = hotKey
     }
 
     /// The launch defaults: target iTerm2 (spec-draft:18; bundle id verified `com.googlecode.iterm2`
-    /// via `mdls`), never granted, 8-pt gap. `load()` falls back to these per-key.
-    public static let defaults = AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8)
+    /// via `mdls`), never granted, 8-pt gap, ⌘⌥T hotkey. `load()` falls back to these per-key.
+    public static let defaults = AppSettings(
+        targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8, hotKey: .rearrange)
 }

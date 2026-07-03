@@ -64,20 +64,10 @@ struct TermTileApp: App {
         // the delegate re-asserts it as a belt.
         NSApplication.shared.setActivationPolicy(.accessory)
 
-        // Global hotkey ⌃⌥⌘R → the same rearrangeNow() the menu button invokes (#25). Registered on
-        // the normal path only (not selftest/gallery, where a global hotkey would interfere). onFire
-        // hops to the main actor to respect rearrangeNow()'s isolation. TERMTILE_HOTKEY_LOG emits
-        // stderr markers so a live prove can confirm registration + real-keypress routing.
-        let vmForHotKey = viewModel
-        let logHotKey = ProcessInfo.processInfo.environment["TERMTILE_HOTKEY_LOG"] != nil
-        hotKeyMonitor = HotKeyMonitor(onFire: {
-            if logHotKey { FileHandle.standardError.write(Data("HOTKEY fired\n".utf8)) }
-            Task { @MainActor in await vmForHotKey.rearrangeNow() }
-        })
-        if !isSelftest && !isGallery {
-            let ok = hotKeyMonitor.start()
-            if logHotKey { FileHandle.standardError.write(Data("HOTKEY registered=\(ok)\n".utf8)) }
-        }
+        // Global hotkey → the same rearrangeNow() the menu button invokes (#25). Active on the normal
+        // path only (not selftest/gallery, where a global hotkey would interfere).
+        hotKeyMonitor = Self.makeHotKeyMonitor(vm: viewModel, active: !isSelftest && !isGallery,
+            log: ProcessInfo.processInfo.environment["TERMTILE_HOTKEY_LOG"] != nil)
 
         if isSelftest { Self.runSelftest(viewModel: viewModel) }
 
@@ -99,12 +89,31 @@ struct TermTileApp: App {
         }
     }
 
+    /// Build the global-hotkey monitor from the VM's persisted combo, wire it to rearrangeNow, and
+    /// set the VM's re-registration handler (#25/#25b). `onFire`/the handler weakly capture the VM/
+    /// monitor (the App struct retains both for process life; weak breaks the VM↔monitor cycle).
+    @MainActor
+    private static func makeHotKeyMonitor(vm: MenuBarViewModel, active: Bool, log: Bool) -> HotKeyMonitor {
+        let monitor = HotKeyMonitor(config: vm.hotKey, onFire: { [weak vm] in
+            if log { FileHandle.standardError.write(Data("HOTKEY fired\n".utf8)) }
+            Task { @MainActor in await vm?.rearrangeNow() }
+        })
+        if active {
+            let ok = monitor.start()
+            vm.setHotKeyRegistered(ok)
+            if log { FileHandle.standardError.write(Data("HOTKEY registered=\(ok)\n".utf8)) }
+        }
+        // Post-init: re-register on a recorder change, reporting success back to setHotKey (#25b B1).
+        vm.onHotKeyChanged = { [weak monitor] config in monitor?.reconfigure(config) ?? false }
+        return monitor
+    }
+
     /// A VM forced into the `grantBroken` state (untrusted probe + seeded `wasTrusted`) so the
     /// grant-break fix-it copy can be render-validated (#23). Throwaway suite; never the real domain.
     private static func brokenGalleryVM(loginItem: any LoginItem, visibleFrame: CGRect,
                                         eps: CGFloat) -> MenuBarViewModel {
         let store = UserDefaultsSettingsStore(suiteName: "dev.ecn.apps.termtile.gallery")
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange))
         return MenuBarViewModel(settings: store, loginItem: loginItem,
             appsProvider: WorkspaceTargetAppsProvider(), isTrustedProbe: { false },
             visibleFrame: visibleFrame, epsilon: eps,

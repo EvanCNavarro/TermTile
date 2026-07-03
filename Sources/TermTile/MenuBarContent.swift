@@ -43,6 +43,18 @@ struct MenuBarContent: View {
                 set: { viewModel.setGap($0) }),
                 in: MenuBarViewModel.gapRange, step: 4)
 
+            // Global-hotkey recorder (#25b): click the field, press a combo (needs ⌥ or ⌃; setHotKey
+            // rejects ⌘-only footguns). A self-contained focusable NSView that captures + re-registers
+            // live; the "⚠" marks a persisted combo that couldn't register (taken by another app).
+            HStack {
+                Text("Shortcut")
+                Spacer()
+                HotKeyRecorder(current: viewModel.hotKey, registered: viewModel.hotKeyRegistered) { config in
+                    viewModel.setHotKey(config)
+                }
+                .frame(width: 120, height: 22)
+            }
+
             Toggle("Launch at login", isOn: Binding(
                 get: { viewModel.launchAtLogin },
                 set: { viewModel.setLaunchAtLogin($0) }))

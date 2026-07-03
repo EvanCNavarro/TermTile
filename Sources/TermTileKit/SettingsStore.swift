@@ -46,7 +46,13 @@ public struct UserDefaultsSettingsStore: SettingsStore {
             // `object(forKey:) as? Bool` (NOT bool(forKey:)) so an absent key falls back to false
             // rather than reading as a stored false — the per-key discipline this store mandates.
             wasTrusted: d.object(forKey: Key.wasTrusted) as? Bool ?? AppSettings.defaults.wasTrusted,
-            gap: d.object(forKey: Key.gap) as? Double ?? AppSettings.defaults.gap)
+            gap: d.object(forKey: Key.gap) as? Double ?? AppSettings.defaults.gap,
+            // `UInt32(exactly:)` — a tampered negative Int would TRAP `UInt32(_:)`; fall back per-key.
+            hotKey: HotKeyConfig(
+                keyCode: (d.object(forKey: Key.hotKeyCode) as? Int).flatMap(UInt32.init(exactly:))
+                    ?? AppSettings.defaults.hotKey.keyCode,
+                modifiers: (d.object(forKey: Key.hotKeyModifiers) as? Int).flatMap(UInt32.init(exactly:))
+                    ?? AppSettings.defaults.hotKey.modifiers))
     }
 
     public func save(_ settings: AppSettings) {
@@ -54,6 +60,8 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         d.set(settings.targetBundleID, forKey: Key.targetBundleID)
         d.set(settings.wasTrusted, forKey: Key.wasTrusted)
         d.set(settings.gap, forKey: Key.gap)
+        d.set(Int(settings.hotKey.keyCode), forKey: Key.hotKeyCode)
+        d.set(Int(settings.hotKey.modifiers), forKey: Key.hotKeyModifiers)
     }
 
     /// The domain name is the suite when named (tests) or the app's bundleID for `.standard`
@@ -68,5 +76,7 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         static let targetBundleID = "targetBundleID"
         static let wasTrusted = "wasTrusted"
         static let gap = "gap"
+        static let hotKeyCode = "hotKeyCode"
+        static let hotKeyModifiers = "hotKeyModifiers"
     }
 }
