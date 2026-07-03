@@ -237,8 +237,19 @@ committed; findings notes are the durable output.
   Gap = hardcoded constant (→ #17); launchAtLogin source-of-truth = SMAppService.status (→ #12b),
   NOT UserDefaults (double-source bug). PROVE = swift test incl. LIVE UserDefaults(suiteName:)
   cross-instance round-trip + invert-check. Plan: .engine/state/stoke-plan-12a.md.
-#12b · Launch-at-login: SMAppService.mainApp behind a LoginItem protocol + fake · S0
-  blocked-by #12a. Logic/registration API testable via fake now; the LIVE login-item
+#12b · Launch-at-login: SMAppService.mainApp behind a LoginItem protocol + fake · DONE
+  (2026-07-03: swift test 112/112 green [+5 LoginItem] + invert-check red [swap map arms
+  .notRegistered↔.enabled → keystone 2 issues, restored]; PROVE — correctness by the unit mapping
+  test across ALL FOUR real SMAppService.Status cases; READ path proven LIVE via AXProbe logincheck
+  [real SMAppServiceLoginItem().status through real ServiceManagement → status=notFound from the
+  unbundled binary, no crash/hang, framed liveness-only]. LoginItemStatus + LoginItem [sync Sendable
+  port] + SMAppServiceLoginItem [resolves .mainApp per call — SMAppService is non-Sendable NSObject;
+  explicit named-case map + @unknown default] + lock-guarded @unchecked Sendable InMemoryLoginItem
+  fake [seedable initial status], all in Kit; core-purity + axprobe checks PASS. Skeptic verified
+  every API fact against the real SMAppService.h header [no BLOCKERs; 1 MAJOR honesty-of-live-read +
+  2 MINORs reconciled]. Plan: .engine/state/stoke-plan-12b.md; receipt: receipt.md Row 8;
+  verification: docs/verification/task12b-loginitem.md.)
+  blocked-by #12a (DONE). Logic/registration API testable via fake now; the LIVE login-item
   registration is observable only from a bundled .app.
   [DEP: blocked-by #13 — SMAppService.mainApp requires the packaged .app + login-item domain; a
   `swift run` binary can't register a real login item, so the LIVE prove needs #13's bundle] → #13

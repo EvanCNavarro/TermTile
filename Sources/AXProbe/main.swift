@@ -732,6 +732,21 @@ if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "settingscheck"
     exit(ok ? 0 : 1)
 }
 
+// logincheck — #12b LIVENESS/SMOKE read (NOT a correctness proof; the unit mapping test proves
+// correctness). Drives the REAL `SMAppServiceLoginItem` (no inline copy): resolves its `.status`
+// through real ServiceManagement from this external process, proving the adapter's READ path calls
+// into the system and returns a value without crashing/hanging. From an unbundled, ad-hoc binary
+// this returns `.notFound` (Apple: SMAppService callers "must be code signed") — a NON-
+// discriminating read that touches only 1 of 4 statuses. LIVE register()/unregister() are DEFERRED
+// to #13 (real login-item registration needs the packaged, signed .app). Synchronous, no AX/async
+// → no TRAP-14/-12. Exits 0 iff the read returned any value (it always does).
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "logincheck" {
+    let status = SMAppServiceLoginItem().status                          // real product read
+    print("logincheck: status=\(status) bundleID=\(Bundle.main.bundleIdentifier ?? "none") "
+        + "note=liveness-smoke-only-correctness-proven-by-unit-test PASS=true")
+    exit(0)
+}
+
 // livecheck <bundle-id> [count] [outPNG] — #19a LIVE grid-snap PROVE. Dispatched via a
 // semaphore-blocked `Task.detached`: top-level main.swift code runs on the @MainActor, so a plain
 // `Task {}` INHERITS main-actor isolation and enqueues onto the main thread — which is then parked
