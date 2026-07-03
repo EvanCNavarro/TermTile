@@ -31,6 +31,16 @@ public actor TilingActor {
     /// The cached window snapshot — an instant read that never touches AX.
     public var snapshot: WindowState { state }
 
+    /// The tracked window whose cached frame contains `point`, or `nil` if none does. Used by the
+    /// drag-monitor (#14b) to resolve the dragged id at mouse-DOWN — while the windows are still on
+    /// their grid slots (NON-overlapping), so at most one frame contains the cursor and the answer
+    /// is unambiguous (skeptic B1: resolving at mouse-UP would be ambiguous, the dragged window
+    /// overlapping its drop target). Insertion order is not z-order, so this is only sound on the
+    /// non-overlapping tiled snapshot; first containing match wins.
+    public func windowID(at point: CGPoint) -> CGWindowID? {
+        state.windows.first { $0.frame.contains(point) }?.id
+    }
+
     /// Toggle-on / authoritative reset: adopt `config`, re-enumerate the target app's tileable
     /// windows as the source of truth, and tile them all onto the grid.
     public func activate(config: TileConfig) async {

@@ -725,6 +725,205 @@ func activatecheck(bundleID: String, count: Int, axVisible: CGRect, outPNG: Stri
     exit(pass ? 0 : 1)
 }
 
+// #14b mode: LIVE PROVE of the PRODUCTION drag-reorder WIRING — a `leftMouseUp` CGEvent POSTED by
+// this probe is received by the REAL `TermTileKit.DragMonitor`'s own in-process session tap (A1),
+// which resolves the dragged id captured at mouse-DOWN (`TilingActor.windowID(at:)`, skeptic B1) and
+// drives `TilingActor.handleDragEnd` → a REAL AX reorder+write that relocates a REAL WezTerm window
+// to a NEW slot. `handleDragEnd` had ZERO callers before this beat (TilingActor.swift:60).
+//
+// The drop point is fed into the actor cache via an injected `.moved` — the mid-drag frame update
+// that `TilingActor.run()`'s event stream delivers in production (or a physical drag delivers). This
+// probe does NOT prove that a synthetic drag PHYSICALLY moves the window (A3) or the run()→cache-
+// freshness chain — those need real drag physics → #14c. What IS proven live: self-posted events
+// reach the in-process tap (A1) and the tap→windowID(down)→handleDragEnd wiring moves a real window.
+//
+// Non-spoofable (TRAP-15): the dragged window (birth slot 0) ends at a DIFFERENT slot (2), its
+// readback lands on slot-2's target, and the snapshot order flips [1,2,3,4]→[2,3,1,4]. `--invert`
+// posts a CLICK (no travel) instead: the DragMonitor's travel-gate (skeptic B2) must ignore it →
+// ZERO reorder (order unchanged) → invert PASS. Sync-pump shape (m7/TRAP-14): the tap fires only
+// while the run loop is pumped, so `pumpAwait` drives each actor call WITHOUT blocking the loop.
+
+/// A one-shot lock-guarded boolean, set from the DragMonitor's `onDragEnd` closure (a pool thread)
+/// and polled from main — so the drag poll can disarm the tap the instant the reorder completes.
+final class Flag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    func set() { lock.withLock { value = true } }
+    func get() -> Bool { lock.withLock { value } }
+}
+
+/// Pump the run loop (so the tap keeps firing) WHILE awaiting an async actor call. Returns the
+/// result, or `nil` on timeout. Never `sem.wait()` on main (TRAP-14) — that would freeze the tap.
+func pumpAwait<T: Sendable>(_ timeout: Double, _ op: @escaping @Sendable () async -> T) -> T? {
+    let lock = NSLock()
+    nonisolated(unsafe) var result: T?
+    let task = Task.detached { let r = await op(); lock.withLock { result = r } }
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+        _ = CFRunLoopRunInMode(.defaultMode, 0.02, false)
+        if lock.withLock({ result != nil }) { break }
+    }
+    task.cancel()
+    return lock.withLock { result }
+}
+
+/// Pump the run loop for `seconds` (no async wait) — lets posted events deliver + tap callbacks fire.
+func pumpFor(_ seconds: Double) {
+    let deadline = Date().addingTimeInterval(seconds)
+    while Date() < deadline { _ = CFRunLoopRunInMode(.defaultMode, 0.02, false) }
+}
+
+/// Post one synthetic left-button mouse event at a global (top-left) point — the SAME coordinate
+/// space as AX window frames on a single display (skeptic m6: no flip), so a slot point posts directly.
+func postMouse(_ type: CGEventType, _ p: CGPoint) {
+    guard let e = CGEvent(mouseEventSource: nil, mouseType: type,
+                          mouseCursorPosition: p, mouseButton: .left) else { return }
+    e.post(tap: .cgSessionEventTap)
+}
+
+func dragcheck(bundleID: String, count: Int, axVisible: CGRect, outPNG: String, invert: Bool) {
+    setvbuf(stdout, nil, _IOLBF, 0)  // line-buffer for tail-ability
+    guard axVisible != .null else { print("dragcheck: no screen"); exit(1) }
+    let eps: CGFloat = 2, gap: CGFloat = 12
+    guard count >= 3 else { print("dragcheck: need >=3 windows to prove a shuffle"); exit(1) }
+
+    print("dragcheck: inputMonitoringPreflight=\(CGPreflightListenEventAccess()) "
+        + "axTrusted=\(AXIsProcessTrusted()) mode=\(invert ? "INVERT(click)" : "drag")")
+
+    let adapter = AXWindowSystem(bundleID: bundleID)
+    let config = TileConfig(isEnabled: true, visibleFrame: axVisible, gap: gap)
+    let actor = TilingActor(system: adapter, config: config, epsilon: eps, ttlSeconds: 5)
+    let targets = TileLayout.frames(count: count, visibleFrame: axVisible, gap: gap)
+
+    // (1) Enumerate the throwaways (shell-created), settle, and tile them to the grid (the toggle path).
+    stderrLog("stage: enumerate + activate")
+    let before = pumpAwait(8) { await adapter.tileableWindows() } ?? []
+    print("dragcheck: enumerated \(before.count) window(s) (expect \(count)) "
+        + "ids=\(before.map { String($0.id) }.joined(separator: ","))")
+    guard before.count == count else { print("dragcheck: FAIL — creation mechanism?"); exit(1) }
+    pumpFor(0.5)
+    _ = pumpAwait(8) { await actor.activate(config: config); return true }
+    pumpFor(0.5)
+
+    // After activate() the REAL windows are tiled, but the actor CACHE still holds their BIRTH frames
+    // — in production `run()`'s echo-folding refreshes the cache to the tiled frames (M4: this
+    // freshness is load-bearing for the drag IDENTITY `windowID(at:)`, not just the drop point). This
+    // probe runs no event stream, so feed the real tiled frames in as `.moved` — the deterministic
+    // stand-in for run()'s folding (the real run()→echo chain is the #14c deferral). Without this,
+    // `windowID(at: a slot point)` hit-tests stale birth frames and resolves the WRONG window.
+    let tiled = pumpAwait(5) { await adapter.tileableWindows() } ?? []
+    for w in tiled {
+        _ = pumpAwait(2) {
+            await actor.handle(WindowEvent(windowID: w.id, kind: .moved, frame: w.frame)); return true
+        }
+    }
+
+    let orderBefore = pumpAwait(3) { await actor.snapshot.windows.map(\.id) } ?? []
+    let draggedID = orderBefore.first ?? before[0].id                 // birth slot 0
+    print("dragcheck: orderBefore=\(orderBefore) draggedID=\(draggedID)")
+
+    // (2) Arm the REAL production DragMonitor on the (main) run loop, wired to the REAL actor. A
+    //     completion flag flips the INSTANT the first drag's reorder finishes, so the poll can disarm
+    //     the tap immediately — no long armed window in which a stray mouse event could re-reorder.
+    let fired = Flag()
+    let monitor = DragMonitor(
+        travelThreshold: 6,
+        resolveWindow: { pt in                                       // identity at DOWN (B1)
+            let id = await actor.windowID(at: pt)
+            stderrLog("resolve: tap-delivered downPt=\(rectStr(CGRect(origin: pt, size: .zero))) → id=\(id.map(String.init) ?? "nil")")
+            return id
+        },
+        onDragEnd: { id in                                           // the previously-uncalled path
+            stderrLog("onDragEnd: id=\(id)")
+            await actor.handleDragEnd(id); fired.set()
+        })
+    guard monitor.start() else {
+        print("dragcheck: FAIL — DragMonitor tap install failed (Input Monitoring not granted?)")
+        exit(1)
+    }
+    stderrLog("stage: DragMonitor armed")
+
+    // (3) Geometry: DOWN on the dragged window's titlebar (slot 0), UP over slot 2. The drop FRAME
+    //     fed to the cache is slot-2 OFFSET by +40 (so it differs from the slot-2 target beyond eps —
+    //     a real reorder WRITE fires, not an idempotent skip) yet stays nearest slot 2.
+    let dropSlot = 2
+    let birthA = targets[0]
+    let downPt = CGPoint(x: birthA.midX, y: birthA.origin.y + 11)    // titlebar
+    let dropFrame = CGRect(x: targets[dropSlot].origin.x + 40, y: targets[dropSlot].origin.y + 40,
+                           width: birthA.width, height: birthA.height)
+    let upPt = CGPoint(x: dropFrame.midX, y: dropFrame.midY)
+
+    stderrLog("stage: post \(invert ? "click" : "drag") down=\(rectStr(CGRect(origin: downPt, size: .zero)))")
+    postMouse(.leftMouseDown, downPt)
+    pumpFor(0.15)                                                     // let handleDown resolve the id
+
+    if invert {
+        // CLICK: up at the SAME point (zero travel) — the travel-gate (B2) must ignore it.
+        postMouse(.leftMouseUp, downPt)
+    } else {
+        // Faithful drag gesture (the real posted events the tap consumes); then feed the drop point
+        // into the cache (the mid-drag `.moved` run()/a real drag would deliver) just before the UP.
+        for k in 1...5 {
+            let t = CGFloat(k) / 5
+            postMouse(.leftMouseDragged, CGPoint(x: downPt.x + (upPt.x - downPt.x) * t,
+                                                 y: downPt.y + (upPt.y - downPt.y) * t))
+            pumpFor(0.03)
+        }
+        _ = pumpAwait(3) {
+            await actor.handle(WindowEvent(windowID: draggedID, kind: .moved, frame: dropFrame))
+            return true
+        }
+        postMouse(.leftMouseUp, upPt)
+    }
+
+    // (4) Let the tap's mouse-up fire handleDragEnd. Drag: break the INSTANT the reorder completes
+    //     (fired flag) and disarm — a stray event can't slip into a long armed poll. Invert: pump a
+    //     fixed window and prove NOTHING fired (the click-gate ate it) — order must stay unchanged.
+    stderrLog("stage: await reorder")
+    let expectOrder: [CGWindowID] = invert ? orderBefore
+        : { var o = orderBefore; o.removeFirst(); o.insert(draggedID, at: dropSlot); return o }()
+    let deadline = Date().addingTimeInterval(invert ? 2.5 : 4)
+    while Date() < deadline {
+        pumpFor(0.05)
+        if fired.get() && !invert { break }
+    }
+    monitor.stop()                                                    // disarm BEFORE reading (no stray window)
+    pumpFor(0.4)                                                      // settle the reorder writes
+    let finalOrder = pumpAwait(2) { await actor.snapshot.windows.map(\.id) } ?? orderBefore
+
+    // (5) Read back every window via the REAL adapter; assert the dragged window relocated to its NEW
+    //     slot (delta from birth slot, TRAP-15) and the whole grid matches the shuffled order.
+    var readbackOK = true
+    for (slot, id) in finalOrder.enumerated() {
+        let back = pumpAwait(2) { (await adapter.readFrame(id)) ?? .null } ?? .null
+        let target = targets[slot]
+        let dOrigin = max(abs(back.origin.x - target.origin.x), abs(back.origin.y - target.origin.y))
+        let ok = dOrigin <= eps
+        if !invert { readbackOK = readbackOK && ok }
+        print("dragcheck: slot=\(slot) id=\(id) target=\(rectStr(target)) readback=\(rectStr(back)) "
+            + "dOrigin=\(Int(dOrigin)) ok=\(ok)")
+    }
+    let draggedFinalSlot = finalOrder.firstIndex(of: draggedID) ?? -1
+    let didFire = fired.get()
+    let orderOK = finalOrder == expectOrder
+    let deltaOK = invert ? (draggedFinalSlot == 0) : (draggedFinalSlot != 0)   // moved (or, invert: did NOT)
+
+    // (6) Screencapture — SEPARATE from the readback evidence (TRAP-9).
+    stderrLog("stage: screencapture → \(outPNG)")
+    let cap = Process()
+    cap.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    cap.arguments = ["-x", outPNG]
+    try? cap.run(); cap.waitUntilExit()
+
+    let pass = invert
+        ? (!didFire && orderOK && deltaOK)           // click ignored: NOTHING fired, order unchanged, dragged @ slot 0
+        : (didFire && orderOK && deltaOK && readbackOK)   // drag: tap fired → shuffled order + dragged @ NEW slot + snapped
+    print("dragcheck: orderBefore=\(orderBefore) finalOrder=\(finalOrder) expect=\(expectOrder) "
+        + "fired=\(didFire) draggedFinalSlot=\(draggedFinalSlot) orderOK=\(orderOK) deltaOK=\(deltaOK) readbackOK=\(readbackOK)")
+    print("dragcheck: PASS=\(pass) → \(outPNG)")
+    exit(pass ? 0 : 1)
+}
+
 // Spike #7 mode: macOS Sequoia native-tiling interference / suppression surface. Exercises
 // the REAL TermTileCore.NativeTilingSettings resolver against the REAL com.apple.WindowManager
 // preference domain — (1) enumerates the 4 tiling toggles' live state, (2) proves the GLOBAL
@@ -897,6 +1096,17 @@ if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "activatecheck"
         sem.signal()
     }
     sem.wait()
+}
+
+// dragcheck — #14b LIVE drag-reorder-wiring PROVE. Runs DIRECTLY on main (NOT Task.detached): it
+// installs the DragMonitor tap on the current run loop and pumps it itself (sync-pump, TRAP-14).
+// Args: dragcheck <bundleID> [count=4] [png] [--invert]
+if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "dragcheck" {
+    let n = CommandLine.arguments.count >= 4 ? (Int(CommandLine.arguments[3]) ?? 4) : 4
+    let png = CommandLine.arguments.count >= 5 && !CommandLine.arguments[4].hasPrefix("--")
+        ? CommandLine.arguments[4] : "docs/verification/task14b-drag-reorder.png"
+    dragcheck(bundleID: CommandLine.arguments[2], count: n, axVisible: originAXVisibleFrame(),
+              outPNG: png, invert: CommandLine.arguments.contains("--invert"))
 }
 
 if CommandLine.arguments.count >= 4, CommandLine.arguments[1] == "dragprobe",
