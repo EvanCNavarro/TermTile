@@ -193,3 +193,16 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   emit a synchronous marker before any async work so "hook reached" is distinguishable from "async
   ran".) Enforced by .engine/checks/selftest-stderr-markers.sh (exit non-zero iff a `print(`
   containing `SELFTEST` appears in Sources/TermTile/TermTileApp.swift).
+
+### TRAP-18: a non-ASCII char glued to `$var` breaks Bash under `set -u` (unbound-variable)
+- what happened: #13a's test-packaged-app.sh ended `crash-reports $before→$after` using a Unicode
+  arrow `→` (U+2192, bytes 0xE2 0x86 0x92). In a UTF-8 locale Bash folded the leading arrow byte
+  into the variable NAME, expanding `$before→` as one identifier → `line 62: before�: unbound
+  variable` under `set -u`, aborting the smoke script AFTER a successful launch/poll (only the final
+  echo died, but the script exit-1'd). The live smoke caught it (the PackagingScriptsTests text
+  checks did NOT — the arrow is in an echo string they don't inspect).
+- warning: keep shell scripts (`scripts/*.sh`) PURE ASCII — never put a multibyte char (arrows,
+  em-dashes, smart quotes, en-dashes) adjacent to a `$var` expansion; use `${var}` braces + ASCII
+  (`->`, `--`). This bug is invisible until the code line RUNS with the var set, so a text-invariant
+  test won't see it. Enforced by .engine/checks/scripts-ascii-only.sh (exit non-zero iff any
+  scripts/*.sh contains a non-ASCII byte).

@@ -274,17 +274,52 @@ committed; findings notes are the durable output.
   LoginItem + AccessibilityTrust probe + Privacy_Accessibility deep link into the shell. PROVE =
   LIVE app launch + AX menu-bar enumeration (System Events → menu bar item) + CGWindowList
   layer-25 window — NOT pixels (TRAP-1). Includes bundled-app prompt-path UX observation (spike 02).
-#13 · Packaging + CI: .app bundle, codesign, smoke scripts, test/release workflows · S0
-  blocked-by #12c. Authority: docs/research/remembar-audit.md COPY/ADAPT table. Build script
-  (Info.plist heredoc, LSUIElement, sips/iconutil icon; glob resources — audit §8.4),
-  inside-out ad-hoc codesign no --deep + verify strict, test-packaged-app.sh launch proof,
-  monotonic build number (NOT dots-stripped — audit §8.5), SwiftLint + Semgrep + Dependabot,
-  release.yml with VirusTotal + provenance attestation + SHA-256 ("virus testing"), AND
-  swift test in CI gating release (RememBar's biggest gap — audit §8.1-8.3). Includes a
-  stable signing identity (Developer ID or self-created cert) so .app TCC grants survive
-  rebuilds (spike 02 proved ad-hoc cdhash pinning voids grants; required before #14).
+#13 · Packaging + CI — SPLIT by stoke-plan-13a.md Scope into #13a/#13b/#13c (three PROVE-surfaces:
+  local packaging / GitHub-Actions CI / Apple-cert signing; precedent #19→a/b, #12→a/b/c). Original
+  authority: docs/research/remembar-audit.md COPY/ADAPT table.
+#13a · App bundle + packaging script + packaged-app launch smoke · DONE
+  (2026-07-03: swift test 128/128 green [+6 PackagingScriptsTests] + invert-check red [add --deep to
+  the bundle sign line → signLines.allSatisfy reddens; the FIRST invert false-passed on a first-match-
+  only assertion → strengthened to allSatisfy over ALL sign lines, re-inverted real red; restored];
+  PROVEN LIVE bundle-specific [skeptic F3] — scripts/build-app.sh built dist/TermTile.app, codesign
+  --verify --deep --strict rc=0, codesign -dv Identifier=dev.ecn.apps.termtile flags=0x2(adhoc); the
+  bundled binary launched accessory/no-focus [ALIVE, exec-path under dist/TermTile.app], System Events
+  bundle-identifier-of-PID == dev.ecn.apps.termtile [the discriminator vs a bare binary's missing
+  value], AX menu-bar-2 status item, CGWindowList layer-25 [TRAP-1 not pixels, X:-4777]; test-packaged-
+  app.sh alive=8/8 crash-reports 0->0. build-app.sh [--show-bin-path, plutil -lint'd Info.plist,
+  LSUIElement, CFBundleVersion=git rev-list --count=28 never dots-stripped, inside-out ad-hoc sign no
+  --deep] + test-packaged-app.sh [kill -0 launch proof, Bundle.module regression guard, no pkill] +
+  PackagingScriptsTests [6 positive line-scoped invariants] land. Hit TRAP-18 [Unicode arrow glued to
+  $var breaks Bash under set -u → new scripts-ascii-only.sh]. Skeptic SAFE-WITH-FIXES [3 MAJOR folded:
+  F1 line-scoped, F2 positive-presence, F3 bundle discriminator]. Plan: stoke-plan-13a.md; receipt:
+  receipt.md Row 8; verification: docs/verification/task13a-packaging.md.)
+  blocked-by #12c (DONE). Kit-adjacent scripts (no production Swift source change). scripts/build-app.sh
+  (swift build -c release --show-bin-path → dist/TermTile.app; Info.plist heredoc LSUIElement + bundle
+  id dev.ecn.apps.termtile + monotonic CFBundleVersion=git rev-list --count [NOT dots-stripped, audit
+  §8.5]; plutil -lint; xattr -cr; inside-out ad-hoc codesign -s - no --deep; verify --deep --strict) +
+  scripts/test-packaged-app.sh (bundle-invariant + foreign-path launch proof, NO pkill/killall) +
+  Tests/TermTileKitTests/PackagingScriptsTests.swift (scripts-as-text invariants, red-first). PROVE
+  (FL-1, bundle-specific per audit F3): build the .app, codesign -dv Identifier + verify --deep --strict,
+  launch Contents/MacOS/TermTile, System Events "status menu" AND bundle-identifier-of-PID ==
+  dev.ecn.apps.termtile (discriminator vs bare binary), CGWindowList layer-25 (TRAP-1 not pixels),
+  screencapture archival. Icon deferred (LSUIElement = no dock icon, YAGNI). Plan: stoke-plan-13a.md.
+#13b · CI wiring: swift test in check.yml + SwiftLint/Semgrep + release.yml · S0
+  blocked-by #13a. Replace the placeholder npm check.yml (package.json is scaffolding: echo-lint +
+  node --test over zero test files = trivial pass — audit §8.1 gap) with a macOS `swift test` job gating
+  the build; add SwiftLint + Semgrep (p/security-audit + p/secrets) workflows; release.yml (tag v* →
+  build-app.sh → VirusTotal + attest-build-provenance + SHA-256 + gh release, swift test gated).
+  [DEP: external — no-network/no-push in loop beats; workflows are authored + static-validated
+  (actionlint/yamllint) locally, but a LIVE run is provable only on GitHub Actions runners with secrets] → #13b
+#13c · Stable signing identity (Developer ID / self-signed cert) so .app TCC grants survive rebuilds · S0
+  blocked-by #13a. Spike 02 proved ad-hoc cdhash pinning voids the Accessibility grant on every rebuild
+  (fatal UX for an AX tiler). Establish a stable codesigning identity and re-sign the bundle with it.
+  [DEP: external — zero codesigning identities on this machine (security find-identity → 0 valid);
+  Developer ID needs an Apple Developer account (network), a self-signed identity needs Keychain UI —
+  un-doable in an offline/non-interactive loop beat] → #13c
 #14 · E2E proof: fresh-boot flow — grant TCC, toggle on, spawn 5 terminals, verify grid, drag-reorder · S0
-  blocked-by #11, #13, #19b. Recorded evidence (screencaptures) into docs/verification/.
+  blocked-by #11, #13a, #19b. Recorded evidence (screencaptures) into docs/verification/. NOTE: durable
+  TCC across rebuilds needs #13c (signing identity) — but #14's one-shot E2E can run the ad-hoc build
+  granted once, so #14 is NOT hard-blocked on the cert-blocked #13c (skeptic-confirmed).
 
 ## Phase C — deferred (do not pull forward without a reason)
 
