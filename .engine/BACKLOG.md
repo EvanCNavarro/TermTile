@@ -410,7 +410,10 @@ committed; findings notes are the durable output.
   neighbour dir must never be caught; make the trash op injectable so a test proves scope). CANNOT
   revoke the TCC grant — guide the user (System Settings toggle / `sudo tccutil reset Accessibility
   dev.ecn.apps.termtile`). Verify tccutil syntax vs the shipping macOS.
-#23 · First-run onboarding: Accessibility grant walkthrough + icon discoverability · S0
+#23 · Accessibility trust-state UX: grant-break-aware fix-it row (3-state) · DONE
+  (2026-07-03: AppSettings.wasTrusted + AccessibilityState + VM syncTrust/accessibilityState; onboarding
+  window dropped as YAGNI. Two plan BLOCKERs (persist-clobber, latch-misses-trusted-at-launch) caught
+  + fixed; runtime-revoke pinned; grant-broken copy render-validated (TERMTILE_GALLERY_BROKEN).)
   MUST-HAVE (whole app is grant-gated; the menu-bar icon can be hidden by Ice/Bartender). First launch:
   what-it-is → grant Accessibility (deep link) → find the icon. Also handle the verified grant-break:
   detect "untrusted but a TCC row exists" (moved/duplicate bundle) and warn/offer a fix.
