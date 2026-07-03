@@ -245,3 +245,18 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   adapter.tileableWindows() → actor.handle(.moved id frame) per window) to sync the cache first. The
   run()→echo-freshness chain is load-bearing for drag IDENTITY, not just the drop point. Not mechanically
   checkable from repo state (runtime-ordering semantics) — this warning is the guard.
+
+### TRAP-22: a prior beat marked a task DONE in BACKLOG but never committed — next beat inherits dirty tree
+- what happened: #14b's full work (DragMonitor.swift, windowID(at:)+handleDragEnd wiring, dragcheck
+  probe, +5 tests, TRAP-20/21, verification doc + 2 screenshots) was complete and the BACKLOG entry
+  was already marked DONE with a full live-prove note — but the prior beat never ran the commit. This
+  beat opened on a dirty working tree (5 modified + 5 untracked files) with the task already "done" on
+  paper. Cost a re-verification round (swift test 140/140 + all 10 checks) to confirm the uncommitted
+  work was sound before committing it as one #14b commit.
+- warning: at REORIENT, ALWAYS `git status` first — a dirty tree whose changes match an
+  already-DONE-marked BACKLOG task is prior-beat uncommitted work, not fresh scope; verify it green
+  (test_command + .engine/checks) then commit it before picking the next task. And per the loop's own
+  step 5: the beat that flips a `· S<n>` marker to `· DONE` MUST commit in the SAME beat — the FINAL
+  ACTION is not done until the commit lands. Not cleanly mechanically checkable (a mid-beat tree is
+  legitimately dirty, so a static "clean tree" gate would false-fire during normal work) — this
+  reorient-git-status habit is the guard.
