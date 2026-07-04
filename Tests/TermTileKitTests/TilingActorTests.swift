@@ -274,6 +274,27 @@ struct TilingActorTests {
         #expect(Set(writes.map(\.id)) == Set([1, 2, 3, 4]))
     }
 
+    // #26 B1 — the enumeration order is NOT slot order (AX returns z-order). reorderCommands needs
+    // slot order, so reorderDropFresh must re-sort by (minX,minY). This seeds the fake in SCRAMBLED
+    // order — the NON-dragged windows must still land on their CORRECT slots, not get shuffled.
+    @Test("reorderDropFresh: correct with a scrambled (non-slot) enumeration order")
+    func reorderDropFreshScrambledEnumeration() async {
+        let f = targets(4)
+        let dropped = CGRect(x: f[3].midX - 50, y: f[3].midY - 50, width: 100, height: 100)
+        // ids on slots 1,2,3 + id1 dragged to slot-3's area, enumerated in z-order (NOT slot order).
+        let scrambled = [win(3, f[2]), win(1, dropped), win(4, f[3]), win(2, f[1])]
+        let fake = InMemoryWindowSystem(windows: scrambled)
+        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+
+        await actor.reorderDropFresh(1, config: enabled())
+
+        let writes = await fake.recordedWrites
+        #expect(writes.first { $0.id == 1 }?.target == f[3])   // dragged → slot 3
+        #expect(writes.first { $0.id == 2 }?.target == f[0])   // the rest keep slot order,
+        #expect(writes.first { $0.id == 3 }?.target == f[1])   // NOT scrambled by z-order
+        #expect(writes.first { $0.id == 4 }?.target == f[2])
+    }
+
     @Test("reorderDropFresh for an untracked id is a no-op")
     func reorderDropFreshUntrackedNoop() async {
         let fake = InMemoryWindowSystem(windows: [win(1, targets(2)[0]), win(2, targets(2)[1])])

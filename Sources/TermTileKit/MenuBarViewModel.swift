@@ -128,6 +128,19 @@ public final class MenuBarViewModel {
         syncReorderMonitor()
     }
 
+    /// True when the user opted into drag-reorder + Accessibility is granted, but Input Monitoring
+    /// (the mouse tap's permission) is NOT — so the menu shows a fix-it row instead of silently doing
+    /// nothing (#26 S3). `?? true` → no controller (tests/unbundled) never shows the row.
+    public var reorderNeedsInputMonitoring: Bool {
+        reorderOnDrag && isAccessibilityTrusted && !(dragReorder?.inputMonitoringGranted ?? true)
+    }
+
+    /// The Privacy > Input Monitoring deep link the reorder fix-it row opens (sibling of the
+    /// Accessibility one). `Privacy_ListenEvent` is the Input-Monitoring pane anchor.
+    public var inputMonitoringSettingsURL: URL {
+        URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!
+    }
+
     /// The drag-reorder seam the controller's monitor calls (#26). Both hit the CURRENT `actor` (which
     /// `setTarget` rebuilds) + current gap/frame, so a target-switch needs no teardown — the closures
     /// always resolve against the live target.

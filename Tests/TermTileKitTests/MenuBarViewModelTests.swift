@@ -307,6 +307,26 @@ struct MenuBarViewModelTests {
         #expect(!spyUntrusted.isRunning)
     }
 
+    // #26 S3 — opted-in + trusted but Input Monitoring NOT granted → the UI must show a fix-it row
+    // (not silently no-op). Off, or granted, → no fix-it.
+    @Test("reorderNeedsInputMonitoring: on + trusted + not-granted only")
+    func reorderNeedsInputMonitoringState() {
+        let on = InMemorySettingsStore()
+        on.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
+                            hotKey: .rearrange, reorderOnDrag: true))
+        #expect(makeVMWithReorder(store: on, trusted: true, granted: false).0.reorderNeedsInputMonitoring)
+        #expect(!makeVMWithReorder(store: on, trusted: true, granted: true).0.reorderNeedsInputMonitoring)
+        #expect(!makeVMWithReorder(store: on, trusted: false, granted: false).0.reorderNeedsInputMonitoring)
+        // off by default → never
+        #expect(!makeVMWithReorder(store: InMemorySettingsStore(), trusted: true, granted: false)
+            .0.reorderNeedsInputMonitoring)
+    }
+
+    @Test("input-monitoring settings URL is the Privacy_ListenEvent deep link")
+    func inputMonitoringURLIsDeepLink() {
+        #expect(makeVM().0.inputMonitoringSettingsURL.absoluteString.contains("Privacy_ListenEvent"))
+    }
+
     // #25b — setHotKey: valid combo commits + persists + fires the change handler; invalid is
     // rejected; a reconfigure FAILURE (combo taken) does NOT commit or persist (the B1 guard).
     @Test("setHotKey commits + persists + fires the handler on a valid combo")

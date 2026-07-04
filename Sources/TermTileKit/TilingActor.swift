@@ -42,9 +42,12 @@ public actor TilingActor {
     }
 
     /// ON-DEMAND drag path (#26) — the dragged window's id, resolved by enumerating the target's
-    /// windows FRESH at mouse-DOWN (windows still on their non-overlapping grid slots → unambiguous),
-    /// with NO live event stream / cached model. A ~1ms enumerate is trivial for a manual gesture,
-    /// and it sidesteps the off-main-observer race + empty-model seeding the stream approach needs.
+    /// windows FRESH at mouse-DOWN, with NO live event stream / cached model. A ~1ms enumerate is
+    /// trivial for a manual gesture, and it sidesteps the off-main-observer race + empty-model seeding
+    /// the stream approach needs. `first{contains}` is unambiguous when the windows are tiled
+    /// (non-overlapping) — the normal case after a Rearrange; if the user enabled drag-reorder without
+    /// tiling and windows overlap, it relies on AX enumerating topmost-first (skeptic S1 — acceptable
+    /// for MVP; the reorder then re-tiles everything anyway).
     public func windowID(atFresh point: CGPoint) async -> CGWindowID? {
         await system.tileableWindows().first { $0.frame.contains(point) }?.id
     }
@@ -55,8 +58,17 @@ public actor TilingActor {
     public func reorderDropFresh(_ draggedID: CGWindowID, config: TileConfig) async {
         let windows = await system.tileableWindows()
         guard windows.contains(where: { $0.id == draggedID }) else { return }
+        // AX enumerates in z-order, but `reorderCommands` maps position j → slot j, so it needs SLOT
+        // order (#26 B1). The NON-dragged windows are still on their grid slots, and TileLayout is
+        // column-major (`frame[k]` = column k/2, row k%2, top-first) → their frames sort into slot
+        // order by (minX, minY) (same-column windows share an exact x → minY breaks the tie). The
+        // dragged window sorts arbitrarily but is removed-by-id + re-inserted at its nearest slot, so
+        // only the others' relative order matters — which the sort fixes.
+        let slotOrdered = windows.sorted {
+            ($0.frame.minX, $0.frame.minY) < ($1.frame.minX, $1.frame.minY)
+        }
         let (_, commands) = TileEngine.reorderCommands(
-            windows: windows, draggedID: draggedID, config: config, epsilon: epsilon)
+            windows: slotOrdered, draggedID: draggedID, config: config, epsilon: epsilon)
         await apply(commands)
     }
 

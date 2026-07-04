@@ -59,6 +59,18 @@ struct MenuBarContent: View {
                 get: { viewModel.launchAtLogin },
                 set: { viewModel.setLaunchAtLogin($0) }))
 
+            // Opt-in drag-reorder (#26): off by default. Only when on does the app watch for drags —
+            // and only after Input Monitoring is granted (the fix-it row below prompts for it).
+            Toggle("Reorder windows on drag", isOn: Binding(
+                get: { viewModel.reorderOnDrag },
+                set: { viewModel.setReorderOnDrag($0) }))
+            if viewModel.reorderNeedsInputMonitoring {
+                fixItRow("Input Monitoring required",
+                         "Reorder-on-drag needs Input Monitoring to detect when you drag a window.",
+                         link: "Open Input Monitoring Settings…",
+                         url: viewModel.inputMonitoringSettingsURL)
+            }
+
             switch viewModel.accessibilityState {
             case .trusted:
                 EmptyView()
@@ -128,15 +140,17 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The Accessibility fix-it row — one shape, two messages (needs-grant vs grant-broken). The
-    /// deep-link is the shared authority (`accessibilitySettingsURL` → `AccessibilityTrust`).
+    /// A permission fix-it row — one shape, reused for Accessibility (#23) and Input Monitoring (#26):
+    /// title + body + a deep-link to the relevant Settings pane.
     @ViewBuilder
-    private func fixItRow(_ title: String, _ body: String) -> some View {
+    private func fixItRow(_ title: String, _ body: String,
+                          link: String = "Open Accessibility Settings…",
+                          url: URL? = nil) -> some View {
         Divider()
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.subheadline).bold()
             Text(body).font(.caption).foregroundStyle(.secondary)
-            Link("Open Accessibility Settings…", destination: viewModel.accessibilitySettingsURL)
+            Link(link, destination: url ?? viewModel.accessibilitySettingsURL)
         }
     }
 
