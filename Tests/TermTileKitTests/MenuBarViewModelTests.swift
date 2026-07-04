@@ -246,8 +246,7 @@ struct MenuBarViewModelTests {
         #expect(spy.saveCount == afterLatch)             // revoke writes nothing
     }
 
-    // #26 — reorderOnDrag opt-in: off by default; setReorderOnDrag persists + carries all fields
-    // (no clobber). This step is state-only; the live watchers are wired by a later #26 step.
+    // #26 — reorderOnDrag opt-in: off by default; setReorderOnDrag persists + carries all fields.
     @Test("reorderOnDrag off by default; setReorderOnDrag persists")
     func setReorderOnDragPersists() {
         let store = InMemorySettingsStore()
@@ -258,6 +257,54 @@ struct MenuBarViewModelTests {
         #expect(store.load().reorderOnDrag == true)        // persisted
         vm.setReorderOnDrag(false)
         #expect(store.load().reorderOnDrag == false)
+    }
+
+    // #26 — a spy drag-reorder controller: records start/stop so the VM lifecycle is unit-provable.
+    @MainActor
+    final class SpyDragReorder: DragReorderControlling {
+        var inputMonitoringGranted: Bool
+        private(set) var isRunning = false
+        private(set) var startCount = 0
+        private(set) var stopCount = 0
+        init(granted: Bool) { inputMonitoringGranted = granted }
+        func start() -> Bool { startCount += 1; isRunning = true; return true }
+        func stop() { stopCount += 1; isRunning = false }
+    }
+
+    func makeVMWithReorder(store: InMemorySettingsStore, trusted: Bool, granted: Bool)
+        -> (MenuBarViewModel, SpyDragReorder) {
+        let fake = InMemoryWindowSystem(windows: [])
+        let spy = SpyDragReorder(granted: granted)
+        let vm = MenuBarViewModel(
+            settings: store, loginItem: InMemoryLoginItem(),
+            appsProvider: InMemoryTargetAppsProvider(seed: []),
+            isTrustedProbe: { trusted }, visibleFrame: visible, epsilon: eps,
+            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps, ttlSeconds: 100) },
+            dragReorder: spy)
+        return (vm, spy)
+    }
+
+    // The monitor runs ONLY when opted-in AND trusted AND Input Monitoring granted — never a
+    // half-run. Toggling / a denied grant / no-trust all leave it stopped.
+    @Test("drag monitor starts only on opt-in ∧ trusted ∧ granted; stops otherwise")
+    func reorderMonitorLifecycle() {
+        // opted-in at launch (seeded) + trusted + granted → started at init
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
+                               hotKey: .rearrange, reorderOnDrag: true))
+        let (vm, spy) = makeVMWithReorder(store: store, trusted: true, granted: true)
+        #expect(spy.isRunning)
+        vm.setReorderOnDrag(false)               // toggle off → stops
+        #expect(!spy.isRunning)
+        vm.setReorderOnDrag(true)                // toggle on → starts
+        #expect(spy.isRunning)
+
+        // granted=false → NEVER starts (no half-run), even opted-in + trusted
+        let (_, spyDenied) = makeVMWithReorder(store: store, trusted: true, granted: false)
+        #expect(!spyDenied.isRunning)
+        // untrusted → never starts
+        let (_, spyUntrusted) = makeVMWithReorder(store: store, trusted: false, granted: true)
+        #expect(!spyUntrusted.isRunning)
     }
 
     // #25b — setHotKey: valid combo commits + persists + fires the change handler; invalid is

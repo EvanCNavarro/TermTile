@@ -68,6 +68,9 @@ public final class MenuBarViewModel {
     /// Set POST-init by the composition root (breaks the VM↔monitor init cycle): re-registers the
     /// live hotkey and returns whether it succeeded. `setHotKey` commits only on a `true` return.
     @ObservationIgnored public var onHotKeyChanged: (@Sendable (HotKeyConfig) -> Bool)?
+    /// The opt-in drag-reorder monitor (#26), injected by the composition root; nil in tests/unbundled
+    /// (drag-reorder is a no-op there). The VM owns its lifecycle via `syncReorderMonitor()`.
+    @ObservationIgnored private let dragReorder: (any DragReorderControlling)?
 
     public init(
         settings: any SettingsStore,
@@ -77,7 +80,8 @@ public final class MenuBarViewModel {
         visibleFrame: CGRect,
         epsilon: CGFloat,
         makeActor: @escaping @Sendable (String) -> TilingActor,
-        uninstaller: Uninstaller? = nil
+        uninstaller: Uninstaller? = nil,
+        dragReorder: (any DragReorderControlling)? = nil
     ) {
         let loaded = settings.load()
         self.settings = settings
@@ -87,6 +91,7 @@ public final class MenuBarViewModel {
         self.epsilon = epsilon
         self.makeActor = makeActor
         self.uninstaller = uninstaller
+        self.dragReorder = dragReorder
         self.targetBundleID = loaded.targetBundleID
         self.availableApps = appsProvider.runningTargetApps()
         self.isAccessibilityTrusted = false   // set by syncTrust() below (single source)
@@ -99,6 +104,20 @@ public final class MenuBarViewModel {
         self.launchAtLogin = loginItem.status == .enabled
         self.actor = makeActor(loaded.targetBundleID)
         syncTrust()   // probe + latch at init — catches the trusted-at-launch / migrating case (#23 B2)
+        syncReorderMonitor()   // #26 — start the drag monitor iff opted-in + trusted + granted
+    }
+
+    /// Start/stop the opt-in drag-reorder monitor to match state (#26). Runs ONLY when the user opted
+    /// in AND Accessibility is trusted (the reorder writes need it) AND Input Monitoring is granted
+    /// (the tap needs it) — so nothing watches the mouse until all three hold. Idempotent; called on
+    /// every state change (init, toggle, trust). A missing grant → stopped (never a half-run, #26 S3).
+    private func syncReorderMonitor() {
+        guard let dragReorder else { return }
+        if reorderOnDrag, isAccessibilityTrusted, dragReorder.inputMonitoringGranted {
+            dragReorder.start()
+        } else {
+            dragReorder.stop()
+        }
     }
 
     /// Re-read the trust probe and LATCH `wasTrusted` the first time trust is observed (guarded on
@@ -110,6 +129,7 @@ public final class MenuBarViewModel {
             wasTrusted = true
             persist()
         }
+        syncReorderMonitor()   // trust change may enable/disable the drag monitor (#26)
     }
 
     /// Run the uninstall (About panel's Uninstall action). Returns the outcome for the UI to render
@@ -178,6 +198,7 @@ public final class MenuBarViewModel {
     public func setReorderOnDrag(_ on: Bool) {
         reorderOnDrag = on
         persist()
+        syncReorderMonitor()   // #26 — start/stop the monitor to match the new preference
     }
 
     /// Register / unregister as a login item, then refresh `launchAtLogin` from the authoritative
