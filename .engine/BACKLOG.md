@@ -442,7 +442,7 @@ committed; findings notes are the durable output.
   reorderCommands scrambled N≥3 non-dragged tiles → sort by (minX,minY) slot order, scrambled-enum regression.
   6 commits red-first. 187/187 tests. Follow-ups: stale-visibleFrame on display change (S2), cut the now-dead
   stream pipeline (N1/N2).)
-#27 · Selectable drag-reorder strategies · BUILT (live-feel pending)
+#27 · Selectable drag-reorder strategies · DONE (user-validated + hardened)
   (2026-07-04: user asked to make the reorder BEHAVIOR a setting, keep all options, battle-test each.
   Semantics skeptic-audited → a SHARED nearest-slot model (drop dragged by id, assign others to nearest
   slot → target-occupant + vacated-slot fall out; drop-on-own-origin no-op guard; untiled fallback, no crash).
@@ -450,7 +450,11 @@ committed; findings notes are the durable output.
   column, the literal ask), swap, columnShift (original, kept), rowShift. Menu Picker under the reorder toggle,
   gallery render-validated. reorderStrategy persisted (default adaptive). Red-first: N=6 canonical table proves
   all 4 distinct + adaptive-by-direction + lone-last + permutation property N=2..8×4. 3 commits. 139/139 tests.
-  Pending: Bobby's live drag-feel across the 4 strategies.)
+  User-validated live ('feels awesome'). HARDENED: refined out an unreachable placeholder
+  (adaptive resolves inside permute via delegation), added the force-unwrap invariant assert +
+  intentional-design comments, and 11 edge-case tests (N=1/2/3, middle-window×strategies,
+  cross-row bijection, untiled+partial-collision fallback, adaptive diagonal, corrupt rawValue,
+  argmin tie) — a read-only skeptic confirmed no reachable crash, all invariants hold. 150 tests.)
 #25 · Global hotkey to trigger Rearrange now · DONE
   (2026-07-03: Carbon RegisterEventHotKey HotKeyMonitor [mirrors DragMonitor C-bridge] → default ⌃⌥⌘R
   fires the existing rearrangeNow(); no AX grant needed; ID-matched dispatch. Impl review [Carbon correct +
