@@ -22,12 +22,6 @@ public protocol WindowSystem: Sendable {
 
     /// Move + resize the window to `target`. The adapter performs the size→position→size write
     /// (with `AXEnhancedUserInterface` disabled) — that decomposition is the adapter's job.
-    /// Returns `true` on success. The CALLER (`TilingActor`) predicts and records the per-write
-    /// pending expectations from its cached snapshot (ledger contract, `MoveClassifier`), since
-    /// only it holds the write-time clock and the pre-write origin.
+    /// Returns `true` on success.
     func writeFrame(_ id: CGWindowID, to target: CGRect) async -> Bool
-
-    /// The observed window-event stream (ADR rule 4). The adapter bridges its per-pid
-    /// AXObserver callbacks into this stream ONCE; no AX callbacks live anywhere else.
-    func events() -> AsyncStream<WindowEvent>
 }

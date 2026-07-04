@@ -46,7 +46,7 @@ struct MenuBarViewModelTests {
             isTrustedProbe: { trusted },
             visibleFrame: visible,
             epsilon: eps,
-            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps, ttlSeconds: 100) },
+            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps) },
             uninstaller: uninstaller)
         return (vm, fake)
     }
@@ -127,7 +127,7 @@ struct MenuBarViewModelTests {
             appsProvider: InMemoryTargetAppsProvider(seed: []),
             isTrustedProbe: { flag.value },
             visibleFrame: visible, epsilon: eps,
-            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps, ttlSeconds: 100) })
+            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps) })
         #expect(!vm.isAccessibilityTrusted)     // probe false → fix-it row shows
         flag.value = true
         vm.refreshTrust()
@@ -236,7 +236,7 @@ struct MenuBarViewModelTests {
             appsProvider: InMemoryTargetAppsProvider(seed: []),
             isTrustedProbe: { flag.value },
             visibleFrame: visible, epsilon: eps,
-            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps, ttlSeconds: 100) })
+            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps) })
         #expect(vm.accessibilityState == .trusted)
         let afterLatch = spy.saveCount            // 1 — latched at init
         flag.value = false                        // the grant breaks
@@ -279,7 +279,7 @@ struct MenuBarViewModelTests {
             settings: store, loginItem: InMemoryLoginItem(),
             appsProvider: InMemoryTargetAppsProvider(seed: []),
             isTrustedProbe: { trusted }, visibleFrame: visible, epsilon: eps,
-            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps, ttlSeconds: 100) },
+            makeActor: { _ in TilingActor(system: fake, epsilon: self.eps) },
             dragReorder: spy)
         return (vm, spy)
     }

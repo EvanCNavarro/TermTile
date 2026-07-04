@@ -24,12 +24,4 @@ struct AXWindowSystemTests {
         let ok = await adapter.writeFrame(12345, to: CGRect(x: 0, y: 0, width: 800, height: 600))
         #expect(ok == false)
     }
-
-    @Test("not-running target: events() returns a finished-empty stream (no observer, no hang)")
-    func eventsNotRunningFinishes() async {
-        let adapter = AXWindowSystem(bundleID: "dev.ecn.apps.termtile.no-such-app")
-        var count = 0
-        for await _ in adapter.events() { count += 1 }
-        #expect(count == 0)   // no running target → no observer installed → for-await returns at once
-    }
 }

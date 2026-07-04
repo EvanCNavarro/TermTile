@@ -4,11 +4,9 @@ import Testing
 import TermTileCore
 
 /// #18 — the Kit-layer orchestration (ADR-0001 rules 2 & 4): the `WindowSystem` port + fake +
-/// `TilingActor`, proven against the in-memory fake (no live AX — that is #19). The actor wires
-/// the PURE `WindowStateReducer`/`TileEngine`, applies emitted `[FrameCommand]` via the port,
-/// and records ONE `PendingMove` per AX WRITE (size→pos→size trio) so its own write echoes
-/// classify `.internal` (the feedback-loop break). Clock/TTL are actor-side; tests pass a large
-/// `ttlSeconds` so ms-scale timing never expires a pending mid-test.
+/// `TilingActor`, proven against the in-memory fake (no live AX — that is #19). TermTile is a
+/// MANUAL / ON-DEMAND tiler: each action enumerates windows FRESH via the port, tiles/reorders,
+/// and writes. No cached model / event stream (cut once on-demand drag-reorder #26 superseded it).
 @Suite("TilingActor")
 struct TilingActorTests {
     // Keystone geometry: visibleFrame (0,0,1000,1000), gap 10 → known slot targets.
@@ -20,271 +18,90 @@ struct TilingActorTests {
     func win(_ id: CGWindowID, _ r: CGRect) -> TrackedWindow { TrackedWindow(id: id, frame: r) }
     func off(_ id: CGWindowID) -> TrackedWindow { win(id, CGRect(x: 0, y: 0, width: 100, height: 100)) }
 
-    // KEYSTONE — activate tiles all off-grid windows; their size→pos→size echoes classify
-    // internal, drain the ledger to empty, and cause ZERO further writes (ADR rule 3 loop break).
-    @Test("keystone: activate tiles all; echoes classify internal; ledger drains; no re-write")
-    func keystoneActivateEchoesDrain() async {
+    // KEYSTONE — activate enumerates the target's windows FRESH and tiles all off-grid ones to their
+    // slots. The flip that reddens it: activate(.disabled) → zero writes.
+    @Test("keystone: activate tiles all fresh-enumerated windows to their grid slots")
+    func keystoneActivateTilesToGrid() async {
         let seed = [off(1), off(2), off(3)]
         let fake = InMemoryWindowSystem(windows: seed)
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        let actor = TilingActor(system: fake, epsilon: eps)
         let t = targets(3)
-        // R3: each seed is genuinely off its OWN slot target → 3 writes are provable.
-        for k in 0..<3 { #expect(seed[k].frame != t[k]) }
+        for k in 0..<3 { #expect(seed[k].frame != t[k]) }   // genuinely off-grid → writes provable
 
         await actor.activate(config: enabled())
 
         let writes = await fake.recordedWrites
         #expect(writes.count == 3)
         #expect(Set(writes.map(\.id)) == Set([1, 2, 3]))
-        for w in writes { #expect(w.target == t[Int(w.id) - 1]) }
-
-        // 3 pendings per window (size→pos→size trio) = 9.
-        #expect(await actor.snapshot.pending.count == 9)
-
-        // Replay each window's 3 echoes: size1 = (target.size, cachedOrigin), pos + size2 = target.
-        for id in [CGWindowID(1), 2, 3] {
-            let target = t[Int(id) - 1]
-            let sizedOld = CGRect(origin: CGPoint(x: 0, y: 0), size: target.size)
-            await actor.handle(WindowEvent(windowID: id, kind: .resized, frame: sizedOld))
-            await actor.handle(WindowEvent(windowID: id, kind: .moved, frame: target))
-            await actor.handle(WindowEvent(windowID: id, kind: .resized, frame: target))
-        }
-
-        #expect(await actor.snapshot.pending.isEmpty)      // all echoes internal → drained
-        #expect(await fake.recordedWrites.count == 3)       // internal echoes never retile
+        for w in writes { #expect(w.target == t[Int(w.id) - 1]) }   // EXACT slot targets
     }
 
-    // #14a — activate() re-enumerates `system.tileableWindows()` as the source of truth. When the
-    // target app's window SET changes out from under the cache and the toggle is pressed again, the
-    // SECOND activate tiles the CURRENT windows and REPLACES the stale cached set — it reads the
-    // system, NOT `state.windows`. This is the exact property the live 5-window E2E (#14a) relies
-    // on: toggle-on tiles what is actually on screen NOW, not a stale snapshot. Distinct from the
-    // `.created` event path (which folds one window in); no existing test reseeds between two
-    // activates. INVERT (`activate` uses `state.windows`): the first activate reads the empty fresh
-    // cache → tiles nothing → the `[1, 2]` assertion reds immediately.
-    @Test("activate re-enumerates the current windows, replacing a stale cached set")
-    func activateReenumeratesOverStaleCache() async {
+    // #14a — activate() re-enumerates the CURRENT windows each call (no stale cache): after the
+    // window set changes, a second activate tiles what's on screen NOW.
+    @Test("activate re-enumerates the current windows every call")
+    func activateReenumerates() async {
         let fake = InMemoryWindowSystem(windows: [off(1), off(2)])
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
-        await actor.activate(config: enabled())
-        #expect(await actor.snapshot.windows.map(\.id) == [1, 2])   // first activate tiled {1,2}
-
-        // The window set changes (2 windows closed, 3 new opened); the toggle is pressed again.
-        await fake.reseed([off(3), off(4), off(5)])
-        await fake.clearWrites()                                    // isolate the second activate's writes
+        let actor = TilingActor(system: fake, epsilon: eps)
         await actor.activate(config: enabled())
 
-        // Snapshot is the CURRENT set — the stale {1,2} is gone, replaced by the live enumerate.
-        #expect(await actor.snapshot.windows.map(\.id) == [3, 4, 5])
-        let t = targets(3)                                          // the new set's count=3 grid
+        await fake.reseed([off(3), off(4), off(5)])   // window set changes out from under it
+        await fake.clearWrites()
+        await actor.activate(config: enabled())
+
+        let t = targets(3)
         let writes = await fake.recordedWrites
-        #expect(Set(writes.map(\.id)) == Set([3, 4, 5]))           // tiled exactly the current windows
-        for w in writes { #expect(w.target == t[Int(w.id) - 3]) }  // each snapped to its slot
-        #expect(await actor.snapshot.pending.count == 9)           // 3 windows × size→pos→size trio (F8)
+        #expect(Set(writes.map(\.id)) == Set([3, 4, 5]))            // tiled exactly the current set
+        for w in writes { #expect(w.target == t[Int(w.id) - 3]) }
     }
 
-    // Disabled config = inert: no writes even over off-grid windows (spec: "Off = no rigid behavior").
+    // Disabled config = inert: no writes even over off-grid windows ("Off = no rigid behavior").
     @Test("disabled config: activate issues no writes")
     func disabledInert() async {
         let fake = InMemoryWindowSystem(windows: [off(1), off(2)])
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        let actor = TilingActor(system: fake, epsilon: eps)
         await actor.activate(config: TileConfig(isEnabled: false, visibleFrame: visible, gap: gap))
         #expect(await fake.recordedWrites.isEmpty)
-        #expect(await actor.snapshot.pending.isEmpty)
     }
 
-    // An external move (frame far from any pending) does NOT drain the ledger and issues no
-    // writes — proves internal≠external discrimination at the actor boundary (drag-reorder = #11).
-    @Test("external move does not drain the ledger and issues no writes")
-    func externalMoveNoDrain() async {
-        let fake = InMemoryWindowSystem(windows: [off(1), off(2), off(3)])
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
-        await actor.activate(config: enabled())
-        #expect(await actor.snapshot.pending.count == 9)
-
-        await actor.handle(WindowEvent(windowID: 1, kind: .moved,
-                                       frame: CGRect(x: 900, y: 900, width: 485, height: 485)))
-        #expect(await actor.snapshot.pending.count == 9)    // no pending consumed
-        #expect(await fake.recordedWrites.count == 3)        // no retile on a drag
-    }
-
-    // A created new window while enabled retiles the CHANGED set. Adding id4 to 3 on-grid windows
-    // retargets id3 (lone-last full-height → half-height) AND places id4 → TWO writes (audit R2).
-    @Test("created new window retiles the changed set (id3 retargeted + id4)")
-    func createdRetilesChangedSet() async {
-        let t3 = targets(3)
-        let seed = [win(1, t3[0]), win(2, t3[1]), win(3, t3[2])]   // already on their count=3 grid
-        let fake = InMemoryWindowSystem(windows: seed)
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
-        await actor.activate(config: enabled())
-        #expect(await fake.recordedWrites.isEmpty)             // already on grid → idempotent, no writes
-
-        await actor.handle(WindowEvent(windowID: 4, kind: .created,
-                                       frame: CGRect(x: 0, y: 0, width: 50, height: 50)))
-        let t4 = targets(4)
-        let writes = await fake.recordedWrites
-        #expect(Set(writes.map(\.id)) == Set([3, 4]))          // id1/id2 invariant 3→4, stay silent
-        let byID = Dictionary(uniqueKeysWithValues: writes.map { ($0.id, $0.target) })
-        #expect(byID[3] == t4[2])                              // id3 full→half height
-        #expect(byID[4] == t4[3])
-        #expect(t4[2].height != t3[2].height)                  // sanity: the retarget is real
-    }
-
-    // snapshot is an instant read reflecting the cached state (no AX round-trip semantics).
-    @Test("snapshot reflects the cached state after activate")
-    func snapshotReflectsCache() async {
-        let fake = InMemoryWindowSystem(windows: [off(1), off(2)])
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
-        await actor.activate(config: enabled())
-        #expect(await actor.snapshot.windows.map(\.id) == [1, 2])
-    }
-
-    // run() consumes the port's event stream (ADR rule 4, actor side). Finishable stream + a
-    // real sync point (await the task) avoid flake/hang (audit R4).
-    @Test("run() consumes the event stream")
-    func runConsumesStream() async {
-        let fake = InMemoryWindowSystem(windows: [])
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
-        await actor.activate(config: enabled())               // empty seed → no writes yet
-        let task = Task { await actor.run() }
-        await fake.emit(WindowEvent(windowID: 5, kind: .created,
-                                    frame: CGRect(x: 0, y: 0, width: 50, height: 50)))
-        await fake.finish()
-        await task.value                                       // run() returns when the stream ends
-        #expect(await actor.snapshot.windows.contains { $0.id == 5 })
-        #expect(await fake.recordedWrites.count == 1)          // the created window was tiled
-    }
-
-    // Fake conformance sanity: enumerate returns the seed.
-    @Test("fake returns seeded windows")
-    func fakeConformance() async {
-        let w = off(1)
-        let fake = InMemoryWindowSystem(windows: [w])
-        #expect(await fake.tileableWindows() == [w])
-    }
-
-    // #11 — drag snap-reorder at drag END. A mid-drag `.moved` alone must NOT reorder (the
-    // reducer's `.moved` path is untouched); `handleDragEnd` reads the dragged window's cached
-    // drop frame, reassigns it to the nearest slot, shuffles the rest, and snaps the new order —
-    // recording pendings per AX write so the snap's own echoes would classify `.internal`.
-    @Test("drag end: reorder to nearest slot, shuffle, snap; snapshot order updated")
-    func dragEndReorders() async {
-        let f = targets(4)
-        let seed = (0..<4).map { win(CGWindowID($0 + 1), f[$0]) }   // all four ON their grid slots
-        let fake = InMemoryWindowSystem(windows: seed)
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
-        await actor.activate(config: enabled())
-        #expect(await fake.recordedWrites.isEmpty)                  // already on grid → no writes
-
-        // Simulate dragging id1 (slot 0) so its drop center lands in slot 3: an EXTERNAL `.moved`
-        // updates the cached frame (no matching pending → external, no reorder, no write).
-        let dropped = CGRect(x: f[3].midX - 50, y: f[3].midY - 50, width: 100, height: 100)
-        await actor.handle(WindowEvent(windowID: 1, kind: .moved, frame: dropped))
-        #expect(await fake.recordedWrites.isEmpty)                  // mid-drag move alone: no reorder
-        #expect(await actor.snapshot.windows.first { $0.id == 1 }?.frame == dropped)
-
-        // Drag END → reorder + snap.
-        await actor.handleDragEnd(1)
-
-        let finalOrder = await actor.snapshot.windows
-        #expect(finalOrder.map(\.id) == [2, 3, 4, 1])              // id1 → slot 3; rest shuffle up
-        let writes = await fake.recordedWrites
-        #expect(writes.contains { $0.id == 1 && $0.target == f[3] })   // dragged snaps to slot 3
-        for w in writes {                                          // every write hits the NEW slot
-            let newSlot = finalOrder.firstIndex { $0.id == w.id }!
-            #expect(w.target == f[newSlot])
-        }
-        #expect(await actor.snapshot.pending.count == writes.count * 3) // one trio per AX write
-    }
-
-    // #11 — an untracked drag-end id is a clean no-op (leading guard): no writes, no state churn.
-    @Test("drag end for an untracked id is a no-op")
-    func dragEndUntrackedNoop() async {
-        let f = targets(2)
-        let fake = InMemoryWindowSystem(windows: [win(1, f[0]), win(2, f[1])])
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
-        await actor.activate(config: enabled())
-        await actor.handleDragEnd(999)
-        #expect(await fake.recordedWrites.isEmpty)
-        #expect(await actor.snapshot.windows.map(\.id) == [1, 2])
-        #expect(await actor.snapshot.pending.isEmpty)
-    }
-
-    // #14b — the drag-identity hit-test. `DragMonitor` resolves the dragged window at mouse-DOWN
-    // (windows still tiled → NON-overlapping → unambiguous, skeptic B1) by asking the actor which
-    // tracked window's cached frame contains the cursor point. Discriminating (skeptic B3): the
-    // queried point is inside a NON-first window, so a "return windows[0]" bug reddens instead of
-    // coincidentally passing.
-    @Test("windowID(at:) resolves the window under the point — a NON-first window (discriminates pick-first)")
-    func windowIDAtResolvesUnderPoint() async {
-        let f = targets(4)
-        let seed = (0..<4).map { win(CGWindowID($0 + 1), f[$0]) }   // ids 1..4 on grid slots 0..3
-        let fake = InMemoryWindowSystem(windows: seed)
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
-        await actor.activate(config: enabled())                     // populate the cached snapshot
-
-        // A point inside slot-2's window (id3) — NOT windows[0]. A pick-first bug returns 1 → red.
-        #expect(await actor.windowID(at: CGPoint(x: f[2].midX, y: f[2].midY)) == 3)
-        // And slot-3's window (id4) resolves to 4, not 1.
-        #expect(await actor.windowID(at: CGPoint(x: f[3].midX, y: f[3].midY)) == 4)
-    }
-
-    // #14b — a point over no tracked window (a gap / off-screen) resolves to nil; DragMonitor then
-    // ignores that drag (no dragged id captured), so a drag that starts outside a managed window is
-    // never a reorder.
-    @Test("windowID(at:) is nil for a point over no tracked window (a gap)")
-    func windowIDAtMissIsNil() async {
-        let f = targets(2)
-        let fake = InMemoryWindowSystem(windows: [win(1, f[0]), win(2, f[1])])
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
-        await actor.activate(config: enabled())
-        #expect(await actor.windowID(at: CGPoint(x: -500, y: -500)) == nil)
-    }
-
-    // #26 — ON-DEMAND drag path (no live event stream, no cached model). windowID(atFresh:) resolves
-    // the dragged id by ENUMERATING FRESH at mouse-down — NOTE: no activate() first, unlike the
-    // cached windowID(at:). Discriminates pick-first (asks for a NON-first window).
-    @Test("windowID(atFresh:) resolves from a fresh enumerate — no activate/cached state")
+    // #26 — ON-DEMAND drag path. windowID(atFresh:) resolves the dragged id by ENUMERATING FRESH at
+    // mouse-down — no activate/cached state. Discriminates pick-first (asks for a NON-first window).
+    @Test("windowID(atFresh:) resolves from a fresh enumerate")
     func windowIDAtFreshResolves() async {
         let f = targets(4)
         let fake = InMemoryWindowSystem(windows: (0..<4).map { win(CGWindowID($0 + 1), f[$0]) })
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        let actor = TilingActor(system: fake, epsilon: eps)
         #expect(await actor.windowID(atFresh: CGPoint(x: f[2].midX, y: f[2].midY)) == 3)   // NOT first
         #expect(await actor.windowID(atFresh: CGPoint(x: -500, y: -500)) == nil)           // a gap
     }
 
     // #26 — ON-DEMAND reorder: at drag END, reorderDropFresh ENUMERATES FRESH (the dragged window at
-    // its dropped position — simulated by reseeding the fake), snaps it to the nearest slot, shuffles
-    // the rest. No cached state, no event stream — the whole risky stream pipeline is bypassed.
-    @Test("reorderDropFresh: fresh-enumerate → nearest-slot snap (no cached model)")
+    // its dropped position — simulated by the seed), snaps it to the nearest slot, shuffles the rest.
+    @Test("reorderDropFresh: fresh-enumerate → nearest-slot snap")
     func reorderDropFreshReorders() async {
         let f = targets(4)
-        // The user dragged id1 (slot 0) down to slot-3's area: FRESH enumerate sees id1 at the drop.
         let dropped = CGRect(x: f[3].midX - 50, y: f[3].midY - 50, width: 100, height: 100)
         let fake = InMemoryWindowSystem(windows: [win(1, dropped), win(2, f[1]), win(3, f[2]), win(4, f[3])])
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        let actor = TilingActor(system: fake, epsilon: eps)
 
-        await actor.reorderDropFresh(1, config: enabled())   // NO activate — enumerates fresh itself
+        await actor.reorderDropFresh(1, config: enabled())
 
         let writes = await fake.recordedWrites
         #expect(writes.contains { $0.id == 1 && $0.target == f[3] })   // dragged id1 snaps to slot 3
-        // reorder = [2,3,4,1]: every window lands on its NEW slot's target.
         let order: [CGWindowID] = [2, 3, 4, 1]
         for w in writes { #expect(w.target == f[order.firstIndex(of: w.id)!]) }
         #expect(Set(writes.map(\.id)) == Set([1, 2, 3, 4]))
     }
 
-    // #26 B1 — the enumeration order is NOT slot order (AX returns z-order). reorderCommands needs
-    // slot order, so reorderDropFresh must re-sort by (minX,minY). This seeds the fake in SCRAMBLED
-    // order — the NON-dragged windows must still land on their CORRECT slots, not get shuffled.
+    // #26 B1 — AX enumerates z-order, NOT slot order. reorderCommands needs slot order, so
+    // reorderDropFresh re-sorts by (minX,minY). Seed a SCRAMBLED order: the NON-dragged windows must
+    // still land on their CORRECT slots.
     @Test("reorderDropFresh: correct with a scrambled (non-slot) enumeration order")
     func reorderDropFreshScrambledEnumeration() async {
         let f = targets(4)
         let dropped = CGRect(x: f[3].midX - 50, y: f[3].midY - 50, width: 100, height: 100)
-        // ids on slots 1,2,3 + id1 dragged to slot-3's area, enumerated in z-order (NOT slot order).
         let scrambled = [win(3, f[2]), win(1, dropped), win(4, f[3]), win(2, f[1])]
         let fake = InMemoryWindowSystem(windows: scrambled)
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        let actor = TilingActor(system: fake, epsilon: eps)
 
         await actor.reorderDropFresh(1, config: enabled())
 
@@ -298,7 +115,7 @@ struct TilingActorTests {
     @Test("reorderDropFresh for an untracked id is a no-op")
     func reorderDropFreshUntrackedNoop() async {
         let fake = InMemoryWindowSystem(windows: [win(1, targets(2)[0]), win(2, targets(2)[1])])
-        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        let actor = TilingActor(system: fake, epsilon: eps)
         await actor.reorderDropFresh(999, config: enabled())
         #expect(await fake.recordedWrites.isEmpty)
     }

@@ -56,7 +56,7 @@ struct TermTileApp: App {
             visibleFrame: visibleFrame,
             epsilon: eps,
             makeActor: { bundleID in
-                TilingActor(system: AXWindowSystem(bundleID: bundleID), config: .disabled, epsilon: eps)
+                TilingActor(system: AXWindowSystem(bundleID: bundleID), epsilon: eps)
             },
             uninstaller: uninstaller)
 
@@ -121,7 +121,7 @@ struct TermTileApp: App {
         return MenuBarViewModel(settings: store, loginItem: loginItem,
             appsProvider: WorkspaceTargetAppsProvider(), isTrustedProbe: { false },
             visibleFrame: visibleFrame, epsilon: eps,
-            makeActor: { bid in TilingActor(system: AXWindowSystem(bundleID: bid), config: .disabled, epsilon: eps) })
+            makeActor: { bid in TilingActor(system: AXWindowSystem(bundleID: bid), epsilon: eps) })
     }
 
     /// Gallery hook (RememBar's REMEMBAR_GALLERY pattern): show the REAL MenuBarContent panel in a
