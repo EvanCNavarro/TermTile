@@ -123,6 +123,17 @@ struct SettingsStoreTests {
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().reorderStrategy == .rowShift)
     }
 
+    // #27 — a corrupt/unknown persisted strategy string (tamper, or a value from a NEWER build) must
+    // fall back to the default, never crash the enum init.
+    @Test("corrupt reorderStrategy rawValue falls back to the default")
+    func corruptStrategyFallsBack() {
+        let suite = "dev.ecn.apps.termtile.tests.badstrategy"
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        UserDefaults(suiteName: suite)?.set("not-a-strategy", forKey: "reorderStrategy")
+        #expect(UserDefaultsSettingsStore(suiteName: suite).load().reorderStrategy == .adaptive)
+    }
+
     // #26 — reorderOnDrag opt-in: absent → false (off by default, so no daemon/permission without
     // the user opting in); round-trips true.
     @Test("reorderOnDrag defaults false; round-trips true")

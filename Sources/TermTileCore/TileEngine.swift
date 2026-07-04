@@ -75,9 +75,7 @@ public enum TileEngine {
             assignment[vacatedSlot] = dragged
             ordered = assignment.map { $0! }
         } else {
-            let effective = (strategy == .adaptive)
-                ? adaptiveStrategy(dragged: dragged, origin: slots[vacatedSlot]) : strategy
-            ordered = permute(effective, occupant: occupant, dragged: dragged,
+            ordered = permute(strategy, occupant: occupant, dragged: dragged,
                               indices: (targetSlot, vacatedSlot), slots: slots)
         }
         return (ordered, retileCommands(windows: ordered, config: config, epsilon: epsilon))
@@ -110,6 +108,9 @@ public enum TileEngine {
         let n = occupant.count
         let (targetSlot, vacatedSlot) = indices
         switch strategy {
+        case .adaptive:   // resolve to a concrete strategy by drag direction, then apply it
+            return permute(adaptiveStrategy(dragged: dragged, origin: slots[vacatedSlot]),
+                           occupant: occupant, dragged: dragged, indices: indices, slots: slots)
         case .swap:
             var a = occupant
             a[vacatedSlot] = a[targetSlot]                 // target's occupant → the vacated slot
@@ -128,8 +129,6 @@ public enum TileEngine {
             var a = [TrackedWindow?](repeating: nil, count: n)
             for (position, slot) in rowMajor.enumerated() { a[slot] = seq[position] }   // scatter back
             return a.map { $0! }
-        case .adaptive:
-            return occupant.map { $0 ?? dragged }          // unreachable (resolved before permute)
         }
     }
 }
