@@ -166,28 +166,30 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The utility footer — muted text actions (borderless, so they read as links, not buttons
-    /// competing with the settings cards), visually separated by a divider.
+    /// The utility footer — muted actions with hover affordances: text buttons highlight on hover,
+    /// external links carry a ↗ + underline on hover. Divider-separated from the settings above.
     private var footer: some View {
         VStack(alignment: .leading, spacing: 8) {
             Divider()
             HStack {
                 Button("Check for Updates…") { updater.checkForUpdates() }
                     .disabled(!updater.canCheckForUpdates)
+                    .buttonStyle(HoverActionButtonStyle())
                 Spacer()
-                Link("GitHub", destination: appInfo.repoURL)
+                ExternalLink("GitHub", appInfo.repoURL)
                 Text("·").foregroundStyle(.tertiary)
-                Link("License", destination: appInfo.licenseURL)
+                ExternalLink("License", appInfo.licenseURL)
             }
             HStack {
                 Button("Uninstall…", role: .destructive) { confirmingUninstall = true }
+                    .buttonStyle(HoverActionButtonStyle())
                     .foregroundStyle(.red)
                 Spacer()
                 Button("Quit TermTile") { NSApplication.shared.terminate(nil) }
+                    .buttonStyle(HoverActionButtonStyle())
             }
         }
         .font(.callout)
-        .buttonStyle(.borderless)
     }
 
     /// Accessibility permission state → a contextual notice (nothing when trusted). Honest about the
@@ -216,7 +218,7 @@ struct MenuBarContent: View {
             Label(title, systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(.orange)
             Text(body).font(.caption).foregroundStyle(.secondary)
-            Link(link, destination: url ?? viewModel.accessibilitySettingsURL).font(.caption)
+            ExternalLink(link, url ?? viewModel.accessibilitySettingsURL).font(.caption)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
@@ -251,5 +253,56 @@ struct MenuBarContent: View {
         }
         return [TargetApp(bundleID: viewModel.targetBundleID, name: viewModel.targetBundleID)]
             + viewModel.availableApps
+    }
+}
+
+/// An external link: label + a `↗` glyph (it opens outside the app — browser or System Settings) that
+/// underlines and shows the pointing-hand cursor on hover. The universal "this leaves the app" cue.
+private struct ExternalLink: View {
+    let label: String
+    let url: URL
+    @State private var hovering = false
+
+    init(_ label: String, _ url: URL) { self.label = label; self.url = url }
+
+    var body: some View {
+        Link(destination: url) {
+            HStack(spacing: 2) {
+                Text(label).underline(hovering)
+                Image(systemName: "arrow.up.right").imageScale(.small)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.accentColor)
+        .onHover { inside in
+            hovering = inside
+            if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
+    }
+}
+
+/// A borderless text action with a rounded hover-highlight background + pointing-hand cursor. The
+/// background is drawn with negative inset so it extends past the label WITHOUT shifting layout —
+/// the footer text stays aligned to the panel edges while the hover target reads as a button.
+private struct HoverActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { Hoverable(configuration: configuration) }
+
+    private struct Hoverable: View {
+        let configuration: ButtonStyle.Configuration
+        @State private var hovering = false
+        var body: some View {
+            configuration.label
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.primary.opacity(configuration.isPressed ? 0.16 : (hovering ? 0.09 : 0)))
+                        .padding(.horizontal, -7).padding(.vertical, -3)
+                )
+                .contentShape(Rectangle())
+                .onHover { inside in
+                    hovering = inside
+                    if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+                }
+        }
     }
 }
