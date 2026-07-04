@@ -66,8 +66,7 @@ struct TermTileApp: App {
 
         // Global hotkey → the same rearrangeNow() the menu button invokes (#25). Active on the normal
         // path only (not selftest/gallery, where a global hotkey would interfere).
-        hotKeyMonitor = Self.makeHotKeyMonitor(vm: viewModel, active: !isSelftest && !isGallery,
-            log: ProcessInfo.processInfo.environment["TERMTILE_HOTKEY_LOG"] != nil)
+        hotKeyMonitor = Self.makeHotKeyMonitor(vm: viewModel, active: !isSelftest && !isGallery)
 
         if isSelftest { Self.runSelftest(viewModel: viewModel) }
 
@@ -93,16 +92,11 @@ struct TermTileApp: App {
     /// set the VM's re-registration handler (#25/#25b). `onFire`/the handler weakly capture the VM/
     /// monitor (the App struct retains both for process life; weak breaks the VM↔monitor cycle).
     @MainActor
-    private static func makeHotKeyMonitor(vm: MenuBarViewModel, active: Bool, log: Bool) -> HotKeyMonitor {
+    private static func makeHotKeyMonitor(vm: MenuBarViewModel, active: Bool) -> HotKeyMonitor {
         let monitor = HotKeyMonitor(config: vm.hotKey, onFire: { [weak vm] in
-            if log { FileHandle.standardError.write(Data("HOTKEY fired\n".utf8)) }
             Task { @MainActor in await vm?.rearrangeNow() }
         })
-        if active {
-            let ok = monitor.start()
-            vm.setHotKeyRegistered(ok)
-            if log { FileHandle.standardError.write(Data("HOTKEY registered=\(ok)\n".utf8)) }
-        }
+        if active { vm.setHotKeyRegistered(monitor.start()) }
         // Post-init: re-register on a recorder change, reporting success back to setHotKey (#25b B1).
         vm.onHotKeyChanged = { [weak monitor] config in monitor?.reconfigure(config) ?? false }
         return monitor
