@@ -41,18 +41,22 @@ public struct UserDefaultsSettingsStore: SettingsStore {
     /// `AppSettings.defaults` so a partially-written domain still loads sane values.
     public func load() -> AppSettings {
         let d = defaults
+        let dflt = AppSettings.defaults
+        // `object(forKey:) as? Bool/Double/Int` (NOT bool/double/integer(forKey:)) so an absent key
+        // falls back to the default rather than reading as a stored zero/false — the per-key
+        // discipline this store mandates. `UInt32(exactly:)` — a tampered negative Int would TRAP
+        // `UInt32(_:)`; fall back per-key. (Broken into sub-expressions: the one-shot initializer
+        // exceeded the Swift type-checker's time budget.)
+        let keyCode = (d.object(forKey: Key.hotKeyCode) as? Int).flatMap(UInt32.init(exactly:))
+            ?? dflt.hotKey.keyCode
+        let modifiers = (d.object(forKey: Key.hotKeyModifiers) as? Int).flatMap(UInt32.init(exactly:))
+            ?? dflt.hotKey.modifiers
         return AppSettings(
-            targetBundleID: d.string(forKey: Key.targetBundleID) ?? AppSettings.defaults.targetBundleID,
-            // `object(forKey:) as? Bool` (NOT bool(forKey:)) so an absent key falls back to false
-            // rather than reading as a stored false — the per-key discipline this store mandates.
-            wasTrusted: d.object(forKey: Key.wasTrusted) as? Bool ?? AppSettings.defaults.wasTrusted,
-            gap: d.object(forKey: Key.gap) as? Double ?? AppSettings.defaults.gap,
-            // `UInt32(exactly:)` — a tampered negative Int would TRAP `UInt32(_:)`; fall back per-key.
-            hotKey: HotKeyConfig(
-                keyCode: (d.object(forKey: Key.hotKeyCode) as? Int).flatMap(UInt32.init(exactly:))
-                    ?? AppSettings.defaults.hotKey.keyCode,
-                modifiers: (d.object(forKey: Key.hotKeyModifiers) as? Int).flatMap(UInt32.init(exactly:))
-                    ?? AppSettings.defaults.hotKey.modifiers))
+            targetBundleID: d.string(forKey: Key.targetBundleID) ?? dflt.targetBundleID,
+            wasTrusted: d.object(forKey: Key.wasTrusted) as? Bool ?? dflt.wasTrusted,
+            gap: d.object(forKey: Key.gap) as? Double ?? dflt.gap,
+            hotKey: HotKeyConfig(keyCode: keyCode, modifiers: modifiers),
+            reorderOnDrag: d.object(forKey: Key.reorderOnDrag) as? Bool ?? dflt.reorderOnDrag)
     }
 
     public func save(_ settings: AppSettings) {
@@ -62,6 +66,7 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         d.set(settings.gap, forKey: Key.gap)
         d.set(Int(settings.hotKey.keyCode), forKey: Key.hotKeyCode)
         d.set(Int(settings.hotKey.modifiers), forKey: Key.hotKeyModifiers)
+        d.set(settings.reorderOnDrag, forKey: Key.reorderOnDrag)
     }
 
     /// The domain name is the suite when named (tests) or the app's bundleID for `.standard`
@@ -78,5 +83,6 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         static let gap = "gap"
         static let hotKeyCode = "hotKeyCode"
         static let hotKeyModifiers = "hotKeyModifiers"
+        static let reorderOnDrag = "reorderOnDrag"
     }
 }

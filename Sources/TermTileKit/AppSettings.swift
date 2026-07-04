@@ -19,16 +19,23 @@ public struct AppSettings: Equatable, Sendable {
     /// The global "Rearrange now" hotkey (#25b), user-settable via the menu recorder. Stored as its
     /// two `UInt32` fields (keyCode + Carbon modifiers) → 2 Int keys. Absent → ⌘⌥T.
     public var hotKey: HotKeyConfig
+    /// Opt-in: reorder a tiled window back into the grid when it's dragged (#26). OFF by default —
+    /// only when enabled does the app request Input Monitoring + start the mouse/AX watchers, so the
+    /// clean single-permission manual model stays the default. Absent → false.
+    public var reorderOnDrag: Bool
 
-    public init(targetBundleID: String, wasTrusted: Bool, gap: Double, hotKey: HotKeyConfig) {
+    public init(targetBundleID: String, wasTrusted: Bool, gap: Double, hotKey: HotKeyConfig,
+                reorderOnDrag: Bool) {
         self.targetBundleID = targetBundleID
         self.wasTrusted = wasTrusted
         self.gap = gap
         self.hotKey = hotKey
+        self.reorderOnDrag = reorderOnDrag
     }
 
     /// The launch defaults: target iTerm2 (spec-draft:18; bundle id verified `com.googlecode.iterm2`
-    /// via `mdls`), never granted, 8-pt gap, ⌘⌥T hotkey. `load()` falls back to these per-key.
+    /// via `mdls`), never granted, 8-pt gap, ⌘⌥T hotkey, drag-reorder off. `load()` falls back per-key.
     public static let defaults = AppSettings(
-        targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8, hotKey: .rearrange)
+        targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8, hotKey: .rearrange,
+        reorderOnDrag: false)
 }

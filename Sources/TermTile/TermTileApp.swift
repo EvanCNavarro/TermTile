@@ -107,7 +107,8 @@ struct TermTileApp: App {
     private static func brokenGalleryVM(loginItem: any LoginItem, visibleFrame: CGRect,
                                         eps: CGFloat) -> MenuBarViewModel {
         let store = UserDefaultsSettingsStore(suiteName: "dev.ecn.apps.termtile.gallery")
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8,
+                               hotKey: .rearrange, reorderOnDrag: false))
         return MenuBarViewModel(settings: store, loginItem: loginItem,
             appsProvider: WorkspaceTargetAppsProvider(), isTrustedProbe: { false },
             visibleFrame: visibleFrame, epsilon: eps,
