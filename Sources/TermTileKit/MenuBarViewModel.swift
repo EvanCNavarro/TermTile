@@ -68,9 +68,10 @@ public final class MenuBarViewModel {
     /// Set POST-init by the composition root (breaks the VM↔monitor init cycle): re-registers the
     /// live hotkey and returns whether it succeeded. `setHotKey` commits only on a `true` return.
     @ObservationIgnored public var onHotKeyChanged: (@Sendable (HotKeyConfig) -> Bool)?
-    /// The opt-in drag-reorder monitor (#26), injected by the composition root; nil in tests/unbundled
-    /// (drag-reorder is a no-op there). The VM owns its lifecycle via `syncReorderMonitor()`.
-    @ObservationIgnored private let dragReorder: (any DragReorderControlling)?
+    /// The opt-in drag-reorder monitor (#26). Injected at init (tests, a spy) OR set post-init by the
+    /// composition root (production — its closures capture this VM, so it can't exist at init: the
+    /// same cycle-break the hotkey uses). The VM owns its lifecycle via `syncReorderMonitor()`.
+    @ObservationIgnored private var dragReorder: (any DragReorderControlling)?
 
     public init(
         settings: any SettingsStore,
@@ -118,6 +119,26 @@ public final class MenuBarViewModel {
         } else {
             dragReorder.stop()
         }
+    }
+
+    /// Wire the real drag-reorder controller AFTER init (production — it captures this VM). Triggers
+    /// the first lifecycle sync.
+    public func setDragReorder(_ controller: any DragReorderControlling) {
+        dragReorder = controller
+        syncReorderMonitor()
+    }
+
+    /// The drag-reorder seam the controller's monitor calls (#26). Both hit the CURRENT `actor` (which
+    /// `setTarget` rebuilds) + current gap/frame, so a target-switch needs no teardown — the closures
+    /// always resolve against the live target.
+    /// Resolve the dragged window at mouse-DOWN (fresh enumerate, windows still on their grid slots).
+    public func resolveDraggedWindow(at point: CGPoint) async -> CGWindowID? {
+        await actor.windowID(atFresh: point)
+    }
+
+    /// Reorder the dropped window at drag-END (fresh enumerate → nearest slot) with the current grid.
+    public func reorderDroppedWindow(_ id: CGWindowID) async {
+        await actor.reorderDropFresh(id, config: TileConfig(isEnabled: true, visibleFrame: visibleFrame, gap: gap))
     }
 
     /// Re-read the trust probe and LATCH `wasTrusted` the first time trust is observed (guarded on

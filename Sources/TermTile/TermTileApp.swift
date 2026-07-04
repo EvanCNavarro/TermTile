@@ -68,6 +68,15 @@ struct TermTileApp: App {
         // path only (not selftest/gallery, where a global hotkey would interfere).
         hotKeyMonitor = Self.makeHotKeyMonitor(vm: viewModel, active: !isSelftest && !isGallery)
 
+        // Opt-in drag-reorder (#26): wire the controller POST-init (its closures capture the VM). The
+        // VM starts/stops it only when opted-in + trusted + Input-Monitoring-granted; off by default.
+        if !isSelftest && !isGallery {
+            let vm = viewModel
+            viewModel.setDragReorder(DragReorderController(
+                resolveWindow: { [weak vm] point in await vm?.resolveDraggedWindow(at: point) },
+                onDrop: { [weak vm] id in await vm?.reorderDroppedWindow(id) }))
+        }
+
         if isSelftest { Self.runSelftest(viewModel: viewModel) }
 
         // One-shot demo/E2E hook: TERMTILE_TILE_ONCE=1 fires the same rearrangeNow() the panel's
