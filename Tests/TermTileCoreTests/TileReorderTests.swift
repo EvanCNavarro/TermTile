@@ -177,6 +177,55 @@ struct TileReorderTests {
         for cmd in cmds { #expect([f[0], f[1], f[2]].contains(cmd.targetFrame)) }
     }
 
+    // N=3 is the SMALLEST grid where strategies diverge (N=1 identity, N=2 all coincide). Drag id1
+    // (s0) → s2 (lone full-height): swap/rowShift = [3,2,1] but columnShift = [2,3,1] — proof they're
+    // not aliases below the N=6 canonical.
+    @Test("N=3: columnShift diverges from swap (not aliases below N=6)")
+    func n3Divergence() {
+        #expect(reorderIDs(n: 3, dropOn: 2, .swap) == [3, 2, 1])
+        #expect(reorderIDs(n: 3, dropOn: 2, .columnShift) == [2, 3, 1])
+        #expect(reorderIDs(n: 3, dropOn: 2, .swap) != reorderIDs(n: 3, dropOn: 2, .columnShift))
+    }
+
+    // Middle-window (id3) drag across EVERY strategy — exercises the permute paths with a non-first
+    // dragged id (the existing multi-window tests all drag id1; this is the biggest coverage gap).
+    @Test("middle-window drag: valid permutation for every strategy", arguments: ReorderStrategy.allCases)
+    func middleWindowPermutation(strategy: ReorderStrategy) {
+        var wins = onGrid(6)
+        wins[2].frame = droppedOn(frames(6)[4])            // drag id3 (slot 2) → slot 4
+        let (order, _) = TileEngine.reorderCommands(
+            windows: wins, draggedID: 3, config: enabled(), epsilon: eps, strategy: strategy)
+        #expect(Set(order.map(\.id)) == Set((1...6).map(CGWindowID.init)))
+        #expect(order.firstIndex { $0.id == 3 } == 4)      // dragged id3 lands at the drop slot
+    }
+
+    // PARTIAL collision (2 non-dragged windows nearest the SAME slot → >1 empty slot): the untiled
+    // fallback fires — no force-unwrap crash, output is still a permutation of all ids.
+    @Test("partial slot collision: fallback fires, no crash, permutation preserved")
+    func partialCollisionFallback() {
+        let f = frames(4)
+        var wins = onGrid(4)
+        wins[0].frame = droppedOn(f[2])                    // id1 dragged
+        wins[2].frame = droppedOn(f[1])                    // id3 collides with id2 on slot 1
+        let (order, cmds) = TileEngine.reorderCommands(
+            windows: wins, draggedID: 1, config: enabled(), epsilon: eps, strategy: .swap)
+        #expect(Set(order.map(\.id)) == Set([1, 2, 3, 4]))
+        #expect(!cmds.isEmpty)
+    }
+
+    // nearestSlot ARGMIN tie: a drop equidistant from two slots resolves to the LOWER index (strict <,
+    // seed 0). Drag id2 (N=2) to the exact midpoint between s0 and s1 → tie {0,1} → id2 takes s0.
+    @Test("equidistant drop resolves to the lower slot index")
+    func tieLowestIndex() {
+        let f = frames(2)
+        var wins = onGrid(2)
+        let midY = (f[0].midY + f[1].midY) / 2
+        wins[1].frame = CGRect(x: f[0].midX - 50, y: midY - 50, width: 100, height: 100)
+        let (order, _) = TileEngine.reorderCommands(
+            windows: wins, draggedID: 2, config: enabled(), epsilon: eps, strategy: .swap)
+        #expect(order.map(\.id) == [2, 1])                 // tie → id2 to slot 0 (lower index)
+    }
+
     // ADAPTIVE on a diagonal drag: DETERMINISTIC + a valid permutation. With these wide slots
     // (485w > 385h) a top-left→bottom-right drag has |dx|>|dy| → resolves to rowShift.
     @Test("adaptive diagonal drag: deterministic; resolves by aspect ratio")

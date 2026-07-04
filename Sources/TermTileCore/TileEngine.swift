@@ -61,7 +61,10 @@ public enum TileEngine {
         for window in windows where window.id != draggedID {
             occupant[nearestSlot(to: window.frame, in: slots)] = window
         }
-        // Untiled fallback: not exactly one empty slot → can't infer origins → plain grid snap.
+        // Untiled fallback: not exactly one empty slot (a collision — two windows nearest one slot —
+        // means the input isn't a tiled grid, so origins can't be inferred). Best-effort degrade: a
+        // (minX,minY) sort + plain retile snaps everyone onto the grid. This ordering is NOT the
+        // nearest-slot model — just a stable, crash-free default for an un-tiled input.
         let emptySlots = occupant.enumerated().filter { $0.element == nil }
         guard emptySlots.count == 1, let vacatedSlot = emptySlots.first?.offset else {
             let sorted = windows.sorted { ($0.frame.minX, $0.frame.minY) < ($1.frame.minX, $1.frame.minY) }
@@ -94,6 +97,11 @@ public enum TileEngine {
     }
 
     /// Adaptive: a mostly-horizontal drag (|dx| ≥ |dy| from the origin slot) → rowShift; else column.
+    /// INTENTIONAL: this compares RAW point deltas, not grid-cell-normalized ones — so it follows the
+    /// physical drag DIRECTION (which way the mouse actually moved), matching "displacement follows the
+    /// drag." A consequence: on wide-short slots a diagonally-adjacent drop reads as horizontal (more
+    /// pixels sideways). Normalizing by column/row pitch would instead follow "cells crossed" — a
+    /// different, more abstract intent; the physical-direction rule tested well, so keep it.
     private static func adaptiveStrategy(dragged: TrackedWindow, origin: CGRect) -> ReorderStrategy {
         abs(dragged.frame.midX - origin.midX) >= abs(dragged.frame.midY - origin.midY)
             ? .rowShift : .columnShift
@@ -107,6 +115,10 @@ public enum TileEngine {
     ) -> [TrackedWindow] {
         let n = occupant.count
         let (targetSlot, vacatedSlot) = indices
+        // Invariant (established by reorderCommands' `emptySlots.count == 1` guard): EXACTLY one nil,
+        // at vacatedSlot. Every force-unwrap below relies on it — assert makes the contract local and
+        // fails loudly in debug if a future edit breaks it.
+        assert(occupant.compactMap { $0 }.count == n - 1 && occupant[vacatedSlot] == nil)
         switch strategy {
         case .adaptive:   // resolve to a concrete strategy by drag direction, then apply it
             return permute(adaptiveStrategy(dragged: dragged, origin: slots[vacatedSlot]),
