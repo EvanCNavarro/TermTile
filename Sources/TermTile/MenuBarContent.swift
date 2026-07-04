@@ -18,6 +18,7 @@ struct MenuBarContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
+            Divider()   // separates identity/meta (above) from the settings + action (below)
 
             section("Tiling") {
                 LabeledContent("Target app") {
@@ -77,8 +78,8 @@ struct MenuBarContent: View {
 
             accessibilityNotice   // the blocker, right above the action it gates
 
-            // PRIMARY ACTION — after the settings it operates on (configure, then tile). Prominent,
-            // full-width, with its keyboard shortcut shown inline (menu-item convention).
+            // PRIMARY ACTION — after the settings it operates on (configure, then tile). Taller than a
+            // standard button (~1.5×) so it clearly reads as the hero; shortcut shown inline.
             Button {
                 Task { await viewModel.rearrangeNow() }
             } label: {
@@ -88,12 +89,11 @@ struct MenuBarContent: View {
                     Text(viewModel.hotKey.displayString).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .disabled(!viewModel.isAccessibilityTrusted)
-
-            footer
         }
         .padding(14)
         .frame(width: 280)
@@ -134,18 +134,48 @@ struct MenuBarContent: View {
 
     // MARK: - Sections
 
-    /// Identity header — app icon + name + version, the RememBar-popover shape. Anchors the panel and
-    /// frees the footer of the version string.
+    /// Identity header (RememBar-popover shape): app icon + name + version + the info links, with a
+    /// `···` overflow menu top-right for meta-actions. Everything "about the app" lives here, above
+    /// the rule — so the settings below aren't diluted by a jumble of footer buttons.
     private var header: some View {
-        HStack(spacing: 11) {
+        HStack(alignment: .top, spacing: 11) {
             Image(nsImage: NSApplication.shared.applicationIconImage)
                 .resizable().frame(width: 40, height: 40)
             VStack(alignment: .leading, spacing: 2) {
                 Text(AppIdentity.appName).font(.headline)
                 Text("Version \(appInfo.version)").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    ExternalLink("GitHub", appInfo.repoURL)
+                    Text("·").foregroundStyle(.tertiary)
+                    ExternalLink("License", appInfo.licenseURL)
+                }
+                .font(.caption)
+                .padding(.top, 1)
             }
             Spacer()
+            overflowMenu
         }
+    }
+
+    /// The `···` overflow — the app's meta-actions (update / uninstall / quit), tucked out of the
+    /// settings flow. Destructive Uninstall is separated by a divider so it's never a mis-tap.
+    private var overflowMenu: some View {
+        Menu {
+            Button("Check for Updates…") { updater.checkForUpdates() }
+                .disabled(!updater.canCheckForUpdates)
+            Divider()
+            Button("Uninstall TermTile…", role: .destructive) { confirmingUninstall = true }
+            Button("Quit TermTile") { NSApplication.shared.terminate(nil) }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 26, height: 26)
+                .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.07)))
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     /// A labeled settings group: a small uppercase section header over a soft rounded card holding its
@@ -164,32 +194,6 @@ struct MenuBarContent: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
         }
-    }
-
-    /// The utility footer — muted actions with hover affordances: text buttons highlight on hover,
-    /// external links carry a ↗ + underline on hover. Divider-separated from the settings above.
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Divider()
-            HStack {
-                Button("Check for Updates…") { updater.checkForUpdates() }
-                    .disabled(!updater.canCheckForUpdates)
-                    .buttonStyle(HoverActionButtonStyle())
-                Spacer()
-                ExternalLink("GitHub", appInfo.repoURL)
-                Text("·").foregroundStyle(.tertiary)
-                ExternalLink("License", appInfo.licenseURL)
-            }
-            HStack {
-                Button("Uninstall…", role: .destructive) { confirmingUninstall = true }
-                    .buttonStyle(HoverActionButtonStyle())
-                    .foregroundStyle(.red)
-                Spacer()
-                Button("Quit TermTile") { NSApplication.shared.terminate(nil) }
-                    .buttonStyle(HoverActionButtonStyle())
-            }
-        }
-        .font(.callout)
     }
 
     /// Accessibility permission state → a contextual notice (nothing when trusted). Honest about the
@@ -278,31 +282,6 @@ private struct ExternalLink: View {
         .onHover { inside in
             hovering = inside
             if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
-        }
-    }
-}
-
-/// A borderless text action with a rounded hover-highlight background + pointing-hand cursor. The
-/// background is drawn with negative inset so it extends past the label WITHOUT shifting layout —
-/// the footer text stays aligned to the panel edges while the hover target reads as a button.
-private struct HoverActionButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { Hoverable(configuration: configuration) }
-
-    private struct Hoverable: View {
-        let configuration: ButtonStyle.Configuration
-        @State private var hovering = false
-        var body: some View {
-            configuration.label
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.primary.opacity(configuration.isPressed ? 0.16 : (hovering ? 0.09 : 0)))
-                        .padding(.horizontal, -7).padding(.vertical, -3)
-                )
-                .contentShape(Rectangle())
-                .onHover { inside in
-                    hovering = inside
-                    if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
-                }
         }
     }
 }
