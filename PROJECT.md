@@ -7,7 +7,6 @@ Deploy target: local .app bundle (signed release via GitHub Releases — see bac
 
 ## Structure
 
-- `docs/` stores setup, decisions, product notes, verification records, and Superpowers specs.
+- `docs/` stores research, decisions (ADRs in `docs/decisions/`), product notes, and verification records.
 - `.engine/` stores Locomotion project memory and config.
-- `.design/` stores authored design decisions and rationale.
 - `.agents/skills/` is reserved for repo-scoped Codex skills with valid `SKILL.md` files.

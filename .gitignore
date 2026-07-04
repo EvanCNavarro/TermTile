@@ -1,17 +1,11 @@
 .env
 .env.*
-!.env.example
-.dev.vars
-.dev.vars.*
-.design/.cache/
 .engine/state/*
 !.engine/state/.gitkeep
-node_modules/
+.engine/events.jsonl
 dist/
 build/
 .build/
-.wrangler/
-.engine/events.jsonl
 
 # Sparkle (vendored by scripts/fetch-sparkle.sh)
 Vendor/
