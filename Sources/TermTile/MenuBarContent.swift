@@ -16,105 +16,86 @@ struct MenuBarContent: View {
     @State private var uninstallOutcome: Uninstaller.UninstallOutcome?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(AppIdentity.appName).font(.headline)
+        VStack(alignment: .leading, spacing: 16) {
+            header
 
+            section("Tiling") {
+                LabeledContent("Target app") {
+                    Picker("", selection: Binding(
+                        get: { viewModel.targetBundleID },
+                        set: { id in Task { await viewModel.setTarget(id) } })) {
+                        ForEach(pickerOptions) { app in Text(app.name).tag(app.bundleID) }
+                    }
+                    .labelsHidden()
+                }
+                // Gap (#17a): setGap is synchronous. Step 4 lands on the 8-pt default.
+                LabeledContent("Gap") {
+                    Stepper("\(Int(viewModel.gap)) pt", value: Binding(
+                        get: { viewModel.gap }, set: { viewModel.setGap($0) }),
+                        in: MenuBarViewModel.gapRange, step: 4)
+                }
+            }
+
+            section("Drag to reorder") {
+                Toggle("Reorder windows on drag", isOn: Binding(
+                    get: { viewModel.reorderOnDrag },
+                    set: { viewModel.setReorderOnDrag($0) }))
+                // How a drag reshuffles the others (#27) — only while reorder-on-drag is on.
+                if viewModel.reorderOnDrag {
+                    LabeledContent("When dragged") {
+                        Picker("", selection: Binding(
+                            get: { viewModel.reorderStrategy },
+                            set: { viewModel.setReorderStrategy($0) })) {
+                            ForEach(ReorderStrategy.allCases, id: \.self) { s in
+                                Text(s.displayName).tag(s)
+                            }
+                        }
+                        .labelsHidden()
+                    }
+                }
+                if viewModel.reorderNeedsInputMonitoring {
+                    noticeCard("Input Monitoring required",
+                               "Reorder-on-drag needs Input Monitoring to detect when you drag a window.",
+                               link: "Open Input Monitoring Settings…",
+                               url: viewModel.inputMonitoringSettingsURL)
+                }
+            }
+
+            section("General") {
+                // Global-hotkey recorder (#25b): click the field, press a combo (needs ⌥ or ⌃).
+                // The "⚠" marks a persisted combo that couldn't register (taken by another app).
+                LabeledContent("Shortcut") {
+                    HotKeyRecorder(current: viewModel.hotKey, registered: viewModel.hotKeyRegistered) {
+                        viewModel.setHotKey($0)
+                    }
+                    .frame(width: 120, height: 22)
+                }
+                Toggle("Launch at login", isOn: Binding(
+                    get: { viewModel.launchAtLogin },
+                    set: { viewModel.setLaunchAtLogin($0) }))
+            }
+
+            accessibilityNotice   // the blocker, right above the action it gates
+
+            // PRIMARY ACTION — after the settings it operates on (configure, then tile). Prominent,
+            // full-width, with its keyboard shortcut shown inline (menu-item convention).
             Button {
                 Task { await viewModel.rearrangeNow() }
             } label: {
-                Label("Rearrange now", systemImage: "rectangle.grid.2x2")
-                    .frame(maxWidth: .infinity)
+                HStack {
+                    Label("Rearrange now", systemImage: "rectangle.grid.2x2")
+                    Spacer()
+                    Text(viewModel.hotKey.displayString).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .disabled(!viewModel.isAccessibilityTrusted)
 
-            Picker("Target app", selection: Binding(
-                get: { viewModel.targetBundleID },
-                set: { id in Task { await viewModel.setTarget(id) } })) {
-                ForEach(pickerOptions) { app in
-                    Text(app.name).tag(app.bundleID)
-                }
-            }
-
-            // Gap between tiled windows (#17a). Label renders viewModel.gap (the clamped truth);
-            // setGap is synchronous → no Task wrap. Step 4 lands on the 8-pt default.
-            Stepper("Gap: \(Int(viewModel.gap)) pt", value: Binding(
-                get: { viewModel.gap },
-                set: { viewModel.setGap($0) }),
-                in: MenuBarViewModel.gapRange, step: 4)
-
-            // Global-hotkey recorder (#25b): click the field, press a combo (needs ⌥ or ⌃; setHotKey
-            // rejects ⌘-only footguns). A self-contained focusable NSView that captures + re-registers
-            // live; the "⚠" marks a persisted combo that couldn't register (taken by another app).
-            HStack {
-                Text("Shortcut")
-                Spacer()
-                HotKeyRecorder(current: viewModel.hotKey, registered: viewModel.hotKeyRegistered) { config in
-                    viewModel.setHotKey(config)
-                }
-                .frame(width: 120, height: 22)
-            }
-
-            Toggle("Launch at login", isOn: Binding(
-                get: { viewModel.launchAtLogin },
-                set: { viewModel.setLaunchAtLogin($0) }))
-
-            // Opt-in drag-reorder (#26): off by default. Only when on does the app watch for drags —
-            // and only after Input Monitoring is granted (the fix-it row below prompts for it).
-            Toggle("Reorder windows on drag", isOn: Binding(
-                get: { viewModel.reorderOnDrag },
-                set: { viewModel.setReorderOnDrag($0) }))
-            if viewModel.reorderNeedsInputMonitoring {
-                fixItRow("Input Monitoring required",
-                         "Reorder-on-drag needs Input Monitoring to detect when you drag a window.",
-                         link: "Open Input Monitoring Settings…",
-                         url: viewModel.inputMonitoringSettingsURL)
-            }
-            // How a drag reshuffles the others (#27) — only relevant while reorder-on-drag is on.
-            if viewModel.reorderOnDrag {
-                Picker("When dragged", selection: Binding(
-                    get: { viewModel.reorderStrategy },
-                    set: { viewModel.setReorderStrategy($0) })) {
-                    ForEach(ReorderStrategy.allCases, id: \.self) { strategy in
-                        Text(strategy.displayName).tag(strategy)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-
-            switch viewModel.accessibilityState {
-            case .trusted:
-                EmptyView()
-            case .needsFirstGrant:
-                fixItRow("Accessibility access required",
-                         "TermTile needs Accessibility permission to arrange windows.")
-            case .grantBroken:
-                // Honest about the moved/duplicate-bundle break AND an intentional revoke (the two
-                // are indistinguishable via AXIsProcessTrusted) — the "if you didn't turn it off"
-                // conditional covers both.
-                fixItRow("Accessibility access is off",
-                         "If you didn't turn it off, TermTile may have moved or a duplicate copy ran. "
-                         + "Remove any old TermTile entries in Accessibility settings, then re-add this one.")
-            }
-
-            Divider()
-            Button("Check for Updates…") { updater.checkForUpdates() }
-                .disabled(!updater.canCheckForUpdates)
-
-            // About — version + links, single-sourced from AppInfo (nothing hardcoded here).
-            HStack(spacing: 8) {
-                Text("v\(appInfo.version)").foregroundStyle(.secondary)
-                Spacer()
-                Link("GitHub", destination: appInfo.repoURL)
-                Text("·").foregroundStyle(.tertiary)
-                Link("License", destination: appInfo.licenseURL)
-            }
-            .font(.caption)
-
-            Button("Uninstall TermTile…", role: .destructive) { confirmingUninstall = true }
-            Button("Quit TermTile") { NSApplication.shared.terminate(nil) }
+            footer
         }
-        .padding(12)
+        .padding(14)
         .frame(width: 280)
         .onAppear { viewModel.refreshTrust() }
         // Destructive — an explicit confirm so uninstall is never a one-click accident.
@@ -151,18 +132,95 @@ struct MenuBarContent: View {
         }
     }
 
-    /// A permission fix-it row — one shape, reused for Accessibility (#23) and Input Monitoring (#26):
-    /// title + body + a deep-link to the relevant Settings pane.
-    @ViewBuilder
-    private func fixItRow(_ title: String, _ body: String,
-                          link: String = "Open Accessibility Settings…",
-                          url: URL? = nil) -> some View {
-        Divider()
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.subheadline).bold()
-            Text(body).font(.caption).foregroundStyle(.secondary)
-            Link(link, destination: url ?? viewModel.accessibilitySettingsURL)
+    // MARK: - Sections
+
+    /// Identity header — app icon + name + version, the RememBar-popover shape. Anchors the panel and
+    /// frees the footer of the version string.
+    private var header: some View {
+        HStack(spacing: 11) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable().frame(width: 40, height: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(AppIdentity.appName).font(.headline)
+                Text("Version \(appInfo.version)").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
         }
+    }
+
+    /// A labeled settings group: a small uppercase section header over a soft rounded card holding its
+    /// rows (macOS System-Settings grouping — the card is the proximity cue that makes each group read
+    /// as one intentional unit). The fill is `.primary`-derived so it adapts to light/dark.
+    @ViewBuilder
+    private func section<Content: View>(_ title: String,
+                                        @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary).textCase(.uppercase).kerning(0.5)
+            VStack(alignment: .leading, spacing: 10) {
+                content()
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+        }
+    }
+
+    /// The utility footer — muted text actions (borderless, so they read as links, not buttons
+    /// competing with the settings cards), visually separated by a divider.
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider()
+            HStack {
+                Button("Check for Updates…") { updater.checkForUpdates() }
+                    .disabled(!updater.canCheckForUpdates)
+                Spacer()
+                Link("GitHub", destination: appInfo.repoURL)
+                Text("·").foregroundStyle(.tertiary)
+                Link("License", destination: appInfo.licenseURL)
+            }
+            HStack {
+                Button("Uninstall…", role: .destructive) { confirmingUninstall = true }
+                    .foregroundStyle(.red)
+                Spacer()
+                Button("Quit TermTile") { NSApplication.shared.terminate(nil) }
+            }
+        }
+        .font(.callout)
+        .buttonStyle(.borderless)
+    }
+
+    /// Accessibility permission state → a contextual notice (nothing when trusted). Honest about the
+    /// moved/duplicate-bundle break AND an intentional revoke (indistinguishable via AXIsProcessTrusted).
+    @ViewBuilder
+    private var accessibilityNotice: some View {
+        switch viewModel.accessibilityState {
+        case .trusted:
+            EmptyView()
+        case .needsFirstGrant:
+            noticeCard("Accessibility access required",
+                       "TermTile needs Accessibility permission to arrange windows.")
+        case .grantBroken:
+            noticeCard("Accessibility access is off",
+                       "If you didn't turn it off, TermTile may have moved or a duplicate copy ran. "
+                       + "Remove any old TermTile entries in Accessibility settings, then re-add this one.")
+        }
+    }
+
+    /// A permission notice — a tinted card (icon + title + body + deep-link), reused for Accessibility
+    /// (#23) and Input Monitoring (#26). Reads as an alert, not another form row.
+    private func noticeCard(_ title: String, _ body: String,
+                            link: String = "Open Accessibility Settings…",
+                            url: URL? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(title, systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline.weight(.semibold)).foregroundStyle(.orange)
+            Text(body).font(.caption).foregroundStyle(.secondary)
+            Link(link, destination: url ?? viewModel.accessibilitySettingsURL).font(.caption)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
     }
 
     /// Honest title — never claims a clean removal on a partial one.
