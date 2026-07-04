@@ -41,6 +41,25 @@ public actor TilingActor {
         state.windows.first { $0.frame.contains(point) }?.id
     }
 
+    /// ON-DEMAND drag path (#26) — the dragged window's id, resolved by enumerating the target's
+    /// windows FRESH at mouse-DOWN (windows still on their non-overlapping grid slots → unambiguous),
+    /// with NO live event stream / cached model. A ~1ms enumerate is trivial for a manual gesture,
+    /// and it sidesteps the off-main-observer race + empty-model seeding the stream approach needs.
+    public func windowID(atFresh point: CGPoint) async -> CGWindowID? {
+        await system.tileableWindows().first { $0.frame.contains(point) }?.id
+    }
+
+    /// ON-DEMAND reorder at drag END (#26) — enumerate FRESH (the dragged window now at its dropped
+    /// position), reassign it to the nearest grid slot, shuffle the rest, apply. No cached state; the
+    /// fresh snapshot IS the truth. No-op if `draggedID` isn't among the current windows.
+    public func reorderDropFresh(_ draggedID: CGWindowID, config: TileConfig) async {
+        let windows = await system.tileableWindows()
+        guard windows.contains(where: { $0.id == draggedID }) else { return }
+        let (_, commands) = TileEngine.reorderCommands(
+            windows: windows, draggedID: draggedID, config: config, epsilon: epsilon)
+        await apply(commands)
+    }
+
     /// Toggle-on / authoritative reset: adopt `config`, re-enumerate the target app's tileable
     /// windows as the source of truth, and tile them all onto the grid.
     public func activate(config: TileConfig) async {

@@ -240,4 +240,45 @@ struct TilingActorTests {
         await actor.activate(config: enabled())
         #expect(await actor.windowID(at: CGPoint(x: -500, y: -500)) == nil)
     }
+
+    // #26 — ON-DEMAND drag path (no live event stream, no cached model). windowID(atFresh:) resolves
+    // the dragged id by ENUMERATING FRESH at mouse-down — NOTE: no activate() first, unlike the
+    // cached windowID(at:). Discriminates pick-first (asks for a NON-first window).
+    @Test("windowID(atFresh:) resolves from a fresh enumerate — no activate/cached state")
+    func windowIDAtFreshResolves() async {
+        let f = targets(4)
+        let fake = InMemoryWindowSystem(windows: (0..<4).map { win(CGWindowID($0 + 1), f[$0]) })
+        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        #expect(await actor.windowID(atFresh: CGPoint(x: f[2].midX, y: f[2].midY)) == 3)   // NOT first
+        #expect(await actor.windowID(atFresh: CGPoint(x: -500, y: -500)) == nil)           // a gap
+    }
+
+    // #26 — ON-DEMAND reorder: at drag END, reorderDropFresh ENUMERATES FRESH (the dragged window at
+    // its dropped position — simulated by reseeding the fake), snaps it to the nearest slot, shuffles
+    // the rest. No cached state, no event stream — the whole risky stream pipeline is bypassed.
+    @Test("reorderDropFresh: fresh-enumerate → nearest-slot snap (no cached model)")
+    func reorderDropFreshReorders() async {
+        let f = targets(4)
+        // The user dragged id1 (slot 0) down to slot-3's area: FRESH enumerate sees id1 at the drop.
+        let dropped = CGRect(x: f[3].midX - 50, y: f[3].midY - 50, width: 100, height: 100)
+        let fake = InMemoryWindowSystem(windows: [win(1, dropped), win(2, f[1]), win(3, f[2]), win(4, f[3])])
+        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+
+        await actor.reorderDropFresh(1, config: enabled())   // NO activate — enumerates fresh itself
+
+        let writes = await fake.recordedWrites
+        #expect(writes.contains { $0.id == 1 && $0.target == f[3] })   // dragged id1 snaps to slot 3
+        // reorder = [2,3,4,1]: every window lands on its NEW slot's target.
+        let order: [CGWindowID] = [2, 3, 4, 1]
+        for w in writes { #expect(w.target == f[order.firstIndex(of: w.id)!]) }
+        #expect(Set(writes.map(\.id)) == Set([1, 2, 3, 4]))
+    }
+
+    @Test("reorderDropFresh for an untracked id is a no-op")
+    func reorderDropFreshUntrackedNoop() async {
+        let fake = InMemoryWindowSystem(windows: [win(1, targets(2)[0]), win(2, targets(2)[1])])
+        let actor = TilingActor(system: fake, epsilon: eps, ttlSeconds: 100)
+        await actor.reorderDropFresh(999, config: enabled())
+        #expect(await fake.recordedWrites.isEmpty)
+    }
 }
