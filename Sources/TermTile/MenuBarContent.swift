@@ -70,6 +70,17 @@ struct MenuBarContent: View {
                          link: "Open Input Monitoring Settings…",
                          url: viewModel.inputMonitoringSettingsURL)
             }
+            // How a drag reshuffles the others (#27) — only relevant while reorder-on-drag is on.
+            if viewModel.reorderOnDrag {
+                Picker("When dragged", selection: Binding(
+                    get: { viewModel.reorderStrategy },
+                    set: { viewModel.setReorderStrategy($0) })) {
+                    ForEach(ReorderStrategy.allCases, id: \.self) { strategy in
+                        Text(strategy.displayName).tag(strategy)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
 
             switch viewModel.accessibilityState {
             case .trusted:

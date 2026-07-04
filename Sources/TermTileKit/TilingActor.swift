@@ -26,23 +26,16 @@ public actor TilingActor {
         await system.tileableWindows().first { $0.frame.contains(point) }?.id
     }
 
-    /// ON-DEMAND reorder at drag END (#26) — enumerate FRESH (the dragged window now at its dropped
-    /// position), reassign it to the nearest grid slot, shuffle the rest, apply. No-op if `draggedID`
-    /// isn't among the current windows.
-    public func reorderDropFresh(_ draggedID: CGWindowID, config: TileConfig) async {
+    /// ON-DEMAND reorder at drag END (#26/#27) — enumerate FRESH (the dragged window now at its
+    /// dropped position, the others on their slots) and hand the raw set to `reorderCommands`, whose
+    /// shared model infers each window's slot + the vacated slot and applies `strategy`. No pre-sort
+    /// (the model does the slot inference); no-op if `draggedID` isn't among the current windows.
+    public func reorderDropFresh(_ draggedID: CGWindowID, config: TileConfig,
+                                 strategy: ReorderStrategy) async {
         let windows = await system.tileableWindows()
         guard windows.contains(where: { $0.id == draggedID }) else { return }
-        // AX enumerates in z-order, but `reorderCommands` maps position j → slot j, so it needs SLOT
-        // order (#26 B1). The NON-dragged windows are still on their grid slots, and TileLayout is
-        // column-major (`frame[k]` = column k/2, row k%2, top-first) → their frames sort into slot
-        // order by (minX, minY) (same-column windows share an exact x → minY breaks the tie). The
-        // dragged window sorts arbitrarily but is removed-by-id + re-inserted at its nearest slot, so
-        // only the others' relative order matters — which the sort fixes.
-        let slotOrdered = windows.sorted {
-            ($0.frame.minX, $0.frame.minY) < ($1.frame.minX, $1.frame.minY)
-        }
         let (_, commands) = TileEngine.reorderCommands(
-            windows: slotOrdered, draggedID: draggedID, config: config, epsilon: epsilon)
+            windows: windows, draggedID: draggedID, config: config, epsilon: epsilon, strategy: strategy)
         await apply(commands)
     }
 

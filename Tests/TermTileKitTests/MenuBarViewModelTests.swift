@@ -259,6 +259,17 @@ struct MenuBarViewModelTests {
         #expect(store.load().reorderOnDrag == false)
     }
 
+    // #27 — reorderStrategy defaults adaptive; setReorderStrategy persists the pick.
+    @Test("reorderStrategy defaults adaptive; setReorderStrategy persists")
+    func setReorderStrategyPersists() {
+        let store = InMemorySettingsStore()
+        let (vm, _) = makeVM(store: store)
+        #expect(vm.reorderStrategy == .adaptive)           // the intuitive default
+        vm.setReorderStrategy(.swap)
+        #expect(vm.reorderStrategy == .swap)
+        #expect(store.load().reorderStrategy == .swap)      // persisted
+    }
+
     // #26 — a spy drag-reorder controller: records start/stop so the VM lifecycle is unit-provable.
     @MainActor
     final class SpyDragReorder: DragReorderControlling {

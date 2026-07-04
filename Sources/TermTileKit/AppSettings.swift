@@ -44,5 +44,5 @@ public struct AppSettings: Equatable, Sendable {
     /// falls back per-key.
     public static let defaults = AppSettings(
         targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8, hotKey: .rearrange,
-        reorderOnDrag: false, reorderStrategy: .swap)
+        reorderOnDrag: false, reorderStrategy: .adaptive)
 }

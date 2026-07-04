@@ -83,7 +83,7 @@ struct TilingActorTests {
         let fake = InMemoryWindowSystem(windows: [win(1, dropped), win(2, f[1]), win(3, f[2]), win(4, f[3])])
         let actor = TilingActor(system: fake, epsilon: eps)
 
-        await actor.reorderDropFresh(1, config: enabled())
+        await actor.reorderDropFresh(1, config: enabled(), strategy: .columnShift)
 
         let writes = await fake.recordedWrites
         #expect(writes.contains { $0.id == 1 && $0.target == f[3] })   // dragged id1 snaps to slot 3
@@ -103,7 +103,7 @@ struct TilingActorTests {
         let fake = InMemoryWindowSystem(windows: scrambled)
         let actor = TilingActor(system: fake, epsilon: eps)
 
-        await actor.reorderDropFresh(1, config: enabled())
+        await actor.reorderDropFresh(1, config: enabled(), strategy: .columnShift)
 
         let writes = await fake.recordedWrites
         #expect(writes.first { $0.id == 1 }?.target == f[3])   // dragged → slot 3
@@ -116,7 +116,7 @@ struct TilingActorTests {
     func reorderDropFreshUntrackedNoop() async {
         let fake = InMemoryWindowSystem(windows: [win(1, targets(2)[0]), win(2, targets(2)[1])])
         let actor = TilingActor(system: fake, epsilon: eps)
-        await actor.reorderDropFresh(999, config: enabled())
+        await actor.reorderDropFresh(999, config: enabled(), strategy: .columnShift)
         #expect(await fake.recordedWrites.isEmpty)
     }
 }

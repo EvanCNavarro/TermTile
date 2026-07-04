@@ -27,51 +27,109 @@ public enum TileEngine {
         }
     }
 
-    /// Drag snap-reorder (spec-draft:25-28, ADR-0001 rule 1). On drag END the shell passes the
-    /// dragged window's id; its CURRENT cached frame — kept fresh by the mid-drag `.moved` echoes
-    /// the reducer folds (`WindowStateReducer` updates the cached frame for external moves too) —
-    /// is the drop point. Reassigns the dragged window to the slot whose CENTER is nearest the
-    /// drop-point center, shuffles the rest to fill (stable list remove+insert preserves their
-    /// relative order), and returns the new slot order plus the `retileCommands` to snap everyone
-    /// home. Pure: no clock, no AX, no pending (the actor records pendings per AX write — #18).
+    /// Drag snap-reorder (#11/#27, ADR-0001 rule 1). Given a FRESH window enumerate (the dragged
+    /// window at its DROP position, the others still on their grid slots) + the chosen `strategy`,
+    /// returns the new column-major slot order + the `retileCommands` to snap everyone there. Pure.
     ///
-    /// No-op — returns `windows` unchanged and `[]` — when disabled or when `draggedID` isn't
-    /// tracked (empty `windows` is subsumed: no id can be present). This leading guard runs BEFORE
-    /// any geometry, so an empty/untracked call never argmins over an empty slot array. Distance
-    /// ties resolve to the lowest slot index (stable argmin, strict `<`). N=1 is not special: the
-    /// identity reorder still lets `retileCommands` snap a dragged-away lone window back to its slot.
+    /// SHARED MODEL (skeptic-mandated, #27): drop the dragged window by id, assign each remaining
+    /// window to its nearest slot (on a tiled grid this is exact + injective) → the `targetSlot`'s
+    /// occupant and the `vacatedSlot` (the one slot no window claims = the dragged window's origin)
+    /// both fall out. NO-OP guard: dropping nearest one's own origin (`targetSlot == vacatedSlot`) is
+    /// the identity. All four strategies are pure permutations built on this (see `ReorderStrategy`).
     ///
-    /// Drag-END DETECTION (global mouse-up, spike-06) is the imperative shell's job (#12), not
-    /// Core's — this function is the pure policy invoked once the shell has decided the drag ended.
+    /// Precondition: reorder is only well-defined from a TILED grid. If the windows aren't tiled
+    /// (the user enabled reorder without a Rearrange → overlapping), nearest-slot can't infer origins;
+    /// it degrades to a plain retile (snap everyone to the grid, no meaningful reorder) — never a crash.
+    ///
+    /// No-op — returns `windows` unchanged, `[]` — when disabled or `draggedID` isn't tracked. Distance
+    /// ties resolve to the lowest slot index (stable argmin). Drag-END detection is the shell's job.
     public static func reorderCommands(
         windows: [TrackedWindow],
         draggedID: CGWindowID,
         config: TileConfig,
-        epsilon: CGFloat
+        epsilon: CGFloat,
+        strategy: ReorderStrategy
     ) -> (windows: [TrackedWindow], commands: [FrameCommand]) {
-        guard config.isEnabled,
-              let draggedIndex = windows.firstIndex(where: { $0.id == draggedID }) else {
+        guard config.isEnabled, let dragged = windows.first(where: { $0.id == draggedID }) else {
             return (windows, [])
         }
-        let dragged = windows[draggedIndex]
-        let dropCenter = CGPoint(x: dragged.frame.midX, y: dragged.frame.midY)
-        let slots = TileLayout.frames(count: windows.count, visibleFrame: config.visibleFrame, gap: config.gap)
+        let n = windows.count
+        let slots = TileLayout.frames(count: n, visibleFrame: config.visibleFrame, gap: config.gap)
 
-        var targetSlot = 0
-        var bestDistanceSquared = CGFloat.greatestFiniteMagnitude
-        for (k, slot) in slots.enumerated() {
-            let dx = slot.midX - dropCenter.x
-            let dy = slot.midY - dropCenter.y
-            let distanceSquared = dx * dx + dy * dy
-            if distanceSquared < bestDistanceSquared {
-                bestDistanceSquared = distanceSquared
-                targetSlot = k
-            }
+        // Shared model: nearest-slot assignment of the NON-dragged windows.
+        var occupant = [TrackedWindow?](repeating: nil, count: n)
+        for window in windows where window.id != draggedID {
+            occupant[nearestSlot(to: window.frame, in: slots)] = window
         }
+        // Untiled fallback: not exactly one empty slot → can't infer origins → plain grid snap.
+        let emptySlots = occupant.enumerated().filter { $0.element == nil }
+        guard emptySlots.count == 1, let vacatedSlot = emptySlots.first?.offset else {
+            let sorted = windows.sorted { ($0.frame.minX, $0.frame.minY) < ($1.frame.minX, $1.frame.minY) }
+            return (sorted, retileCommands(windows: sorted, config: config, epsilon: epsilon))
+        }
+        let targetSlot = nearestSlot(to: dragged.frame, in: slots)
 
-        var newOrder = windows
-        newOrder.remove(at: draggedIndex)
-        newOrder.insert(dragged, at: targetSlot)
-        return (newOrder, retileCommands(windows: newOrder, config: config, epsilon: epsilon))
+        let ordered: [TrackedWindow]
+        if targetSlot == vacatedSlot {
+            var assignment = occupant                      // dropped nearest own origin → identity
+            assignment[vacatedSlot] = dragged
+            ordered = assignment.map { $0! }
+        } else {
+            let effective = (strategy == .adaptive)
+                ? adaptiveStrategy(dragged: dragged, origin: slots[vacatedSlot]) : strategy
+            ordered = permute(effective, occupant: occupant, dragged: dragged,
+                              indices: (targetSlot, vacatedSlot), slots: slots)
+        }
+        return (ordered, retileCommands(windows: ordered, config: config, epsilon: epsilon))
+    }
+
+    /// The slot index whose center is nearest `frame`'s center (stable argmin, lowest index on ties).
+    private static func nearestSlot(to frame: CGRect, in slots: [CGRect]) -> Int {
+        var best = 0
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+        for (k, slot) in slots.enumerated() {
+            let dx = slot.midX - frame.midX, dy = slot.midY - frame.midY
+            let distance = dx * dx + dy * dy
+            if distance < bestDistance { bestDistance = distance; best = k }
+        }
+        return best
+    }
+
+    /// Adaptive: a mostly-horizontal drag (|dx| ≥ |dy| from the origin slot) → rowShift; else column.
+    private static func adaptiveStrategy(dragged: TrackedWindow, origin: CGRect) -> ReorderStrategy {
+        abs(dragged.frame.midX - origin.midX) >= abs(dragged.frame.midY - origin.midY)
+            ? .rowShift : .columnShift
+    }
+
+    /// The new column-major slot assignment for a concrete (non-adaptive) strategy. `occupant[k]` is
+    /// the window on slot k (nil only at `vacatedSlot`); returns `[window per slot 0..<n]`.
+    private static func permute(
+        _ strategy: ReorderStrategy, occupant: [TrackedWindow?], dragged: TrackedWindow,
+        indices: (target: Int, vacated: Int), slots: [CGRect]
+    ) -> [TrackedWindow] {
+        let n = occupant.count
+        let (targetSlot, vacatedSlot) = indices
+        switch strategy {
+        case .swap:
+            var a = occupant
+            a[vacatedSlot] = a[targetSlot]                 // target's occupant → the vacated slot
+            a[targetSlot] = dragged
+            return a.map { $0! }
+        case .columnShift:
+            var seq = (0..<n).map { $0 == vacatedSlot ? dragged : occupant[$0]! }   // column-major
+            seq.remove(at: vacatedSlot)
+            seq.insert(dragged, at: targetSlot)
+            return seq                                     // seq[k] → slot k
+        case .rowShift:
+            let rowMajor = (0..<n).sorted { (slots[$0].minY, slots[$0].minX) < (slots[$1].minY, slots[$1].minX) }
+            var seq = rowMajor.map { $0 == vacatedSlot ? dragged : occupant[$0]! }
+            seq.remove(at: rowMajor.firstIndex(of: vacatedSlot)!)
+            seq.insert(dragged, at: rowMajor.firstIndex(of: targetSlot)!)
+            var a = [TrackedWindow?](repeating: nil, count: n)
+            for (position, slot) in rowMajor.enumerated() { a[slot] = seq[position] }   // scatter back
+            return a.map { $0! }
+        case .adaptive:
+            return occupant.map { $0 ?? dragged }          // unreachable (resolved before permute)
+        }
     }
 }

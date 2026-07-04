@@ -110,13 +110,13 @@ struct SettingsStoreTests {
     }
 
     // #27 — reorderStrategy persists (as its rawValue); absent → .swap (the intuitive default).
-    @Test("reorderStrategy defaults swap; round-trips")
+    @Test("reorderStrategy defaults adaptive; round-trips")
     func reorderStrategyPersists() {
-        #expect(AppSettings.defaults.reorderStrategy == .swap)
+        #expect(AppSettings.defaults.reorderStrategy == .adaptive)
         let suite = "dev.ecn.apps.termtile.tests.strategy"
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
-        #expect(UserDefaultsSettingsStore(suiteName: suite).load().reorderStrategy == .swap)   // absent
+        #expect(UserDefaultsSettingsStore(suiteName: suite).load().reorderStrategy == .adaptive)   // absent
         UserDefaultsSettingsStore(suiteName: suite).save(AppSettings(
             targetBundleID: "com.x", wasTrusted: false, gap: 8, hotKey: .rearrange,
             reorderOnDrag: false, reorderStrategy: .rowShift))

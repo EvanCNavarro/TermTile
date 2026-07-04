@@ -152,9 +152,11 @@ public final class MenuBarViewModel {
         await actor.windowID(atFresh: point)
     }
 
-    /// Reorder the dropped window at drag-END (fresh enumerate → nearest slot) with the current grid.
+    /// Reorder the dropped window at drag-END (fresh enumerate → nearest slot) using the user's chosen
+    /// strategy (#27) on the current grid.
     public func reorderDroppedWindow(_ id: CGWindowID) async {
-        await actor.reorderDropFresh(id, config: TileConfig(isEnabled: true, visibleFrame: visibleFrame, gap: gap))
+        await actor.reorderDropFresh(id, config: TileConfig(isEnabled: true, visibleFrame: visibleFrame, gap: gap),
+                                     strategy: reorderStrategy)
     }
 
     /// Re-read the trust probe and LATCH `wasTrusted` the first time trust is observed (guarded on

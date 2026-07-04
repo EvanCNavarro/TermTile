@@ -2,140 +2,115 @@ import CoreGraphics
 import Testing
 @testable import TermTileCore
 
-/// #11 — the pure drag snap-reorder POLICY (ADR-0001 rule 1). `TileEngine.reorderCommands`
-/// reassigns the dragged window to the slot whose CENTER is nearest its drop-point center,
-/// shuffles the rest to fill (stable list remove+insert preserves relative order), and returns
-/// the new slot order plus the `retileCommands` to snap everyone home. Pure: no clock, no AX,
-/// no pending-recording (the actor records pendings per AX write — #18). Drag-END detection
-/// (global mouse-up CGEventTap, spike-06) is the shell's job (#12), not Core's.
-@Suite("TileEngine — drag snap-reorder policy (#11)")
+/// #11/#27 — the pure drag snap-reorder POLICY (ADR-0001 rule 1). `TileEngine.reorderCommands` takes
+/// a FRESH enumerate (dragged window at its DROP position, others on their slots) + a `strategy`,
+/// infers each window's slot via the shared nearest-slot model, and returns the new column-major slot
+/// order + the `retileCommands`. Four strategies (see `ReorderStrategy`); each a pure permutation.
+@Suite("TileEngine — drag reorder strategies (#11/#27)")
 struct TileReorderTests {
-    // Non-zero gap + non-.zero origin so `.zero` frames are genuinely off-grid.
     let visible = CGRect(x: 100, y: 200, width: 1000, height: 800)
     let gap: CGFloat = 10
     let eps: CGFloat = 2.0
 
     func enabled() -> TileConfig { TileConfig(isEnabled: true, visibleFrame: visible, gap: gap) }
     func frames(_ n: Int) -> [CGRect] { TileLayout.frames(count: n, visibleFrame: visible, gap: gap) }
-
-    /// N windows placed EXACTLY on their grid slots, ids 1...N (N1: exact frame, not just center).
     func onGrid(_ n: Int) -> [TrackedWindow] {
         let f = frames(n)
         return (0..<n).map { TrackedWindow(id: CGWindowID($0 + 1), frame: f[$0]) }
     }
-
-    /// A 100×100 window whose CENTER sits on `slot`'s center — a drop point, NOT a grid frame.
+    /// A 100×100 window centered on `slot` — a drop point, NOT a grid frame.
     func droppedOn(_ slot: CGRect) -> CGRect {
         CGRect(x: slot.midX - 50, y: slot.midY - 50, width: 100, height: 100)
     }
-
-    // KEYSTONE — drag id1 (slot 0) so its center lands on slot 3: id1 takes slot 3, the rest
-    // shuffle up preserving relative order → [2,3,4,1]; the dragged window's snap targets slot 3.
-    @Test("keystone: dragged window takes nearest-center slot, others shuffle to fill")
-    func keystoneNearestSlot() {
-        let f = frames(4)
-        var wins = onGrid(4)
-        wins[0].frame = droppedOn(f[3])
-        let (order, cmds) = TileEngine.reorderCommands(
-            windows: wins, draggedID: 1, config: enabled(), epsilon: eps)
-        #expect(order.map(\.id) == [2, 3, 4, 1])
-        let dragCmd = cmds.first { $0.windowID == 1 }
-        #expect(dragCmd?.targetFrame == f[3])
-    }
-
-    // Shuffle preserves the non-dragged windows' relative order (drag a middle window).
-    @Test("shuffle preserves relative order of the non-dragged windows")
-    func shufflePreservesOrder() {
-        let f = frames(4)
-        var wins = onGrid(4)
-        wins[1].frame = droppedOn(f[3])                 // drag id2 (slot1) → slot3
+    /// Reorder: id1 (slot 0) dropped onto slot `target`, under `strategy`. Returns the new id order.
+    func reorderIDs(n: Int, dropOn target: Int, _ strategy: ReorderStrategy) -> [CGWindowID] {
+        var wins = onGrid(n)
+        wins[0].frame = droppedOn(frames(n)[target])
         let (order, _) = TileEngine.reorderCommands(
-            windows: wins, draggedID: 2, config: enabled(), epsilon: eps)
-        #expect(order.map(\.id) == [1, 3, 4, 2])         // id2 → slot3; [1,3,4] relative order kept
+            windows: wins, draggedID: 1, config: enabled(), epsilon: eps, strategy: strategy)
+        return order.map(\.id)
     }
 
-    // Idempotent: dragged window dropped EXACTLY on its own grid slot → order unchanged, no snap.
-    @Test("dropped exactly on its own slot frame: order unchanged, no commands")
-    func idempotentOnOwnSlot() {
-        let wins = onGrid(4)                              // every window at its EXACT slot frame
+    // CANONICAL (audit table) — N=6 (3×2), drag id1 (top-left, s0) HORIZONTALLY onto s4 (top-right).
+    // The four strategies give four DISTINCT column-major orders — the proof they're not aliases.
+    @Test("N=6 horizontal drag s0→s4: swap trades only id1↔id5")
+    func canonicalSwap() { #expect(reorderIDs(n: 6, dropOn: 4, .swap) == [5, 2, 3, 4, 1, 6]) }
+
+    @Test("N=6 horizontal drag s0→s4: columnShift snakes column-major (the diagonal wrap)")
+    func canonicalColumnShift() { #expect(reorderIDs(n: 6, dropOn: 4, .columnShift) == [2, 3, 4, 5, 1, 6]) }
+
+    @Test("N=6 horizontal drag s0→s4: rowShift shifts the top row, bottom row (2,4,6) frozen")
+    func canonicalRowShift() {
+        let order = reorderIDs(n: 6, dropOn: 4, .rowShift)
+        #expect(order == [3, 2, 5, 4, 1, 6])
+        #expect([order[1], order[3], order[5]] == [2, 4, 6])   // bottom row (s1,s3,s5) untouched
+    }
+
+    // ADAPTIVE follows drag direction: a horizontal drag (s0→s4) resolves to rowShift…
+    @Test("adaptive: horizontal drag resolves to rowShift")
+    func adaptiveHorizontal() { #expect(reorderIDs(n: 6, dropOn: 4, .adaptive) == [3, 2, 5, 4, 1, 6]) }
+
+    // …and a vertical drag (s0→s1, same column) resolves to columnShift.
+    @Test("adaptive: vertical drag resolves to columnShift")
+    func adaptiveVertical() {
+        #expect(reorderIDs(n: 6, dropOn: 1, .adaptive) == reorderIDs(n: 6, dropOn: 1, .columnShift))
+        #expect(reorderIDs(n: 6, dropOn: 1, .adaptive) == [2, 1, 3, 4, 5, 6])
+    }
+
+    // NO-OP guard (all strategies): dropped nearest its OWN origin slot → identity, no commands.
+    @Test("dropped on its own slot: identity order, no commands", arguments: ReorderStrategy.allCases)
+    func noOpOnOwnSlot(strategy: ReorderStrategy) {
+        let wins = onGrid(4)                       // every window EXACTLY on its slot
         let (order, cmds) = TileEngine.reorderCommands(
-            windows: wins, draggedID: 3, config: enabled(), epsilon: eps)
+            windows: wins, draggedID: 3, config: enabled(), epsilon: eps, strategy: strategy)
         #expect(order.map(\.id) == [1, 2, 3, 4])
         #expect(cmds.isEmpty)
     }
 
-    // Disabled config = inert: no reorder, no commands (spec "Off = no rigid behavior").
+    // LONE-LAST (odd N): swap id1 (s0, half-height) with id5 (s4, the lone FULL-height slot). id1 must
+    // land on the full-height frame, id5 on id1's old half slot — sizes follow the final slot index.
+    @Test("lone-last: swap into the full-height slot resizes correctly")
+    func loneLastSwap() {
+        var wins = onGrid(5)
+        let f = frames(5)
+        wins[0].frame = droppedOn(f[4])            // drag id1 onto the lone full-height slot
+        let (order, cmds) = TileEngine.reorderCommands(
+            windows: wins, draggedID: 1, config: enabled(), epsilon: eps, strategy: .swap)
+        #expect(order.map(\.id) == [5, 2, 3, 4, 1])
+        #expect(cmds.first { $0.windowID == 1 }?.targetFrame == f[4])   // id1 → full-height slot
+        #expect(cmds.first { $0.windowID == 5 }?.targetFrame == f[0])   // id5 → id1's old half slot
+    }
+
+    // Disabled / untracked / empty → no reorder, no commands (leading guards, B1).
     @Test("disabled config: no reorder, no commands")
     func disabledNoop() {
-        let f = frames(4)
         var wins = onGrid(4)
-        wins[0].frame = droppedOn(f[3])
+        wins[0].frame = droppedOn(frames(4)[3])
         let cfg = TileConfig(isEnabled: false, visibleFrame: visible, gap: gap)
         let (order, cmds) = TileEngine.reorderCommands(
-            windows: wins, draggedID: 1, config: cfg, epsilon: eps)
+            windows: wins, draggedID: 1, config: cfg, epsilon: eps, strategy: .swap)
         #expect(order.map(\.id) == [1, 2, 3, 4])
         #expect(cmds.isEmpty)
     }
 
-    // Untracked draggedID → no-op (leading guard, B1).
-    @Test("untracked draggedID: no reorder, no commands")
-    func untrackedNoop() {
-        let wins = onGrid(4)
-        let (order, cmds) = TileEngine.reorderCommands(
-            windows: wins, draggedID: 999, config: enabled(), epsilon: eps)
-        #expect(order.map(\.id) == [1, 2, 3, 4])
-        #expect(cmds.isEmpty)
+    @Test("untracked draggedID / empty windows: no crash, no reorder")
+    func untrackedAndEmptyNoop() {
+        let (o1, c1) = TileEngine.reorderCommands(
+            windows: onGrid(4), draggedID: 999, config: enabled(), epsilon: eps, strategy: .swap)
+        #expect(o1.map(\.id) == [1, 2, 3, 4]); #expect(c1.isEmpty)
+        let (o2, c2) = TileEngine.reorderCommands(
+            windows: [], draggedID: 1, config: enabled(), epsilon: eps, strategy: .swap)
+        #expect(o2.isEmpty); #expect(c2.isEmpty)
     }
 
-    // Empty windows → no crash (B1: leading guard runs before any TileLayout.frames/argmin).
-    @Test("empty windows: no crash, no reorder")
-    func emptyNoop() {
-        let (order, cmds) = TileEngine.reorderCommands(
-            windows: [], draggedID: 1, config: enabled(), epsilon: eps)
-        #expect(order.isEmpty)
-        #expect(cmds.isEmpty)
-    }
-
-    // Distance ties resolve to the LOWEST slot index (stable argmin, strict <). Drop id2 exactly
-    // on the midpoint between slot0 and slot1 centers → it takes slot 0.
-    @Test("distance tie resolves to lowest slot index")
-    func tieLowestIndex() {
-        let f = frames(2)
-        var wins = onGrid(2)
-        let midY = (f[0].midY + f[1].midY) / 2           // N=2: same x, midpoint in y
-        wins[1].frame = CGRect(x: f[0].midX - 50, y: midY - 50, width: 100, height: 100)
-        let (order, _) = TileEngine.reorderCommands(
-            windows: wins, draggedID: 2, config: enabled(), epsilon: eps)
-        #expect(order.map(\.id) == [2, 1])               // tie → slot0 (lowest index)
-    }
-
-    // N=1: a lone window dragged off its slot snaps back (identity reorder, one snap command).
-    @Test("lone window dragged off its slot snaps back")
-    func loneSnapBack() {
-        let f = frames(1)
-        var wins = onGrid(1)
-        wins[0].frame = CGRect(x: 500, y: 500, width: 100, height: 100)
-        let (order, cmds) = TileEngine.reorderCommands(
-            windows: wins, draggedID: 1, config: enabled(), epsilon: eps)
-        #expect(order.map(\.id) == [1])
-        #expect(cmds.count == 1)
-        #expect(cmds[0].windowID == 1)
-        #expect(cmds[0].targetFrame == f[0])
-    }
-
-    // PROPERTY (FL-6 multi-sample, N=2..8): dropping id1's center on the LAST slot's center makes
-    // it the unique argmin → id1 lands at slot N-1, and the result is a PERMUTATION of the input
-    // (no window lost or duplicated).
-    @Test("property: result is a permutation; dragged lands at argmin-center slot",
-          arguments: [2, 3, 4, 5, 6, 7, 8])
-    func propertyPermutationAndArgmin(n: Int) {
-        let f = frames(n)
-        var wins = onGrid(n)
-        wins[0].frame = droppedOn(f[n - 1])
-        let (order, _) = TileEngine.reorderCommands(
-            windows: wins, draggedID: 1, config: enabled(), epsilon: eps)
+    // PROPERTY (N=2..8, every strategy): the result is always a PERMUTATION (no window lost/dup) and
+    // the dragged window lands on the argmin slot it was dropped on (its center → last slot here).
+    @Test("property: permutation + dragged lands at drop slot",
+          arguments: [2, 3, 4, 5, 6, 7, 8], ReorderStrategy.allCases)
+    func propertyPermutation(n: Int, strategy: ReorderStrategy) {
+        let order = reorderIDs(n: n, dropOn: n - 1, strategy)
         #expect(order.count == n)
-        #expect(Set(order.map(\.id)) == Set(wins.map(\.id)))
-        #expect(order.firstIndex { $0.id == 1 } == n - 1)
+        #expect(Set(order) == Set((1...n).map(CGWindowID.init)))
+        #expect(order.firstIndex(of: 1) == n - 1)   // id1 dropped on the last slot → lands there
     }
 }
