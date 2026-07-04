@@ -434,6 +434,14 @@ committed; findings notes are the durable output.
   AppSettings.hotKey persisted; HotKeyMonitor.reconfigure rollback; default ⌘⌥T. 2 plan BLOCKERs [B1
   commit-on-success, B2 ⌥/⌃-required central in start()] + 2 impl SHOULD-FIX. Capture user-confirmed;
   non-default combo live-proven load→register→fire. 178/178.)
+#26 · Live drag-to-reorder (opt-in) · DONE
+  (2026-07-04: user-confirmed live. PIVOTED by the plan audit from a stream/AXObserver design (off-main
+  data race + empty-model + target-switch dance) to ON-DEMAND — enumerate tileableWindows() FRESH at each
+  drag moment (windowID(atFresh:)/reorderDropFresh), no stream/observer/module-globals/race. Off by default;
+  starts only on opt-in∧trusted∧InputMonitoring. Impl-review B1 caught+fixed: raw AX z-order fed to
+  reorderCommands scrambled N≥3 non-dragged tiles → sort by (minX,minY) slot order, scrambled-enum regression.
+  6 commits red-first. 187/187 tests. Follow-ups: stale-visibleFrame on display change (S2), cut the now-dead
+  stream pipeline (N1/N2).)
 #25 · Global hotkey to trigger Rearrange now · DONE
   (2026-07-03: Carbon RegisterEventHotKey HotKeyMonitor [mirrors DragMonitor C-bridge] → default ⌃⌥⌘R
   fires the existing rearrangeNow(); no AX grant needed; ID-matched dispatch. Impl review [Carbon correct +
