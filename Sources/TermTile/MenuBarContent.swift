@@ -14,6 +14,7 @@ struct MenuBarContent: View {
     let appInfo: AppInfo
     @State private var confirmingUninstall = false
     @State private var uninstallOutcome: Uninstaller.UninstallOutcome?
+    @State private var ellipsisHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -140,42 +141,57 @@ struct MenuBarContent: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 11) {
             Image(nsImage: NSApplication.shared.applicationIconImage)
-                .resizable().frame(width: 40, height: 40)
+                .resizable().frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 2) {
                 Text(AppIdentity.appName).font(.headline)
                 Text("Version \(appInfo.version)").font(.caption).foregroundStyle(.secondary)
+                // Made-with pairs with the version (RememBar's identity block); the active outbound
+                // links read best as the last line before the rule.
+                MadeWithSignoff().padding(.top, 2)
                 HStack(spacing: 6) {
                     ExternalLink("GitHub", appInfo.repoURL)
                     Text("·").foregroundStyle(.tertiary)
                     ExternalLink("License", appInfo.licenseURL)
                 }
                 .font(.caption)
-                .padding(.top, 1)
+                .padding(.top, 2)
             }
             Spacer()
             overflowMenu
         }
     }
 
-    /// The `···` overflow — the app's meta-actions (update / uninstall / quit), tucked out of the
-    /// settings flow. Destructive Uninstall is separated by a divider so it's never a mis-tap.
+    /// The `···` overflow — a native menu (reliable in a menu-bar app, unlike a nested popover) of the
+    /// meta-actions, each with an SF Symbol icon; Uninstall is destructive (red) and divider-separated
+    /// so it's never a mis-tap. The button itself gets a hover background + pointing-hand cursor.
     private var overflowMenu: some View {
         Menu {
-            Button("Check for Updates…") { updater.checkForUpdates() }
-                .disabled(!updater.canCheckForUpdates)
+            Button { updater.checkForUpdates() } label: {
+                Label("Check for Updates", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .disabled(!updater.canCheckForUpdates)
+            Button { NSApplication.shared.terminate(nil) } label: {
+                Label("Quit TermTile", systemImage: "power")
+            }
             Divider()
-            Button("Uninstall TermTile…", role: .destructive) { confirmingUninstall = true }
-            Button("Quit TermTile") { NSApplication.shared.terminate(nil) }
+            Button(role: .destructive) { confirmingUninstall = true } label: {
+                Label("Uninstall TermTile…", systemImage: "trash")
+            }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.07)))
+                .background(RoundedRectangle(cornerRadius: 7)
+                    .fill(Color.primary.opacity(ellipsisHovered ? 0.13 : 0.06)))
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
+        .onHover { hovering in
+            ellipsisHovered = hovering
+            if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
     }
 
     /// A labeled settings group: a small uppercase section header over a soft rounded card holding its
@@ -257,6 +273,56 @@ struct MenuBarContent: View {
         }
         return [TargetApp(bundleID: viewModel.targetBundleID, name: viewModel.targetBundleID)]
             + viewModel.availableApps
+    }
+}
+
+/// The quiet "Made with ♥ & 🤖" sign-off (ported from RememBar's MadeWithSignoff). Both glyphs are
+/// icons, not emoji; the robot is hand-drawn (no robot SF Symbol) and vendor-neutral — "built with AI".
+private struct MadeWithSignoff: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Text("Made with")
+            Image(systemName: "heart.fill").font(.system(size: 8)).foregroundStyle(.pink)
+            Text("&")
+            RobotGlyph(color: .secondary).frame(width: 12, height: 12)
+        }
+        .font(.caption2)
+        .foregroundStyle(.tertiary)
+    }
+}
+
+/// A minimal robot head (antenna + rounded head + two eyes), drawn to read cleanly at ~12pt.
+/// Ported from RememBar's RobotGlyph.
+private struct RobotGlyph: View {
+    var color: Color
+
+    var body: some View {
+        Canvas { context, size in
+            let side = size.width
+            func pt(_ px: CGFloat, _ py: CGFloat) -> CGPoint { CGPoint(x: px * side, y: py * side) }
+            let line = side * 0.09
+
+            var stem = Path()
+            stem.move(to: pt(0.5, 0.14))
+            stem.addLine(to: pt(0.5, 0.30))
+            context.stroke(stem, with: .color(color), lineWidth: line)
+            let ball = side * 0.085
+            context.fill(
+                Path(ellipseIn: CGRect(x: 0.5 * side - ball, y: 0.06 * side, width: ball * 2, height: ball * 2)),
+                with: .color(color))
+
+            let head = Path(
+                roundedRect: CGRect(x: 0.16 * side, y: 0.30 * side, width: 0.68 * side, height: 0.60 * side),
+                cornerRadius: 0.18 * side)
+            context.stroke(head, with: .color(color), lineWidth: line)
+
+            let eye = side * 0.08
+            for cx in [0.37, 0.63] {
+                context.fill(
+                    Path(ellipseIn: CGRect(x: cx * side - eye, y: 0.58 * side - eye, width: eye * 2, height: eye * 2)),
+                    with: .color(color))
+            }
+        }
     }
 }
 
