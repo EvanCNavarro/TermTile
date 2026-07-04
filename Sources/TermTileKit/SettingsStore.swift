@@ -56,7 +56,9 @@ public struct UserDefaultsSettingsStore: SettingsStore {
             wasTrusted: d.object(forKey: Key.wasTrusted) as? Bool ?? dflt.wasTrusted,
             gap: d.object(forKey: Key.gap) as? Double ?? dflt.gap,
             hotKey: HotKeyConfig(keyCode: keyCode, modifiers: modifiers),
-            reorderOnDrag: d.object(forKey: Key.reorderOnDrag) as? Bool ?? dflt.reorderOnDrag)
+            reorderOnDrag: d.object(forKey: Key.reorderOnDrag) as? Bool ?? dflt.reorderOnDrag,
+            reorderStrategy: (d.string(forKey: Key.reorderStrategy)).flatMap(ReorderStrategy.init(rawValue:))
+                ?? dflt.reorderStrategy)
     }
 
     public func save(_ settings: AppSettings) {
@@ -67,6 +69,7 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         d.set(Int(settings.hotKey.keyCode), forKey: Key.hotKeyCode)
         d.set(Int(settings.hotKey.modifiers), forKey: Key.hotKeyModifiers)
         d.set(settings.reorderOnDrag, forKey: Key.reorderOnDrag)
+        d.set(settings.reorderStrategy.rawValue, forKey: Key.reorderStrategy)
     }
 
     /// The domain name is the suite when named (tests) or the app's bundleID for `.standard`
@@ -84,5 +87,6 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         static let hotKeyCode = "hotKeyCode"
         static let hotKeyModifiers = "hotKeyModifiers"
         static let reorderOnDrag = "reorderOnDrag"
+        static let reorderStrategy = "reorderStrategy"
     }
 }

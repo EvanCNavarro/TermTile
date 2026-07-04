@@ -117,7 +117,7 @@ struct TermTileApp: App {
                                         eps: CGFloat) -> MenuBarViewModel {
         let store = UserDefaultsSettingsStore(suiteName: "dev.ecn.apps.termtile.gallery")
         store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8,
-                               hotKey: .rearrange, reorderOnDrag: false))
+                               hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
         return MenuBarViewModel(settings: store, loginItem: loginItem,
             appsProvider: WorkspaceTargetAppsProvider(), isTrustedProbe: { false },
             visibleFrame: visibleFrame, epsilon: eps,

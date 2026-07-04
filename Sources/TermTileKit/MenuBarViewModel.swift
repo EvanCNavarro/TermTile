@@ -43,6 +43,8 @@ public final class MenuBarViewModel {
     /// Opt-in drag-reorder (#26) — loaded from settings, tracked so the toggle live-updates. OFF by
     /// default; the live watchers (#26 later steps) only run when this is true.
     public private(set) var reorderOnDrag: Bool
+    /// Which reorder strategy a drag uses (#27) — loaded from settings, tracked so the Picker updates.
+    public private(set) var reorderStrategy: ReorderStrategy
 
     /// The fix-it row's state (#23): trusted → no row; never granted → first-grant prompt; untrusted
     /// but previously granted → the honest grant-BROKEN message (moved/duplicate bundle). Computed
@@ -102,6 +104,7 @@ public final class MenuBarViewModel {
         self.gap = Self.clampedGap(CGFloat(loaded.gap))
         self.hotKey = loaded.hotKey           // #25b — user-state, loaded like targetBundleID
         self.reorderOnDrag = loaded.reorderOnDrag   // #26 — opt-in, off by default
+        self.reorderStrategy = loaded.reorderStrategy   // #27 — user-selectable reorder behavior
         self.launchAtLogin = loginItem.status == .enabled
         self.actor = makeActor(loaded.targetBundleID)
         syncTrust()   // probe + latch at init — catches the trusted-at-launch / migrating case (#23 B2)
@@ -235,6 +238,13 @@ public final class MenuBarViewModel {
         syncReorderMonitor()   // #26 — start/stop the monitor to match the new preference
     }
 
+    /// Change the drag-reorder strategy (#27). Persists; the next drag uses it (no monitor restart —
+    /// the strategy is read at reorder time).
+    public func setReorderStrategy(_ strategy: ReorderStrategy) {
+        reorderStrategy = strategy
+        persist()
+    }
+
     /// Register / unregister as a login item, then refresh `launchAtLogin` from the authoritative
     /// `LoginItem.status`. Errors are swallowed and reflected as the real post-call status (the
     /// unsigned-binary throw path is observed live in #13, not surfaced as UI here).
@@ -265,7 +275,8 @@ public final class MenuBarViewModel {
     /// target-app change) never clobbers the latch back to false (#23 B1).
     private func persist() {
         settings.save(AppSettings(targetBundleID: targetBundleID, wasTrusted: wasTrusted,
-                                  gap: Double(gap), hotKey: hotKey, reorderOnDrag: reorderOnDrag))
+                                  gap: Double(gap), hotKey: hotKey, reorderOnDrag: reorderOnDrag,
+                                  reorderStrategy: reorderStrategy))
     }
 
     /// The PRODUCTION Accessibility-trust probe for the composition root to inject. Defined in Kit

@@ -60,7 +60,7 @@ struct MenuBarViewModelTests {
         // Seed gap=10 (≠ the 8 default) into the store so the VM LOADS it — this also proves the
         // #17a settings→VM→TileConfig→layout flow: the EXACT targets below use the same gap.
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
         let (vm, fake) = makeVM(windows: seed, store: store)
         let t = targets(3)
         for k in 0..<3 { #expect(seed[k].frame != t[k]) }  // genuinely off-grid → writes provable
@@ -76,7 +76,7 @@ struct MenuBarViewModelTests {
     @Test("init loads persisted target")
     func initLoadsPersistedSettings() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false))
+        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
         let (vm, _) = makeVM(store: store)
         #expect(vm.targetBundleID == "com.example.other")
     }
@@ -205,7 +205,7 @@ struct MenuBarViewModelTests {
     // Idempotent on the PERSISTED flag — repeated refreshTrust after true writes nothing more.
     @Test("latch is idempotent")
     func latchIdempotent() {
-        let spy = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false))
+        let spy = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
         let (vm, _) = makeVM(store: spy, trusted: true)
         let base = spy.saveCount                    // 0 — already true, no init latch
         vm.refreshTrust(); vm.refreshTrust()
@@ -219,7 +219,7 @@ struct MenuBarViewModelTests {
         let (vm1, _) = makeVM(store: spy1, trusted: false)
         #expect(vm1.accessibilityState == .needsFirstGrant)
         #expect(spy1.saveCount == 0)
-        let spy2 = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false))
+        let spy2 = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
         let (vm2, _) = makeVM(store: spy2, trusted: false)
         #expect(vm2.accessibilityState == .grantBroken)
     }
@@ -291,7 +291,7 @@ struct MenuBarViewModelTests {
         // opted-in at launch (seeded) + trusted + granted → started at init
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
-                               hotKey: .rearrange, reorderOnDrag: true))
+                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap))
         let (vm, spy) = makeVMWithReorder(store: store, trusted: true, granted: true)
         #expect(spy.isRunning)
         vm.setReorderOnDrag(false)               // toggle off → stops
@@ -313,7 +313,7 @@ struct MenuBarViewModelTests {
     func reorderNeedsInputMonitoringState() {
         let on = InMemorySettingsStore()
         on.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
-                            hotKey: .rearrange, reorderOnDrag: true))
+                            hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap))
         #expect(makeVMWithReorder(store: on, trusted: true, granted: false).0.reorderNeedsInputMonitoring)
         #expect(!makeVMWithReorder(store: on, trusted: true, granted: true).0.reorderNeedsInputMonitoring)
         #expect(!makeVMWithReorder(store: on, trusted: false, granted: false).0.reorderNeedsInputMonitoring)
@@ -380,7 +380,7 @@ struct MenuBarViewModelTests {
     @Test("gap loads from settings")
     func gapLoadsFromSettings() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 24, hotKey: .rearrange, reorderOnDrag: false))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 24, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
         let (vm, _) = makeVM(store: store)
         #expect(vm.gap == 24)
     }
@@ -390,7 +390,7 @@ struct MenuBarViewModelTests {
     @Test("out-of-range persisted gap is clamped on load")
     func outOfRangeLoadedGapClamped() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 9999, hotKey: .rearrange, reorderOnDrag: false))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 9999, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
         let (vm, _) = makeVM(store: store)
         #expect(vm.gap == 40)                             // clamped, not 9999
     }

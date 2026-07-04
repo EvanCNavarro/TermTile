@@ -1,3 +1,5 @@
+import TermTileCore
+
 /// The persisted app-shell state the menu-bar UI reads on launch and writes on change — the
 /// MVP-user-changeable settings ONLY ("UserDefaults behind a small protocol", remembar-audit
 /// §8.7). Deliberately EXCLUDES `launchAtLogin` (whose source of truth is `SMAppService.status`,
@@ -23,19 +25,24 @@ public struct AppSettings: Equatable, Sendable {
     /// only when enabled does the app request Input Monitoring + start the mouse/AX watchers, so the
     /// clean single-permission manual model stays the default. Absent → false.
     public var reorderOnDrag: Bool
+    /// How a drag-reorder reshuffles the other windows (#27) — user-selectable. Persisted as its
+    /// rawValue; absent → .swap.
+    public var reorderStrategy: ReorderStrategy
 
     public init(targetBundleID: String, wasTrusted: Bool, gap: Double, hotKey: HotKeyConfig,
-                reorderOnDrag: Bool) {
+                reorderOnDrag: Bool, reorderStrategy: ReorderStrategy) {
         self.targetBundleID = targetBundleID
         self.wasTrusted = wasTrusted
         self.gap = gap
         self.hotKey = hotKey
         self.reorderOnDrag = reorderOnDrag
+        self.reorderStrategy = reorderStrategy
     }
 
     /// The launch defaults: target iTerm2 (spec-draft:18; bundle id verified `com.googlecode.iterm2`
-    /// via `mdls`), never granted, 8-pt gap, ⌘⌥T hotkey, drag-reorder off. `load()` falls back per-key.
+    /// via `mdls`), never granted, 8-pt gap, ⌘⌥T hotkey, drag-reorder off, swap reorder. `load()`
+    /// falls back per-key.
     public static let defaults = AppSettings(
         targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8, hotKey: .rearrange,
-        reorderOnDrag: false)
+        reorderOnDrag: false, reorderStrategy: .swap)
 }
