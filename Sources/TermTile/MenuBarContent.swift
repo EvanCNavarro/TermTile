@@ -147,7 +147,8 @@ struct MenuBarContent: View {
                 .frame(width: 52, height: 52)
             VStack(alignment: .leading, spacing: 2) {
                 Text(AppIdentity.appName).font(Tokens.title).foregroundStyle(Tokens.text)
-                Text("Version \(appInfo.version)").font(Tokens.caption).foregroundStyle(Tokens.muted)
+                Text("Version \(appInfo.version) (\(appInfo.build))")
+                    .font(Tokens.caption).foregroundStyle(Tokens.muted)
                 MadeWithSignoff().padding(.top, 2)
             }
             Spacer()

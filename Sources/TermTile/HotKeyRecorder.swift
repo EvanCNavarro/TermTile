@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import MacFaceKit
 import SwiftUI
 import TermTileKit
 
@@ -49,17 +50,18 @@ final class HotKeyRecorderView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let box = bounds.insetBy(dx: 1, dy: 1)
         let path = NSBezierPath(roundedRect: box, xRadius: 5, yRadius: 5)
-        (recording ? NSColor.controlAccentColor.withAlphaComponent(0.15)
-                   : NSColor.controlBackgroundColor).setFill()
+        // Dark, distinct field (Tokens.nsField) so the recorder reads as a separate input on the
+        // dark panel — not the near-panel-colored system control background.
+        (recording ? Tokens.nsAccent.withAlphaComponent(0.18) : Tokens.nsField).setFill()
         path.fill()
-        (recording ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
+        (recording ? Tokens.nsAccent : Tokens.nsLine).setStroke()
         path.stroke()
 
         let text = recording ? "Press keys…"
             : (registered ? current.displayString : "\(current.displayString) ⚠")
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 12),
-            .foregroundColor: recording ? NSColor.controlAccentColor : NSColor.labelColor,
+            .foregroundColor: recording ? Tokens.nsAccent : Tokens.nsText,
         ]
         let size = (text as NSString).size(withAttributes: attrs)
         (text as NSString).draw(at: NSPoint(x: (bounds.width - size.width) / 2,
