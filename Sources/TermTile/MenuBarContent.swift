@@ -22,8 +22,7 @@ struct MenuBarContent: View {
             version: appInfo.displayVersion,
             repoURL: AppIdentity.repoURL,
             licenseURL: AppIdentity.licenseURL,
-            subtitle: "A minimalist menu-bar tiler that snaps your terminal windows into even columns "
-                + "— and reflows them as you drag.",
+            subtitle: "A minimalist menu-bar tiler that keeps your terminal windows in a tidy, even grid.",
             actions: overflowActions
         ) {
             SectionCard("Tiling") {
