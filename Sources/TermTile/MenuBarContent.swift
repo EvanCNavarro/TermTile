@@ -79,22 +79,13 @@ struct MenuBarContent: View {
 
             accessibilityNotice   // the blocker, right above the action it gates
 
-            // PRIMARY ACTION — after the settings it operates on (configure, then tile). Taller than a
-            // standard button (~1.5×) so it clearly reads as the hero; shortcut shown inline.
-            Button {
+            // PRIMARY ACTION — after the settings it operates on (configure, then tile). The shared
+            // branded hero; shortcut shown inline; disabled until Accessibility is granted.
+            PrimaryButton("Rearrange now", systemImage: "rectangle.grid.2x2",
+                          trailing: viewModel.hotKey.displayString,
+                          enabled: viewModel.isAccessibilityTrusted) {
                 Task { await viewModel.rearrangeNow() }
-            } label: {
-                HStack {
-                    Label("Rearrange now", systemImage: "rectangle.grid.2x2")
-                    Spacer()
-                    Text(viewModel.hotKey.displayString).foregroundStyle(Tokens.muted)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, Tokens.micro + 2)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(!viewModel.isAccessibilityTrusted)
         }
         .padding(Tokens.pad)
         .frame(width: 280)
