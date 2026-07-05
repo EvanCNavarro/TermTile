@@ -192,8 +192,8 @@ struct MenuBarContent: View {
                 }
             }
             .padding(6)
-            .frame(width: 216)
-            .background(Tokens.panel)
+            .frame(width: 210)
+            .background(Tokens.field)   // RememBar's dropdown bg is darker than the panel (#0e0f11)
         }
     }
 
