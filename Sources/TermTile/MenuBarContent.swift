@@ -16,6 +16,7 @@ struct MenuBarContent: View {
     @State private var confirmingUninstall = false
     @State private var uninstallOutcome: Uninstaller.UninstallOutcome?
     @State private var ellipsisHovered = false
+    @State private var showActions = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -165,35 +166,37 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The `···` overflow — a PLAIN native menu (icons + text; destructive Uninstall red), like
-    /// RememBar's dropdown. Not outlined rows — those are for clickable links, not menu items. The
-    /// button itself is subtle (just the dots, brightening on hover), not a bordered tile.
+    /// The `···` overflow — RememBar's CUSTOM dark dropdown: a popover of plain `MenuRow`s (icon +
+    /// text, hover fills `rowActive`; Uninstall red then red-fill/white). A native menu can't match
+    /// RememBar's dark theme + hover, so this is a custom popover. The `···` button gets a subtle
+    /// rounded hover fill (no border), like RememBar's.
     private var overflowMenu: some View {
-        Menu {
-            Button { updater.checkForUpdates() } label: {
-                Label("Check for Updates", systemImage: "arrow.triangle.2.circlepath")
-            }
-            .disabled(!updater.canCheckForUpdates)
-            Button { NSApplication.shared.terminate(nil) } label: {
-                Label("Quit TermTile", systemImage: "power")
-            }
-            Divider()
-            Button(role: .destructive) { confirmingUninstall = true } label: {
-                Label("Uninstall TermTile…", systemImage: "trash")
-            }
-        } label: {
+        Button { showActions.toggle() } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(ellipsisHovered ? Tokens.text : Tokens.muted)
+                .foregroundStyle(ellipsisHovered || showActions ? Tokens.text : Tokens.muted)
                 .frame(width: 26, height: 26)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(ellipsisHovered || showActions ? Tokens.rowActive : .clear))
                 .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .buttonStyle(.plain)
         .onHover { hovering in
             ellipsisHovered = hovering
             if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
+        .popover(isPresented: $showActions, arrowEdge: .bottom) {
+            VStack(spacing: 1) {
+                MenuRow(title: "Check for Updates", systemImage: "arrow.triangle.2.circlepath",
+                        enabled: updater.canCheckForUpdates) { showActions = false; updater.checkForUpdates() }
+                MenuRow(title: "Quit TermTile", systemImage: "power") { NSApplication.shared.terminate(nil) }
+                MenuRow(title: "Uninstall TermTile…", systemImage: "trash", destructive: true) {
+                    showActions = false; confirmingUninstall = true
+                }
+            }
+            .padding(6)
+            .frame(width: 216)
+            .background(Tokens.panel)
         }
     }
 
