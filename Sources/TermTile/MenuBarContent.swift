@@ -13,16 +13,16 @@ struct MenuBarContent: View {
     let viewModel: MenuBarViewModel
     let updater: Updater
     let appInfo: AppInfo
-    @State private var ellipsisHovered = false
     @State private var showActions = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            header
+        VStack(alignment: .leading, spacing: Tokens.gap) {
+            AppHeader(name: AppIdentity.appName,
+                      version: "\(appInfo.version) (\(appInfo.build))") { overflowMenu }
             links
             Divider()   // separates identity/meta (above) from the settings + action (below)
 
-            section("Tiling") {
+            SectionCard("Tiling") {
                 LabeledContent("Target app") {
                     Picker("", selection: Binding(
                         get: { viewModel.targetBundleID },
@@ -39,7 +39,7 @@ struct MenuBarContent: View {
                 }
             }
 
-            section("Drag to reorder") {
+            SectionCard("Drag to reorder") {
                 Toggle("Reorder windows on drag", isOn: Binding(
                     get: { viewModel.reorderOnDrag },
                     set: { viewModel.setReorderOnDrag($0) }))
@@ -57,14 +57,14 @@ struct MenuBarContent: View {
                     }
                 }
                 if viewModel.reorderNeedsInputMonitoring {
-                    noticeCard("Input Monitoring required",
-                               "Reorder-on-drag needs Input Monitoring to detect when you drag a window.",
-                               link: "Open Input Monitoring Settings…",
+                    NoticeCard(title: "Input Monitoring required",
+                               message: "Reorder-on-drag needs Input Monitoring to detect when you drag a window.",
+                               linkLabel: "Open Input Monitoring Settings…",
                                url: viewModel.inputMonitoringSettingsURL)
                 }
             }
 
-            section("General") {
+            SectionCard("General") {
                 // Global-hotkey recorder (#25b): click the field, press a combo (needs ⌥ or ⌃).
                 // The "⚠" marks a persisted combo that couldn't register (taken by another app).
                 LabeledContent("Shortcut") {
@@ -88,16 +88,16 @@ struct MenuBarContent: View {
                 HStack {
                     Label("Rearrange now", systemImage: "rectangle.grid.2x2")
                     Spacer()
-                    Text(viewModel.hotKey.displayString).foregroundStyle(.secondary)
+                    Text(viewModel.hotKey.displayString).foregroundStyle(Tokens.muted)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .padding(.vertical, Tokens.micro + 2)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .disabled(!viewModel.isAccessibilityTrusted)
         }
-        .padding(14)
+        .padding(Tokens.pad)
         .frame(width: 280)
         .background(Tokens.panel)   // fixed-dark brand surface (shared with RememBar)
         .onAppear { viewModel.refreshTrust() }
@@ -109,25 +109,7 @@ struct MenuBarContent: View {
         }
     }
 
-    // MARK: - Sections
-
-    /// Identity header (RememBar-popover shape): app icon + name + version + the info links, with a
-    /// `···` overflow menu top-right for meta-actions. Everything "about the app" lives here, above
-    /// the rule — so the settings below aren't diluted by a jumble of footer buttons.
-    private var header: some View {
-        HStack(alignment: .top, spacing: 11) {
-            AppIconView(fallbackMonogram: "T")
-                .frame(width: 52, height: 52)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(AppIdentity.appName).font(Tokens.title).foregroundStyle(Tokens.text)
-                Text("Version \(appInfo.version) (\(appInfo.build))")
-                    .font(Tokens.caption).foregroundStyle(Tokens.muted)
-                MadeWithSignoff().padding(.top, 2)
-            }
-            Spacer()
-            overflowMenu
-        }
-    }
+    // MARK: - Composition
 
     /// The outbound links as outlined LinkButtons (RememBar's "Learn more" treatment) — the boxed style
     /// is for clickable LINKS, distinct from the plain `···` menu items.
@@ -138,22 +120,10 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The `···` overflow — RememBar's CUSTOM dark dropdown: a popover of plain `MenuRow`s (icon +
-    /// text, hover fills `rowActive`; Uninstall red then red-fill/white). A native menu can't match
-    /// RememBar's dark theme + hover, so this is a custom popover. The `···` button gets a subtle
-    /// rounded hover fill (no border), like RememBar's.
+    /// The `···` overflow — an `IconButton` (the shared icon family; owns its own hover, lifts while
+    /// `active`) opening RememBar's CUSTOM dark dropdown: a popover of plain `MenuRow`s on `Tokens.field`.
     private var overflowMenu: some View {
-        Button { showActions.toggle() } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: Tokens.controlButton, height: Tokens.controlButton)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(IconButtonStyle(active: showActions, hovered: ellipsisHovered))
-        .onHover { hovering in
-            ellipsisHovered = hovering
-            if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
-        }
+        IconButton(systemImage: "ellipsis", active: showActions) { showActions.toggle() }
         .popover(isPresented: $showActions, arrowEdge: .bottom) {
             VStack(spacing: 1) {
                 MenuRow(title: "Check for Updates", systemImage: "arrow.triangle.2.circlepath",
@@ -172,58 +142,23 @@ struct MenuBarContent: View {
         }
     }
 
-    /// A labeled settings group: a small uppercase section header over a soft rounded card holding its
-    /// rows (macOS System-Settings grouping — the card is the proximity cue that makes each group read
-    /// as one intentional unit). The fill is `.primary`-derived so it adapts to light/dark.
-    @ViewBuilder
-    private func section<Content: View>(_ title: String,
-                                        @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(Tokens.label)
-                .foregroundStyle(Tokens.muted).textCase(.uppercase).kerning(0.5)
-            VStack(alignment: .leading, spacing: 10) {
-                content()
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: Tokens.radius, style: .continuous).fill(Tokens.row))
-            .overlay(RoundedRectangle(cornerRadius: Tokens.radius, style: .continuous)
-                .stroke(Tokens.line, lineWidth: 1))
-        }
-        .foregroundStyle(Tokens.text)
-    }
-
-    /// Accessibility permission state → a contextual notice (nothing when trusted). Honest about the
-    /// moved/duplicate-bundle break AND an intentional revoke (indistinguishable via AXIsProcessTrusted).
+    /// Accessibility permission state → a contextual `NoticeCard` (nothing when trusted). Honest about
+    /// the moved/duplicate-bundle break AND an intentional revoke (indistinguishable via AXIsProcessTrusted).
     @ViewBuilder
     private var accessibilityNotice: some View {
         switch viewModel.accessibilityState {
         case .trusted:
             EmptyView()
         case .needsFirstGrant:
-            noticeCard("Accessibility access required",
-                       "TermTile needs Accessibility permission to arrange windows.")
+            NoticeCard(title: "Accessibility access required",
+                       message: "TermTile needs Accessibility permission to arrange windows.",
+                       linkLabel: "Open Accessibility Settings…", url: viewModel.accessibilitySettingsURL)
         case .grantBroken:
-            noticeCard("Accessibility access is off",
-                       "If you didn't turn it off, TermTile may have moved or a duplicate copy ran. "
-                       + "Remove any old TermTile entries in Accessibility settings, then re-add this one.")
+            NoticeCard(title: "Accessibility access is off",
+                       message: "If you didn't turn it off, TermTile may have moved or a duplicate copy ran. "
+                       + "Remove any old TermTile entries in Accessibility settings, then re-add this one.",
+                       linkLabel: "Open Accessibility Settings…", url: viewModel.accessibilitySettingsURL)
         }
-    }
-
-    /// A permission notice — a tinted card (icon + title + body + deep-link), reused for Accessibility
-    /// (#23) and Input Monitoring (#26). Reads as an alert, not another form row.
-    private func noticeCard(_ title: String, _ body: String,
-                            link: String = "Open Accessibility Settings…",
-                            url: URL? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(title, systemImage: "exclamationmark.triangle.fill")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(.orange)
-            Text(body).font(.caption).foregroundStyle(.secondary)
-            ExternalLink(link, url ?? viewModel.accessibilitySettingsURL).font(.caption)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
     }
 
     /// The uninstall confirm + outcome flow, run as imperative `NSAlert`s in their OWN windows — NOT
