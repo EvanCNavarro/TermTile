@@ -20,6 +20,7 @@ struct MenuBarContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
+            links
             Divider()   // separates identity/meta (above) from the settings + action (below)
 
             section("Tiling") {
@@ -147,25 +148,25 @@ struct MenuBarContent: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(AppIdentity.appName).font(Tokens.title).foregroundStyle(Tokens.text)
                 Text("Version \(appInfo.version)").font(Tokens.caption).foregroundStyle(Tokens.muted)
-                // Made-with pairs with the version (RememBar's identity block); the active outbound
-                // links read best as the last line before the rule.
                 MadeWithSignoff().padding(.top, 2)
-                HStack(spacing: 6) {
-                    ExternalLink("GitHub", appInfo.repoURL)
-                    Text("·").foregroundStyle(Tokens.quiet)
-                    ExternalLink("License", appInfo.licenseURL)
-                }
-                .font(Tokens.caption)
-                .padding(.top, 2)
             }
             Spacer()
             overflowMenu
         }
     }
 
-    /// The `···` overflow — a native menu (reliable in a menu-bar app, unlike a nested popover) of the
-    /// meta-actions, each with an SF Symbol icon; Uninstall is destructive (red) and divider-separated
-    /// so it's never a mis-tap. The button itself gets a hover background + pointing-hand cursor.
+    /// The outbound links as outlined LinkButtons (RememBar's "Learn more" treatment) — the boxed style
+    /// is for clickable LINKS, distinct from the plain `···` menu items.
+    private var links: some View {
+        HStack(spacing: Tokens.micro + 2) {
+            LinkButton("GitHub", url: appInfo.repoURL, systemImage: "chevron.left.forwardslash.chevron.right")
+            LinkButton("License", url: appInfo.licenseURL, systemImage: "doc.text")
+        }
+    }
+
+    /// The `···` overflow — a PLAIN native menu (icons + text; destructive Uninstall red), like
+    /// RememBar's dropdown. Not outlined rows — those are for clickable links, not menu items. The
+    /// button itself is subtle (just the dots, brightening on hover), not a bordered tile.
     private var overflowMenu: some View {
         Menu {
             Button { updater.checkForUpdates() } label: {
@@ -181,13 +182,9 @@ struct MenuBarContent: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(ellipsisHovered ? Tokens.text : Tokens.muted)
                 .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(ellipsisHovered ? Tokens.rowActive : Tokens.row))
-                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(ellipsisHovered ? Tokens.lineStrong : Tokens.line, lineWidth: 1))
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
