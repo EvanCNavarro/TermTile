@@ -13,8 +13,6 @@ struct MenuBarContent: View {
     let viewModel: MenuBarViewModel
     let updater: Updater
     let appInfo: AppInfo
-    @State private var confirmingUninstall = false
-    @State private var uninstallOutcome: Uninstaller.UninstallOutcome?
     @State private var ellipsisHovered = false
     @State private var showActions = false
 
@@ -103,32 +101,6 @@ struct MenuBarContent: View {
         .frame(width: 280)
         .background(Tokens.panel)   // fixed-dark brand surface (shared with RememBar)
         .onAppear { viewModel.refreshTrust() }
-        // Destructive — an explicit confirm so uninstall is never a one-click accident.
-        .confirmationDialog("Uninstall TermTile?", isPresented: $confirmingUninstall, titleVisibility: .visible) {
-            Button("Move to Trash", role: .destructive) { uninstallOutcome = viewModel.uninstall() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Moves TermTile and its data to the Trash. You'll still need to remove its "
-                + "Accessibility permission in System Settings — that can't be revoked automatically.")
-        }
-        // Outcome + the one thing uninstall can't do (revoke the TCC grant). EVERY action exits with
-        // exit(0), NOT NSApp.terminate — a graceful quit (or leaving the app running) would let
-        // cfprefsd re-flush the purged prefs domain. So the terminal state after uninstall is always
-        // process exit; each button does its side effect, then exits.
-        .alert(uninstallTitle, isPresented: Binding(
-            get: { uninstallOutcome != nil },
-            set: { if !$0 { uninstallOutcome = nil } }
-        ), presenting: uninstallOutcome) { outcome in
-            if let url = outcome.bundleURLIfManual {
-                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]); exit(0) }
-            }
-            Button("Open Accessibility Settings…") {
-                NSWorkspace.shared.open(viewModel.accessibilitySettingsURL); exit(0)
-            }
-            Button("Quit") { exit(0) }
-        } message: { outcome in
-            Text(uninstallMessage(outcome))
-        }
         // MenuBarExtra(.window) keeps this view alive across opens, so `.onAppear` fires once per
         // process — a grant made later rendered a stale fix-it row. The panel becomes key on every
         // open; re-probe then (cheap, read-only).
@@ -188,7 +160,10 @@ struct MenuBarContent: View {
                         enabled: updater.canCheckForUpdates) { showActions = false; updater.checkForUpdates() }
                 MenuRow(title: "Quit TermTile", systemImage: "power") { NSApplication.shared.terminate(nil) }
                 MenuRow(title: "Uninstall TermTile…", systemImage: "trash", destructive: true) {
-                    showActions = false; confirmingUninstall = true
+                    showActions = false
+                    // Close the popover FIRST, then run the modal on the next tick — a SwiftUI dialog
+                    // anchored to the menu-bar popover fights its auto-dismiss (the wonky-window bug).
+                    DispatchQueue.main.async { runUninstallFlow() }
                 }
             }
             .padding(6)
@@ -251,9 +226,41 @@ struct MenuBarContent: View {
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
     }
 
-    /// Honest title — never claims a clean removal on a partial one.
-    private var uninstallTitle: String {
-        (uninstallOutcome?.isClean ?? true) ? "TermTile removed" : "TermTile mostly removed"
+    /// The uninstall confirm + outcome flow, run as imperative `NSAlert`s in their OWN windows — NOT
+    /// SwiftUI modals anchored to the menu-bar popover (which auto-dismisses on focus loss, orphaning
+    /// the dialog and tangling it with the panel). Each modal is its own window, so nothing fights the
+    /// popover. Confirmed removal always ends in `exit(0)` (a graceful quit lets cfprefsd re-flush the
+    /// purged prefs — #22b), so each outcome button does its side effect, then exits.
+    private func runUninstallFlow() {
+        NSApplication.shared.activate(ignoringOtherApps: true)   // bring the alert frontmost (accessory app)
+
+        let confirm = NSAlert()
+        confirm.messageText = "Uninstall TermTile?"
+        confirm.informativeText = "Moves TermTile and its data to the Trash. You'll still need to remove "
+            + "its Accessibility permission in System Settings — that can't be revoked automatically."
+        confirm.alertStyle = .warning
+        confirm.addButton(withTitle: "Move to Trash")
+        confirm.addButton(withTitle: "Cancel")
+        guard confirm.runModal() == .alertFirstButtonReturn else { return }   // Cancel → done, panel intact
+
+        // nil = no armed uninstaller (gallery/selftest) → safe no-op, no outcome, no exit.
+        guard let outcome = viewModel.uninstall() else { return }
+        let done = NSAlert()
+        done.messageText = outcome.isClean ? "TermTile removed" : "TermTile mostly removed"
+        done.informativeText = uninstallMessage(outcome)
+        done.alertStyle = .informational
+        var actions: [() -> Void] = []
+        if let url = outcome.bundleURLIfManual {
+            done.addButton(withTitle: "Show in Finder")
+            actions.append { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        }
+        done.addButton(withTitle: "Open Accessibility Settings…")
+        actions.append { NSWorkspace.shared.open(viewModel.accessibilitySettingsURL) }
+        done.addButton(withTitle: "Quit")
+        actions.append {}
+        let index = done.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
+        if actions.indices.contains(index) { actions[index]() }
+        exit(0)
     }
 
     /// Compose the post-uninstall message from the outcome's structured facts (presentation only —
