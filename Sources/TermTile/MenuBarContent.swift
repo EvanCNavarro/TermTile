@@ -160,7 +160,7 @@ struct MenuBarContent: View {
     /// is for clickable LINKS, distinct from the plain `···` menu items.
     private var links: some View {
         HStack(spacing: Tokens.micro + 2) {
-            LinkButton("GitHub", url: appInfo.repoURL, systemImage: "chevron.left.forwardslash.chevron.right")
+            LinkButton("GitHub", url: appInfo.repoURL, image: Brand.github)
             LinkButton("License", url: appInfo.licenseURL, systemImage: "doc.text")
         }
     }

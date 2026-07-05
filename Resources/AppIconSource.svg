@@ -1,0 +1,23 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- App icon (#logo): the "T" — a crossbar of 5 tiles + a single centered stem tile, in white on a
+       dark squircle. The SAME logo as the menu-bar glyph (TermTileMenuGlyph). Squarer + cleaner than
+       the old 5+5 grid. Rendered to AppIcon.png via rsvg-convert; build-app.sh makes the .icns. -->
+  <defs>
+    <linearGradient id="bg" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#26202f"/>
+      <stop offset="1" stop-color="#0e0b14"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="205" fill="url(#bg)"/>
+  <rect x="64" y="64" width="896" height="896" rx="205" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="10"/>
+  <g fill="#f4f5f7">
+    <!-- crossbar: 5 tiles -->
+    <rect x="212" y="278" width="86" height="300" rx="30"/>
+    <rect x="341" y="278" width="86" height="300" rx="30"/>
+    <rect x="470" y="278" width="86" height="300" rx="30"/>
+    <rect x="599" y="278" width="86" height="300" rx="30"/>
+    <rect x="728" y="278" width="86" height="300" rx="30"/>
+    <!-- stem: 1 centered tile -->
+    <rect x="470" y="618" width="86" height="268" rx="30"/>
+  </g>
+</svg>
