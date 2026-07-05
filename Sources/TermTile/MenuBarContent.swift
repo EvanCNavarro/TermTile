@@ -173,14 +173,11 @@ struct MenuBarContent: View {
     private var overflowMenu: some View {
         Button { showActions.toggle() } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(ellipsisHovered || showActions ? Tokens.text : Tokens.muted)
-                .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(ellipsisHovered || showActions ? Tokens.rowActive : .clear))
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: Tokens.controlButton, height: Tokens.controlButton)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(IconButtonStyle(active: showActions, hovered: ellipsisHovered))
         .onHover { hovering in
             ellipsisHovered = hovering
             if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
