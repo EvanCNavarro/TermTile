@@ -15,12 +15,14 @@ struct MenuBarContent: View {
     let appInfo: AppInfo
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Tokens.gap) {
-            AppHeader(name: AppIdentity.appName,
-                      version: "\(appInfo.version) (\(appInfo.build))") { overflowMenu }
-            links
-            Divider()   // separates identity/meta (above) from the settings + action (below)
-
+        // The SHARED identity card (icon · name · version · made-with · ··· · GitHub/License · separator);
+        // TermTile supplies the content below the separator — its settings + hero.
+        AppIdentityCard(
+            name: AppIdentity.appName,
+            version: "\(appInfo.version) (\(appInfo.build))",
+            actions: overflowActions,
+            links: [.github(appInfo.repoURL), .license(appInfo.licenseURL)]
+        ) {
             SectionCard("Tiling") {
                 LabeledContent("Target app") {
                     Picker("", selection: Binding(
@@ -87,7 +89,6 @@ struct MenuBarContent: View {
                 Task { await viewModel.rearrangeNow() }
             }
         }
-        .padding(Tokens.pad)
         .frame(width: 280)
         .background(Tokens.panel)   // fixed-dark brand surface (shared with RememBar)
         .onAppear { viewModel.refreshTrust() }
@@ -101,26 +102,17 @@ struct MenuBarContent: View {
 
     // MARK: - Composition
 
-    /// The outbound links as outlined LinkButtons (RememBar's "Learn more" treatment) — the boxed style
-    /// is for clickable LINKS, distinct from the plain `···` menu items.
-    private var links: some View {
-        HStack(spacing: Tokens.micro + 2) {
-            LinkButton("GitHub", url: appInfo.repoURL, image: Brand.github)
-            LinkButton("License", url: appInfo.licenseURL, systemImage: "doc.text")
-        }
-    }
-
-    /// The `···` overflow — the shared `OverflowMenu` composite driven by a `[MenuAction]`. Uninstall
-    /// defers to the next tick (the popover closes first — the menu-bar-dialog wonky-window fix).
-    private var overflowMenu: some View {
-        OverflowMenu([
+    /// The `···` overflow actions fed to the identity card. Uninstall defers to the next tick (the
+    /// popover closes first — the menu-bar-dialog wonky-window fix).
+    private var overflowActions: [MenuAction] {
+        [
             MenuAction(title: "Check for Updates", systemImage: "arrow.triangle.2.circlepath",
                        enabled: updater.canCheckForUpdates) { updater.checkForUpdates() },
             MenuAction(title: "Quit TermTile", systemImage: "power") { NSApplication.shared.terminate(nil) },
             MenuAction(title: "Uninstall TermTile…", systemImage: "trash", destructive: true) {
                 DispatchQueue.main.async { runUninstallFlow() }
             }
-        ])
+        ]
     }
 
     /// Accessibility permission state → a contextual `NoticeCard` (nothing when trusted). Honest about
