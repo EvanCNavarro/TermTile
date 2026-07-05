@@ -13,7 +13,6 @@ struct MenuBarContent: View {
     let viewModel: MenuBarViewModel
     let updater: Updater
     let appInfo: AppInfo
-    @State private var showActions = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.gap) {
@@ -120,26 +119,17 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The `···` overflow — an `IconButton` (the shared icon family; owns its own hover, lifts while
-    /// `active`) opening RememBar's CUSTOM dark dropdown: a popover of plain `MenuRow`s on `Tokens.field`.
+    /// The `···` overflow — the shared `OverflowMenu` composite driven by a `[MenuAction]`. Uninstall
+    /// defers to the next tick (the popover closes first — the menu-bar-dialog wonky-window fix).
     private var overflowMenu: some View {
-        IconButton(systemImage: "ellipsis", active: showActions) { showActions.toggle() }
-        .popover(isPresented: $showActions, arrowEdge: .bottom) {
-            VStack(spacing: 1) {
-                MenuRow(title: "Check for Updates", systemImage: "arrow.triangle.2.circlepath",
-                        enabled: updater.canCheckForUpdates) { showActions = false; updater.checkForUpdates() }
-                MenuRow(title: "Quit TermTile", systemImage: "power") { NSApplication.shared.terminate(nil) }
-                MenuRow(title: "Uninstall TermTile…", systemImage: "trash", destructive: true) {
-                    showActions = false
-                    // Close the popover FIRST, then run the modal on the next tick — a SwiftUI dialog
-                    // anchored to the menu-bar popover fights its auto-dismiss (the wonky-window bug).
-                    DispatchQueue.main.async { runUninstallFlow() }
-                }
+        OverflowMenu([
+            MenuAction(title: "Check for Updates", systemImage: "arrow.triangle.2.circlepath",
+                       enabled: updater.canCheckForUpdates) { updater.checkForUpdates() },
+            MenuAction(title: "Quit TermTile", systemImage: "power") { NSApplication.shared.terminate(nil) },
+            MenuAction(title: "Uninstall TermTile…", systemImage: "trash", destructive: true) {
+                DispatchQueue.main.async { runUninstallFlow() }
             }
-            .padding(6)
-            .frame(width: 210)
-            .background(Tokens.field)   // RememBar's dropdown bg is darker than the panel (#0e0f11)
-        }
+        ])
     }
 
     /// Accessibility permission state → a contextual `NoticeCard` (nothing when trusted). Honest about
