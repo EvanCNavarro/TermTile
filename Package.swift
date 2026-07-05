@@ -10,6 +10,11 @@ let package = Package(
     products: [
         .executable(name: "TermTile", targets: ["TermTile"])
     ],
+    dependencies: [
+        // Shared 400faces macOS design system (tokens + components). Local path for fast iteration;
+        // switch to the git URL once tagged. github.com/400faces/MacFaceKit
+        .package(path: "../MacFaceKit")
+    ],
     targets: [
         // Functional core (ADR-0001): pure layout math + domain types. CoreGraphics only —
         // NO AppKit / ApplicationServices (enforced by .engine/checks/core-purity.sh).
@@ -22,7 +27,8 @@ let package = Package(
         // dyld crash (RememBar-audit §1).
         .executableTarget(
             name: "TermTile",
-            dependencies: ["TermTileKit", "TermTileCore", "Sparkle"],
+            dependencies: ["TermTileKit", "TermTileCore", "Sparkle",
+                           .product(name: "MacFaceKit", package: "MacFaceKit")],
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]),

@@ -1,4 +1,5 @@
 import AppKit
+import MacFaceKit
 import SwiftUI
 import TermTileCore
 import TermTileKit
@@ -98,6 +99,7 @@ struct MenuBarContent: View {
         }
         .padding(14)
         .frame(width: 280)
+        .background(Tokens.panel)   // fixed-dark brand surface (shared with RememBar)
         .onAppear { viewModel.refreshTrust() }
         // Destructive — an explicit confirm so uninstall is never a one-click accident.
         .confirmationDialog("Uninstall TermTile?", isPresented: $confirmingUninstall, titleVisibility: .visible) {
@@ -140,20 +142,20 @@ struct MenuBarContent: View {
     /// the rule — so the settings below aren't diluted by a jumble of footer buttons.
     private var header: some View {
         HStack(alignment: .top, spacing: 11) {
-            Image(nsImage: NSApplication.shared.applicationIconImage)
-                .resizable().frame(width: 44, height: 44)
+            AppIconView(fallbackMonogram: "T")
+                .frame(width: 52, height: 52)
             VStack(alignment: .leading, spacing: 2) {
-                Text(AppIdentity.appName).font(.headline)
-                Text("Version \(appInfo.version)").font(.caption).foregroundStyle(.secondary)
+                Text(AppIdentity.appName).font(Tokens.title).foregroundStyle(Tokens.text)
+                Text("Version \(appInfo.version)").font(Tokens.caption).foregroundStyle(Tokens.muted)
                 // Made-with pairs with the version (RememBar's identity block); the active outbound
                 // links read best as the last line before the rule.
                 MadeWithSignoff().padding(.top, 2)
                 HStack(spacing: 6) {
                     ExternalLink("GitHub", appInfo.repoURL)
-                    Text("·").foregroundStyle(.tertiary)
+                    Text("·").foregroundStyle(Tokens.quiet)
                     ExternalLink("License", appInfo.licenseURL)
                 }
-                .font(.caption)
+                .font(Tokens.caption)
                 .padding(.top, 2)
             }
             Spacer()
@@ -180,9 +182,12 @@ struct MenuBarContent: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(ellipsisHovered ? Tokens.text : Tokens.muted)
                 .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.primary.opacity(ellipsisHovered ? 0.13 : 0.06)))
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(ellipsisHovered ? Tokens.rowActive : Tokens.row))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(ellipsisHovered ? Tokens.lineStrong : Tokens.line, lineWidth: 1))
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
@@ -201,15 +206,18 @@ struct MenuBarContent: View {
     private func section<Content: View>(_ title: String,
                                         @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary).textCase(.uppercase).kerning(0.5)
+            Text(title).font(Tokens.label)
+                .foregroundStyle(Tokens.muted).textCase(.uppercase).kerning(0.5)
             VStack(alignment: .leading, spacing: 10) {
                 content()
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+            .background(RoundedRectangle(cornerRadius: Tokens.radius, style: .continuous).fill(Tokens.row))
+            .overlay(RoundedRectangle(cornerRadius: Tokens.radius, style: .continuous)
+                .stroke(Tokens.line, lineWidth: 1))
         }
+        .foregroundStyle(Tokens.text)
     }
 
     /// Accessibility permission state → a contextual notice (nothing when trusted). Honest about the
@@ -273,81 +281,5 @@ struct MenuBarContent: View {
         }
         return [TargetApp(bundleID: viewModel.targetBundleID, name: viewModel.targetBundleID)]
             + viewModel.availableApps
-    }
-}
-
-/// The quiet "Made with ♥ & 🤖" sign-off (ported from RememBar's MadeWithSignoff). Both glyphs are
-/// icons, not emoji; the robot is hand-drawn (no robot SF Symbol) and vendor-neutral — "built with AI".
-private struct MadeWithSignoff: View {
-    var body: some View {
-        HStack(spacing: 3) {
-            Text("Made with")
-            Image(systemName: "heart.fill").font(.system(size: 8)).foregroundStyle(.pink)
-            Text("&")
-            RobotGlyph(color: .secondary).frame(width: 12, height: 12)
-        }
-        .font(.caption2)
-        .foregroundStyle(.tertiary)
-    }
-}
-
-/// A minimal robot head (antenna + rounded head + two eyes), drawn to read cleanly at ~12pt.
-/// Ported from RememBar's RobotGlyph.
-private struct RobotGlyph: View {
-    var color: Color
-
-    var body: some View {
-        Canvas { context, size in
-            let side = size.width
-            func pt(_ px: CGFloat, _ py: CGFloat) -> CGPoint { CGPoint(x: px * side, y: py * side) }
-            let line = side * 0.09
-
-            var stem = Path()
-            stem.move(to: pt(0.5, 0.14))
-            stem.addLine(to: pt(0.5, 0.30))
-            context.stroke(stem, with: .color(color), lineWidth: line)
-            let ball = side * 0.085
-            context.fill(
-                Path(ellipseIn: CGRect(x: 0.5 * side - ball, y: 0.06 * side, width: ball * 2, height: ball * 2)),
-                with: .color(color))
-
-            let head = Path(
-                roundedRect: CGRect(x: 0.16 * side, y: 0.30 * side, width: 0.68 * side, height: 0.60 * side),
-                cornerRadius: 0.18 * side)
-            context.stroke(head, with: .color(color), lineWidth: line)
-
-            let eye = side * 0.08
-            for cx in [0.37, 0.63] {
-                context.fill(
-                    Path(ellipseIn: CGRect(x: cx * side - eye, y: 0.58 * side - eye, width: eye * 2, height: eye * 2)),
-                    with: .color(color))
-            }
-        }
-    }
-}
-
-/// An external link: label + a `↗` glyph (it opens outside the app — browser or System Settings) that
-/// underlines and shows the pointing-hand cursor on hover. The universal "this leaves the app" cue.
-private struct ExternalLink: View {
-    let label: String
-    let url: URL
-    @State private var hovering = false
-
-    init(_ label: String, _ url: URL) { self.label = label; self.url = url }
-
-    var body: some View {
-        Link(destination: url) {
-            HStack(spacing: 2) {
-                Text(label).underline(hovering)
-                Image(systemName: "arrow.up.right").imageScale(.small)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(Color.accentColor)
-        .onHover { inside in
-            hovering = inside
-            if inside { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
-        }
     }
 }
