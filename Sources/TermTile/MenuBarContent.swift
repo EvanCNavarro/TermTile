@@ -19,9 +19,10 @@ struct MenuBarContent: View {
         // TermTile supplies the content below the separator — its settings + hero.
         AppIdentityCard(
             name: AppIdentity.appName,
-            version: "\(appInfo.version) (\(appInfo.build))",
-            actions: overflowActions,
-            links: [.github(appInfo.repoURL), .license(appInfo.licenseURL)]
+            version: appInfo.displayVersion,
+            repoURL: AppIdentity.repoURL,
+            licenseURL: AppIdentity.licenseURL,
+            actions: overflowActions
         ) {
             SectionCard("Tiling") {
                 LabeledContent("Target app") {

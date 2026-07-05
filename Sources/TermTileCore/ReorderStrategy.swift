@@ -19,7 +19,9 @@ public enum ReorderStrategy: String, Equatable, Sendable, CaseIterable {
     /// The menu Picker label.
     public var displayName: String {
         switch self {
-        case .adaptive: return "Adaptive (follows drag)"
+        // "Adaptive" only — the "(follows drag)" was redundant with the "When dragged" row label and
+        // truncated in the 280pt popover (#29-A). Meaning is carried by the section context.
+        case .adaptive: return "Adaptive"
         case .swap: return "Swap"
         case .columnShift: return "Shift by column"
         case .rowShift: return "Shift by row"

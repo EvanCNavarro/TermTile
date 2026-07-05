@@ -12,4 +12,17 @@ struct AppIdentityTests {
     func bundleID() {
         #expect(AppIdentity.bundleID == "dev.ecn.apps.termtile")
     }
+
+    // Canonical URLs — moved here (#29-B3) when AppInfo was generalized into MacFaceKit; these are
+    // TermTile's app-specific constants, so they're pinned in TermTile's own tests, not the shared kit.
+    @Test("repo URL")
+    func repoURL() {
+        #expect(AppIdentity.repoURL.absoluteString == "https://github.com/EvanCNavarro/TermTile")
+    }
+
+    @Test("license URL uses HEAD so a branch rename never 404s")
+    func licenseURL() {
+        #expect(AppIdentity.licenseURL.absoluteString
+            == "https://github.com/EvanCNavarro/TermTile/blob/HEAD/LICENSE")
+    }
 }

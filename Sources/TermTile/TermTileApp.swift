@@ -1,4 +1,5 @@
 import AppKit
+import MacFaceKit
 import SwiftUI
 import TermTileCore
 import TermTileKit
