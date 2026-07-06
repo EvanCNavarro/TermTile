@@ -90,11 +90,26 @@ struct TermTileApp: App {
             }
         }
 
+        armAutoUpdateCheckIfRequested()
+
         if isGallery {
             let vm = ProcessInfo.processInfo.environment["TERMTILE_GALLERY_BROKEN"] != nil
                 ? Self.brokenGalleryVM(loginItem: loginItem, visibleFrame: visibleFrame, eps: eps)
                 : viewModel
             Self.showGallery(MenuBarContent(viewModel: vm, updater: updater, appInfo: appInfo))
+        }
+    }
+
+    /// One-shot dev/E2E hook: TERMTILE_AUTOCHECK=1 fires the same `updater.checkForUpdates()` the menu
+    /// invokes, so the branded update dialog can be exercised end-to-end without driving the menu-bar
+    /// UI. Mirrors RememBar's REMEMBAR_AUTOCHECK.
+    @MainActor
+    private func armAutoUpdateCheckIfRequested() {
+        guard ProcessInfo.processInfo.environment["TERMTILE_AUTOCHECK"] != nil else { return }
+        let up = updater
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))   // let the app finish launching first
+            up.checkForUpdates()
         }
     }
 
