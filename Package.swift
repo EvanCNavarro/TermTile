@@ -29,6 +29,9 @@ let package = Package(
             name: "TermTile",
             dependencies: ["TermTileKit", "TermTileCore", "Sparkle",
                            .product(name: "MacFaceKit", package: "MacFaceKit")],
+            // The app icon, bundled so the shared update dialog can render it (loaded via
+            // Bundle.packagedResourceURL). `.copy` (not `.process`) takes just the PNG — no SVG source.
+            resources: [.copy("Resources/AppIcon.png")],
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]),
@@ -36,6 +39,9 @@ let package = Package(
         // xcframework is gitignored + vendored by scripts/fetch-sparkle.sh — run it once after clone.
         .binaryTarget(name: "Sparkle", path: "Vendor/Sparkle.xcframework"),
         .testTarget(name: "TermTileCoreTests", dependencies: ["TermTileCore"]),
-        .testTarget(name: "TermTileKitTests", dependencies: ["TermTileKit"])
+        .testTarget(name: "TermTileKitTests", dependencies: ["TermTileKit"]),
+        // Shell-level tests (the branded update dialog render — mirrors RememBar's executable-linked
+        // test target). @testable-imports the TermTile executable.
+        .testTarget(name: "TermTileTests", dependencies: ["TermTile"])
     ]
 )

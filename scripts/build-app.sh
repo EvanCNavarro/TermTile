@@ -14,7 +14,7 @@ BUNDLE_ID="${BUNDLE_ID:-dev.ecn.apps.termtile}"
 CONFIGURATION="${CONFIGURATION:-release}"
 SHORT_VERSION="${SHORT_VERSION:-0.1.0}"
 DIST_DIR="${DIST_DIR:-dist}"
-ICON_SRC="${ICON_SRC:-Resources/AppIcon.png}"
+ICON_SRC="${ICON_SRC:-Sources/TermTile/Resources/AppIcon.png}"
 # Sparkle appcast URL (Info.plist SUFeedURL) — 404s until the first release publishes appcast.xml.
 SU_FEED_URL="${SU_FEED_URL:-https://github.com/EvanCNavarro/TermTile/releases/latest/download/appcast.xml}"
 # Sparkle EdDSA PUBLIC key — safe to commit. The matching private key lives in the login Keychain
@@ -80,6 +80,9 @@ if [ -f "$ICON_SRC" ]; then
 	done
 	iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns" >&2
 	/usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$PLIST" >&2 || true
+	# Also drop the raw PNG in Contents/Resources so the shared update dialog resolves it via
+	# Bundle.packagedResourceURL("AppIcon","png") in the shipped app (Bundle.main), not just DEBUG.
+	cp "$ICON_SRC" "$APP/Contents/Resources/AppIcon.png" >&2
 fi
 
 # Embed Sparkle.framework — REQUIRED whenever the binary links Sparkle: a linked
