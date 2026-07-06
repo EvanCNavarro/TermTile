@@ -16,7 +16,9 @@ var termTileUpdateIcon: NSImage? {
 /// security-critical step (download, EdDSA verification, atomic install, relaunch).
 @MainActor
 final class TermTileUserDriver: NSObject, SPUUserDriver {
-    private let controller = UpdateWindowController(appName: "TermTile", icon: termTileUpdateIcon)
+    // internal (not private): the adapter-wiring test drives the SPUUserDriver callbacks and asserts
+    // this controller's state morphs correctly — the only TermTile-owned code in the download flow.
+    let controller = UpdateWindowController(appName: "TermTile", icon: termTileUpdateIcon)
 
     /// The running app's version, shown on the "you have X" / up-to-date lines (the shared reader;
     /// `"dev"` when unbundled).
