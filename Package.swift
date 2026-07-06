@@ -11,9 +11,9 @@ let package = Package(
         .executable(name: "TermTile", targets: ["TermTile"])
     ],
     dependencies: [
-        // Shared 400faces macOS design system (tokens + components). Local path for fast iteration;
-        // switch to the git URL once tagged. github.com/400faces/MacFaceKit
-        .package(path: "../MacFaceKit")
+        // Shared 400faces macOS design system (tokens + components) — public + tagged, resolvable from
+        // any clone / CI without a local checkout.
+        .package(url: "https://github.com/400faces/MacFaceKit.git", from: "0.1.0")
     ],
     targets: [
         // Functional core (ADR-0001): pure layout math + domain types. CoreGraphics only —
