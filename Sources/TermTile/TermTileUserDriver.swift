@@ -39,18 +39,15 @@ final class TermTileUserDriver: NSObject, SPUUserDriver {
 
     func showUpdateFound(with appcastItem: SUAppcastItem, state: SPUUserUpdateState,
                          reply: @escaping (SPUUserUpdateChoice) -> Void) {
-        // Embedded release notes ride on the appcast item; a downloaded releaseNotesLink arrives later
-        // via showUpdateReleaseNotes.
-        var notes: [String] = []
-        if appcastItem.releaseNotesURL == nil, let description = appcastItem.itemDescription {
-            notes = ReleaseNotesParser.items(
-                from: description,
-                format: ReleaseNotesFormat(sparkleFormat: appcastItem.itemDescriptionFormat)) ?? []
-        }
         controller.showAvailable(
             version: appcastItem.displayVersionString,
             currentVersion: currentAppVersion,
-            notes: notes,
+            // Embedded notes only (a downloaded releaseNotesLink arrives later via showUpdateReleaseNotes);
+            // the gate + parse live once in the kit.
+            notes: ReleaseNotesParser.embeddedItems(
+                releaseNotesURL: appcastItem.releaseNotesURL,
+                description: appcastItem.itemDescription,
+                format: ReleaseNotesFormat(sparkleFormat: appcastItem.itemDescriptionFormat)),
             onInstall: { reply(.install) },
             onRemindLater: { reply(.dismiss) })
     }
