@@ -100,9 +100,21 @@ ditto "$SPARKLE_FRAMEWORK" "$SPARKLE_DST"
 # Inside-out sign (no --deep). Sign the deepest nested Sparkle code FIRST (its XPC services /
 # helpers individually — --deep can corrupt those signatures, per Sparkle's docs), then the
 # framework, then the app binary, then the bundle; verify strict.
-# TERMTILE_SIGN_IDENTITY selects a stable keychain identity (#13c) so TCC grants survive rebuilds;
-# default "-" stays ad-hoc (per-build cdhash, grant resets every rebuild).
-SIGN_IDENTITY="${TERMTILE_SIGN_IDENTITY:--}"
+# Signing identity. A STABLE keychain identity keeps the app's code identity constant across rebuilds,
+# so macOS TCC grants (Accessibility, Input Monitoring) survive — ad-hoc ("-") gets a fresh cdhash every
+# build and silently resets every grant (#13c). Resolution order: explicit TERMTILE_SIGN_IDENTITY wins;
+# else auto-use the local "TermTile Dev Signing" identity IF it's in the keychain (so a dev machine that
+# ran scripts/setup-dev-signing.sh gets stable grants with zero ceremony); else fall back to ad-hoc (CI /
+# a fresh clone without the cert). This default is why grants no longer break on every local rebuild.
+DEFAULT_DEV_IDENTITY="TermTile Dev Signing"
+if [ -n "${TERMTILE_SIGN_IDENTITY:-}" ]; then
+	SIGN_IDENTITY="$TERMTILE_SIGN_IDENTITY"
+elif security find-identity -v -p codesigning 2>/dev/null | grep -q "$DEFAULT_DEV_IDENTITY"; then
+	SIGN_IDENTITY="$DEFAULT_DEV_IDENTITY"
+else
+	SIGN_IDENTITY="-"
+fi
+echo "build-app.sh: signing with identity: $SIGN_IDENTITY" >&2
 xattr -cr "$APP"
 codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/XPCServices/Downloader.xpc" >&2
 codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/XPCServices/Installer.xpc" >&2
