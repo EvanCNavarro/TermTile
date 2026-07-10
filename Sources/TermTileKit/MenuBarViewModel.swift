@@ -120,6 +120,14 @@ public final class MenuBarViewModel {
         if reorderOnDrag, isAccessibilityTrusted, dragReorder.inputMonitoringGranted {
             dragReorder.start()
         } else {
+            // Opted in + trusted but Input Monitoring is the missing piece → PROMPT for it (#26 S3b).
+            // This shows the system prompt AND registers TermTile in the Privacy > Input Monitoring pane.
+            // Placed here (not just in setReorderOnDrag) so it also fires on LAUNCH when the setting was
+            // already on — otherwise the app never appears in the pane to be approved. Idempotent: macOS
+            // prompts once, then no-ops; the non-prompting preflight alone never adds the app.
+            if reorderOnDrag, isAccessibilityTrusted, !dragReorder.inputMonitoringGranted {
+                dragReorder.requestInputMonitoring()
+            }
             dragReorder.stop()
         }
     }
@@ -237,15 +245,8 @@ public final class MenuBarViewModel {
     public func setReorderOnDrag(_ on: Bool) {
         reorderOnDrag = on
         persist()
-        // Opting in without Input Monitoring: PROMPT for it now (#26 S3b). This shows the system prompt
-        // AND registers TermTile in the Privacy > Input Monitoring pane — the non-prompting preflight
-        // never adds the app, so otherwise the fix-it link opens a pane that doesn't even list us to
-        // approve. Safe to call repeatedly (macOS prompts once, then no-ops).
-        if on, let dragReorder, !dragReorder.inputMonitoringGranted {
-            dragReorder.requestInputMonitoring()
-        }
-        syncReorderMonitor()   // #26 — start/stop the monitor to match the new preference
-    }
+        syncReorderMonitor()   // #26 — start/stop the monitor + prompt for Input Monitoring if it's the
+    }                          // missing piece (the request lives in syncReorderMonitor so LAUNCH covers it too)
 
     /// Change the drag-reorder strategy (#27). Persists; the next drag uses it (no monitor restart —
     /// the strategy is read at reorder time).

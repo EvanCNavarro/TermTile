@@ -28,11 +28,11 @@ struct PackagingScriptsTests {
     private static func lines(_ text: String) -> [String] { text.split(separator: "\n").map(String.init) }
 
     // 1. Inside-out codesign via the #13c identity parameter: sign lines use
-    //    `--sign "$SIGN_IDENTITY"` whose default MUST stay ad-hoc (`-`, for CI), and must NOT carry
-    //    `--deep` (per Sparkle/audit — `--deep` corrupts nested signatures); the VERIFY line must
-    //    carry BOTH `--deep` and `--strict`. Line-scoped + positive so it can't false-fail on the
-    //    verify line's legitimate `--deep`, nor pass vacuously on an empty file (skeptic F1).
-    @Test("build-app.sh: sign lines use $SIGN_IDENTITY (ad-hoc default), no --deep; verify has --deep AND --strict")
+    //    `--sign "$SIGN_IDENTITY"`, which resolves explicit env → local dev cert → ad-hoc FALLBACK
+    //    (so CI needs no keychain), and must NOT carry `--deep` (per Sparkle/audit — `--deep` corrupts
+    //    nested signatures); the VERIFY line must carry BOTH `--deep` and `--strict`. Line-scoped +
+    //    positive so it can't false-fail on the verify line's legitimate `--deep`, nor pass vacuously.
+    @Test("build-app.sh: sign lines use $SIGN_IDENTITY (ad-hoc fallback), no --deep; verify has --deep AND --strict")
     func codesignFlagsAreCorrect() {
         let ls = Self.lines(Self.script("build-app.sh"))
         // Inspect EVERY sign line (inside-out signs the inner Mach-O AND the bundle) — checking only
@@ -42,9 +42,12 @@ struct PackagingScriptsTests {
         }
         #expect(!signLines.isEmpty, "no codesign --sign \"$SIGN_IDENTITY\" line found")
         #expect(signLines.allSatisfy { !$0.contains("--deep") }, "no sign line may contain --deep")
-        // The identity parameter's default must remain ad-hoc so CI needs no keychain.
-        #expect(Self.script("build-app.sh").contains("TERMTILE_SIGN_IDENTITY:--"),
-                "SIGN_IDENTITY default must stay ad-hoc (:--)")
+        // Resolution: explicit TERMTILE_SIGN_IDENTITY wins; else auto-use the local dev cert IF present;
+        // else fall back to ad-hoc so CI (no env, no keychain cert) needs no signing setup (#13c).
+        let script = Self.script("build-app.sh")
+        #expect(script.contains("TERMTILE_SIGN_IDENTITY"), "explicit sign-identity override must exist")
+        #expect(script.contains("SIGN_IDENTITY=\"-\""),
+                "SIGN_IDENTITY must fall back to ad-hoc (\"-\") so CI needs no keychain")
 
         let verifyLine = ls.first { $0.contains("codesign") && $0.contains("--verify") }
         #expect(verifyLine != nil, "no codesign --verify line found")
