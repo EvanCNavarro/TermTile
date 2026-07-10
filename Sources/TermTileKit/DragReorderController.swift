@@ -20,6 +20,7 @@ public final class DragReorderController: DragReorderControlling {
 
     /// Non-prompting Input-Monitoring preflight (the tap can't run without it).
     public var inputMonitoringGranted: Bool { DragMonitor.inputMonitoringGranted }
+    public func requestInputMonitoring() { DragMonitor.requestInputMonitoring() }
     public var isRunning: Bool { monitor != nil }
 
     /// Install the tap (idempotent). Returns false if it couldn't start (Input Monitoring absent) —

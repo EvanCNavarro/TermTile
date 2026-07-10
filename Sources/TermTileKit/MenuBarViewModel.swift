@@ -237,6 +237,13 @@ public final class MenuBarViewModel {
     public func setReorderOnDrag(_ on: Bool) {
         reorderOnDrag = on
         persist()
+        // Opting in without Input Monitoring: PROMPT for it now (#26 S3b). This shows the system prompt
+        // AND registers TermTile in the Privacy > Input Monitoring pane — the non-prompting preflight
+        // never adds the app, so otherwise the fix-it link opens a pane that doesn't even list us to
+        // approve. Safe to call repeatedly (macOS prompts once, then no-ops).
+        if on, let dragReorder, !dragReorder.inputMonitoringGranted {
+            dragReorder.requestInputMonitoring()
+        }
         syncReorderMonitor()   // #26 — start/stop the monitor to match the new preference
     }
 

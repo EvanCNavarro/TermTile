@@ -18,4 +18,8 @@ public protocol DragReorderControlling {
     @discardableResult func start() -> Bool
     /// Stop watching. Idempotent, safe if never started.
     func stop()
+    /// PROMPT for Input Monitoring — shows the system prompt AND registers the app in the Privacy >
+    /// Input Monitoring pane. The non-prompting `inputMonitoringGranted` preflight never adds the app,
+    /// so without this the pane the fix-it opens wouldn't even list us to approve (#26 S3b).
+    func requestInputMonitoring()
 }

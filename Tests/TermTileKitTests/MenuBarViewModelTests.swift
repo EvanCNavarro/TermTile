@@ -259,6 +259,22 @@ struct MenuBarViewModelTests {
         #expect(store.load().reorderOnDrag == false)
     }
 
+    // #26 S3b — opting in without Input Monitoring must PROMPT (register in the pane), not silently
+    // sit on a non-prompting preflight that never adds the app to the approval list.
+    @Test("enabling reorder-on-drag requests Input Monitoring when it isn't granted")
+    func enablingReorderRequestsInputMonitoringWhenUngranted() {
+        let (vm, spy) = makeVMWithReorder(store: InMemorySettingsStore(), trusted: true, granted: false)
+        vm.setReorderOnDrag(true)
+        #expect(spy.requestCount == 1)
+    }
+
+    @Test("enabling reorder-on-drag does NOT request Input Monitoring when already granted")
+    func enablingReorderDoesNotRequestWhenGranted() {
+        let (vm, spy) = makeVMWithReorder(store: InMemorySettingsStore(), trusted: true, granted: true)
+        vm.setReorderOnDrag(true)
+        #expect(spy.requestCount == 0)
+    }
+
     // #27 — reorderStrategy defaults adaptive; setReorderStrategy persists the pick.
     @Test("reorderStrategy defaults adaptive; setReorderStrategy persists")
     func setReorderStrategyPersists() {
@@ -277,9 +293,11 @@ struct MenuBarViewModelTests {
         private(set) var isRunning = false
         private(set) var startCount = 0
         private(set) var stopCount = 0
+        private(set) var requestCount = 0
         init(granted: Bool) { inputMonitoringGranted = granted }
         func start() -> Bool { startCount += 1; isRunning = true; return true }
         func stop() { stopCount += 1; isRunning = false }
+        func requestInputMonitoring() { requestCount += 1 }
     }
 
     func makeVMWithReorder(store: InMemorySettingsStore, trusted: Bool, granted: Bool)

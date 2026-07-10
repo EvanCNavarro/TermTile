@@ -49,6 +49,12 @@ public final class DragMonitor: @unchecked Sendable {
     /// Non-prompting Input Monitoring preflight (spike-06). `false` → `start()` will return `false`.
     public static var inputMonitoringGranted: Bool { CGPreflightListenEventAccess() }
 
+    /// PROMPTING Input Monitoring request — shows the system prompt AND registers the app in the
+    /// Privacy > Input Monitoring pane (which the non-prompting preflight never does, so the app would
+    /// otherwise never appear there to be approved). Safe to call repeatedly: macOS prompts once, then
+    /// just returns the decided status.
+    public static func requestInputMonitoring() { _ = CGRequestListenEventAccess() }
+
     /// Install the left-down/left-up tap on the CURRENT run loop. Returns `false` if the tap could
     /// not be created (Input Monitoring not granted). The caller pumps the run loop so the callback
     /// fires (production: NSApp; AXProbe `dragcheck`: `CFRunLoopRunInMode`).
