@@ -275,15 +275,16 @@ struct MenuBarViewModelTests {
         #expect(spy.requestCount == 0)
     }
 
-    // The Bobby case: the setting was already on from a prior run, so no toggle happens — LAUNCH must
-    // still request (register in the pane), or the app never appears there to approve.
-    @Test("launching with reorder-on-drag already on (ungranted) requests Input Monitoring")
-    func launchWithReorderAlreadyOnRequestsInputMonitoring() {
+    // The Bobby case: setting already on from a prior run (no toggle), AND Accessibility NOT yet
+    // granted — LAUNCH must still request Input Monitoring (register it in the pane) independent of AX,
+    // or the app never appears there to approve. Gating the IM request on AX was the actual bug.
+    @Test("launch requests Input Monitoring for an already-on setting, even without Accessibility")
+    func launchRequestsInputMonitoringIndependentOfAccessibility() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
+        store.save(AppSettings(targetBundleID: "com.x", wasTrusted: false, gap: 8,
                                hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap))
-        let (_, spy) = makeVMWithReorder(store: store, trusted: true, granted: false)
-        #expect(spy.requestCount >= 1)   // init's syncReorderMonitor prompted (setting was already on)
+        let (_, spy) = makeVMWithReorder(store: store, trusted: false, granted: false)
+        #expect(spy.requestCount >= 1)   // registered in the IM pane despite AX being untrusted
     }
 
     // #27 — reorderStrategy defaults adaptive; setReorderStrategy persists the pick.

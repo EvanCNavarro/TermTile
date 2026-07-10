@@ -120,12 +120,12 @@ public final class MenuBarViewModel {
         if reorderOnDrag, isAccessibilityTrusted, dragReorder.inputMonitoringGranted {
             dragReorder.start()
         } else {
-            // Opted in + trusted but Input Monitoring is the missing piece → PROMPT for it (#26 S3b).
-            // This shows the system prompt AND registers TermTile in the Privacy > Input Monitoring pane.
-            // Placed here (not just in setReorderOnDrag) so it also fires on LAUNCH when the setting was
-            // already on — otherwise the app never appears in the pane to be approved. Idempotent: macOS
-            // prompts once, then no-ops; the non-prompting preflight alone never adds the app.
-            if reorderOnDrag, isAccessibilityTrusted, !dragReorder.inputMonitoringGranted {
+            // Opted in but Input Monitoring is missing → PROMPT for it (#26 S3b). This shows the system
+            // prompt AND registers TermTile in the Privacy > Input Monitoring pane. Fires here (not just
+            // in setReorderOnDrag) so LAUNCH covers an already-on setting, and DELIBERATELY independent of
+            // Accessibility — the two grants are separate, and gating the IM request on AX meant the app
+            // never appeared in the IM pane until AX was granted first. Idempotent: macOS prompts once.
+            if reorderOnDrag, !dragReorder.inputMonitoringGranted {
                 dragReorder.requestInputMonitoring()
             }
             dragReorder.stop()
