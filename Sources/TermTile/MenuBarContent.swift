@@ -61,7 +61,9 @@ struct MenuBarContent: View {
                 }
                 if viewModel.reorderNeedsInputMonitoring {
                     NoticeCard(title: "Input Monitoring required",
-                               message: "Reorder-on-drag needs Input Monitoring to detect when you drag a window.",
+                               message: "Reorder-on-drag needs Input Monitoring to detect when you drag a window. "
+                               + "In the pane below, click the ＋ button, choose TermTile in Applications, then "
+                               + "switch it on.",
                                linkLabel: "Open Input Monitoring Settings…",
                                url: viewModel.inputMonitoringSettingsURL)
                 }
