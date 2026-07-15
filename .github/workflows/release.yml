@@ -30,6 +30,10 @@ jobs:
       # Gate the release on the SAME test suite as check.yml (audit: no release without green tests).
       - name: Test
         run: swift test
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint --strict
 
       # CALL the packaging script (do not duplicate the build - audit "CI should call the scripts").
       # build-app.sh prints the built .app path as its LAST stdout line.
@@ -42,6 +46,9 @@ jobs:
           # (what Sparkle compares) stays the monotonic git rev-list count.
           APP_PATH="$(SHORT_VERSION="${GITHUB_REF_NAME#v}" scripts/build-app.sh | tail -1)"
           echo "app_path=${APP_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Smoke packaged app
+        run: scripts/test-packaged-app.sh "${{ steps.build.outputs.app_path }}"
 
       - name: Package + checksum
         id: package

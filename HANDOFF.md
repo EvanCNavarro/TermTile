@@ -1,6 +1,6 @@
 # TermTile — Handoff
 
-_Last updated: 2026-07-10. This is the single spot to pick TermTile back up. Read it top-to-bottom,
+_Last updated: 2026-07-15. This is the single spot to pick TermTile back up. Read it top-to-bottom,
 then jump to **▶ Start here**. (Companion handoffs: `RememBar/HANDOFF.md`, `MacFaceKit/README.md` —
 the three repos share the MacFaceKit design system.)_
 
@@ -9,16 +9,16 @@ the three repos share the MacFaceKit design system.)_
 | Check | State |
 |---|---|
 | Build | ✅ `swift build` — clean |
-| Tests | ✅ `swift test` — **153 passing** |
+| Tests | ✅ `swift test` — **166 passing** |
 | Lint | ✅ `swiftlint --strict` — **0 violations** |
-| Git | ✅ `master` == `origin/master`, working tree **clean** |
+| Git | Check `git status --short` before release; release-readiness edits may be uncommitted locally |
 | Latest release | **v0.1.0** (2026-07-03) |
 | Unreleased on `master` | user-facing work ready (branded update dialog, redesigned About, hero button) — a **v0.2.0** is warranted, see ▶ Start here |
 | Design-system dep | MacFaceKit `.upToNextMinor(from: "0.3.2")` (public git URL, auto-resolved) |
 
 ## ▶ Start here (next session, in order)
 
-1. **Sanity-check health** — `scripts/fetch-sparkle.sh && swift build && swift test` (expect 153 pass).
+1. **Sanity-check health** — `scripts/fetch-sparkle.sh && swift build && swift test && swiftlint --strict` (expect 166 pass).
    If the build reds with "invalid redeclaration", check for stray `* 2.swift` Finder/Xcode duplicate
    files (`find Sources Tests -name '* 2.swift'`) and delete them — the tracked originals are truth.
    (This bit RememBar this session; TermTile is currently clean.)
@@ -35,8 +35,12 @@ the three repos share the MacFaceKit design system.)_
 ## Where the project is
 
 - **Released & live:** v0.1.0 — menu-bar window-tiler: pick a terminal (iTerm2/WezTerm), press
-  **Rearrange now** (or ⌘⌥T), windows snap into even columns of two. Accessibility-API driven; adjustable
-  gap; global hotkey; drag-reorder; clean one-click uninstall; About panel; Sparkle auto-updates.
+  **Rearrange now**, and windows snap into even columns of two. The public release has the simpler
+  menu from tag `v0.1.0` (target picker, launch-at-login, Accessibility fix-it, Check for Updates,
+  Quit).
+- **Ready for v0.2.0:** the current `master` adds the richer identity card, GitHub/License links,
+  adjustable gap, configurable shortcut, drag-reorder controls, Uninstall, clearer Accessibility/Input
+  Monitoring guidance, branded update dialog, and stricter release-readiness tests.
 - **The big recent arc (this session):** adopted the shared **MacFaceKit** design system
   (`github.com/400faces/MacFaceKit`, public, pinned `.upToNextMinor(from: "0.3.2")`). TermTile is now a
   UI-twin of RememBar — same identity card, icon buttons, and **branded update dialog** (via

@@ -70,6 +70,53 @@ struct WorkflowsTests {
                 "release.yml must trigger on the v* tag pattern")
     }
 
+    @Test("release.yml: derives marketing version from the tag, not build-app.sh's local default")
+    func releaseDerivesMarketingVersionFromTag() {
+        let s = Self.workflow("release.yml")
+        #expect(s.contains("SHORT_VERSION=\"${GITHUB_REF_NAME#v}\" scripts/build-app.sh"),
+                "release.yml must pass the tag-derived marketing version into build-app.sh")
+        #expect(s.contains("GITHUB_REF_NAME#v"),
+                "release.yml must strip the leading v from the SemVer tag")
+    }
+
+    @Test("release.yml: runs strict SwiftLint before publishing")
+    func releaseRunsStrictSwiftLint() {
+        let s = Self.workflow("release.yml")
+        #expect(s.contains("brew install swiftlint"), "release.yml must install SwiftLint on the macOS runner")
+        #expect(s.contains("swiftlint --strict"), "release.yml must run the same strict lint gate before publishing")
+    }
+
+    @Test("release.yml: runs packaged-app smoke before publishing")
+    func releaseRunsPackagedAppSmokeBeforePublishing() {
+        let s = Self.workflow("release.yml")
+        #expect(s.contains("scripts/test-packaged-app.sh \"${{ steps.build.outputs.app_path }}\""),
+                "release.yml must run the native packaged-app smoke against the built artifact")
+
+        let build = s.range(of: "- name: Build .app")?.lowerBound
+        let smoke = s.range(of: "scripts/test-packaged-app.sh")?.lowerBound
+        let package = s.range(of: "- name: Package + checksum")?.lowerBound
+        #expect(build != nil, "release.yml must have a Build .app step")
+        #expect(smoke != nil, "release.yml must have a packaged-app smoke step")
+        #expect(package != nil, "release.yml must have a Package + checksum step")
+        if let build, let smoke, let package {
+            #expect(build < smoke && smoke < package,
+                    "packaged-app smoke must run after build and before zip/appcast publishing")
+        }
+    }
+
+    @Test("release.yml: appcast uses embedded release notes and is published")
+    func releasePublishesSignedAppcastWithNotes() {
+        let s = Self.workflow("release.yml")
+        #expect(s.contains("SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}"),
+                "release.yml must sign the appcast with the Sparkle private key from GitHub secrets")
+        #expect(s.contains("--embed-release-notes"),
+                "release.yml must embed release-notes/<version>.md into Sparkle's appcast item")
+        #expect(s.contains("dist/appcast.xml"),
+                "release.yml must publish the generated appcast.xml as a release asset")
+        #expect(s.contains("--notes-file"),
+                "release.yml must use the same release-notes/<version>.md as the GitHub release body")
+    }
+
     // 4. Secrets are referenced ONLY via the GitHub secrets context - never inlined. Positive presence
     //    of the VirusTotal secret reference; negative absence of an inlined long token literal.
     @Test("release.yml: VirusTotal secret via secrets context, no inlined token")
@@ -77,11 +124,13 @@ struct WorkflowsTests {
         let s = Self.workflow("release.yml")
         #expect(s.contains("secrets.VIRUSTOTAL_API_KEY"),
                 "release.yml must read the VirusTotal key from the secrets context")
+        #expect(s.contains("secrets.SPARKLE_ED_PRIVATE_KEY"),
+                "release.yml must read the Sparkle private key from the secrets context")
         // A secret/token assignment must resolve through a `${{ }}` context (secrets.* or github.*),
         // never a bare literal (e.g. `VIRUSTOTAL_API_KEY: abc123...`). Context refs are safe.
         let codeLines = Self.lines(s).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }
         let inlinedSecret = codeLines.contains { l in
-            (l.contains("API_KEY:") || l.contains("TOKEN:")) && !l.contains("${{")
+            (l.contains("API_KEY:") || l.contains("PRIVATE_KEY:") || l.contains("TOKEN:")) && !l.contains("${{")
         }
         #expect(!inlinedSecret, "no workflow line may assign a secret to an inlined literal")
     }

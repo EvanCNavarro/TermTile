@@ -84,12 +84,24 @@ struct PackagingScriptsTests {
         #expect(!s.contains(".build/release"), "must not hardcode .build/release")
     }
 
-    // 5. The launch smoke really launches + verifies (positive kill -0 + codesign --verify) and never
+    // 5. A signed macOS .app cannot carry arbitrary unsealed content at the bundle root. If a package
+    //    dependency needs Bundle.module resources, the app must avoid that runtime path or move the
+    //    invariant into the dependency; build-app.sh must not copy Package_Target.bundle to TermTile.app/.
+    @Test("build-app.sh: does not copy SwiftPM resource bundles to the app root")
+    func buildAvoidsAppRootSwiftPMResourceBundles() {
+        let s = Self.script("build-app.sh")
+        #expect(!s.contains("\"$APP/$RESOURCE_NAME\""),
+                "app-root SwiftPM bundles produce unsealed contents during codesign")
+    }
+
+    // 6. The launch smoke really launches + verifies (positive kill -0 + codesign --verify) and never
     //    globally kills a process (RememBar safety invariant — no pkill/killall).
     @Test("test-packaged-app.sh: launches (kill -0) + verifies signature, never pkill/killall")
     func smokeLaunchesAndIsSafe() {
         let s = Self.script("test-packaged-app.sh")
         #expect(s.contains("kill -0"), "smoke must poll liveness with kill -0")
+        #expect(s.contains("wait \"$PID\""),
+                "smoke cleanup must wait after killing the launched app to avoid noisy shell output")
         #expect(s.contains("codesign") && s.contains("--verify"), "smoke must codesign --verify the bundle")
         // Line-scoped to CODE (skip comment lines): a "never pkill" comment is fine; INVOKING it isn't.
         let codeLines = Self.lines(s).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }
@@ -97,7 +109,47 @@ struct PackagingScriptsTests {
         #expect(!codeLines.contains { $0.contains("killall") }, "smoke must never invoke killall")
     }
 
-    // 6. Both scripts exist and are executable (a text-present stub that isn't chmod +x never runs).
+    // 7. The smoke must not let local `.build` resource bundles mask a missing packaged bundle.
+    @Test("test-packaged-app.sh: hides local SwiftPM resource bundles before launch")
+    func smokeHidesLocalSwiftPMResourceBundles() {
+        let s = Self.script("test-packaged-app.sh")
+        #expect(s.contains("BUILD_BUNDLE_BACKUP"),
+                "smoke must move local .build resource bundles aside before launching the package")
+        #expect(s.contains("-name '*_*.bundle'"),
+                "smoke must locate SwiftPM resource bundles generically")
+        #expect(s.contains("TERMTILE_GALLERY=1 \"$BIN\""),
+                "smoke must render the real panel while local resource bundles are hidden")
+        #expect(s.contains("GALLERY_LOG"),
+                "smoke must capture gallery output instead of discarding it")
+        #expect(s.contains("grep -q \"GALLERY shown\" \"$GALLERY_LOG\""),
+                "smoke must prove the real panel rendered, not only that the process stayed alive")
+    }
+
+    // 8. The smoke mutates generated `.build` bundles to make the launch proof honest. Cleanup must
+    //    restore every bundle best-effort and preserve the original script status, otherwise a failed
+    //    restore can leave the developer's build tree in a misleading state.
+    @Test("test-packaged-app.sh: restores hidden SwiftPM bundles best-effort")
+    func smokeRestoreIsBestEffortAndPreservesStatus() {
+        let s = Self.script("test-packaged-app.sh")
+        #expect(s.contains("local status=$?"), "cleanup must capture the original exit status")
+        #expect(s.contains("trap - EXIT"), "cleanup must not recursively trigger itself")
+        #expect(s.contains("restore_status=0"), "restore must accumulate failures instead of exiting early")
+        #expect(s.contains("restore_status=1"), "restore must mark failed mkdir/mv operations")
+        #expect(s.contains("exit \"$status\""), "cleanup must exit with the preserved or upgraded status")
+    }
+
+    // 9. The Bundle.module guard must understand real Swift conditional blocks. A line-only
+    //    `grep -v '#if DEBUG'` false-fails on the intended helper, where `Bundle.module` is on the
+    //    line after the DEBUG guard.
+    @Test("test-packaged-app.sh: Bundle.module regression guard is DEBUG-block aware")
+    func bundleModuleGuardIsDebugBlockAware() {
+        let s = Self.script("test-packaged-app.sh")
+        #expect(s.contains("debugDepth"), "Bundle.module guard must track DEBUG preprocessor depth")
+        #expect(!s.contains("grep -v '#if DEBUG'"),
+                "Bundle.module guard must not rely on same-line grep filtering")
+    }
+
+    // 10. Both scripts exist and are executable (a text-present stub that isn't chmod +x never runs).
     @Test("both packaging scripts exist and are executable")
     func scriptsAreExecutable() {
         let fm = FileManager.default

@@ -20,10 +20,9 @@ struct MenuBarContent: View {
         AppIdentityCard(
             name: AppIdentity.appName,
             version: appInfo.displayVersion,
-            repoURL: AppIdentity.repoURL,
-            licenseURL: AppIdentity.licenseURL,
             subtitle: "A minimalist menu-bar tiler that keeps your terminal windows in a tidy, even grid.",
-            actions: overflowActions
+            actions: overflowActions,
+            links: identityLinks
         ) {
             SectionCard("Tiling") {
                 LabeledContent("Target app") {
@@ -105,6 +104,15 @@ struct MenuBarContent: View {
     }
 
     // MARK: - Composition
+
+    /// Package-safe identity links. MacFaceKit's `.github` convenience uses a SwiftPM resource bundle
+    /// for the brand mark; signed `.app` bundles cannot carry that generated bundle at the app root.
+    private var identityLinks: [IdentityLink] {
+        [
+            IdentityLink.link("GitHub", AppIdentity.repoURL, systemImage: "globe"),
+            IdentityLink.license(AppIdentity.licenseURL)
+        ]
+    }
 
     /// The `···` overflow actions fed to the identity card. Uninstall defers to the next tick (the
     /// popover closes first — the menu-bar-dialog wonky-window fix).

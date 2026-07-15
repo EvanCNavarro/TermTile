@@ -18,6 +18,46 @@ cd "$ROOT"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
+PID=""
+BUILD_BUNDLE_BACKUP="$(mktemp -d)"
+BUILD_BUNDLE_LIST="$BUILD_BUNDLE_BACKUP/resource-bundles.list"
+GALLERY_LOG="$BUILD_BUNDLE_BACKUP/gallery.log"
+
+restore_build_bundles() {
+	local restore_status=0
+	while IFS= read -r -d '' bundle; do
+		local rel="${bundle#"$BUILD_BUNDLE_BACKUP"/}"
+		if ! mkdir -p "$(dirname "$rel")"; then
+			echo "WARN: failed to create restore directory for $rel" >&2
+			restore_status=1
+			continue
+		fi
+		if ! mv "$bundle" "$rel"; then
+			echo "WARN: failed to restore SwiftPM resource bundle: $rel" >&2
+			restore_status=1
+		fi
+	done < <(find "$BUILD_BUNDLE_BACKUP" -type d -name '*.bundle' -prune -print0 2>/dev/null)
+	if ! rm -rf "$BUILD_BUNDLE_BACKUP"; then
+		echo "WARN: failed to remove backup directory: $BUILD_BUNDLE_BACKUP" >&2
+		restore_status=1
+	fi
+	return "$restore_status"
+}
+
+cleanup() {
+	local status=$?
+	trap - EXIT
+	if [ -n "$PID" ]; then
+		kill "$PID" 2>/dev/null || true
+		wait "$PID" 2>/dev/null || true
+	fi
+	if ! restore_build_bundles && [ "$status" -eq 0 ]; then
+		status=1
+	fi
+	exit "$status"
+}
+trap cleanup EXIT
+
 # --- Structural invariants -------------------------------------------------------------------
 [ -d "$APP" ] || fail "bundle not found: $APP"
 BIN="$APP/Contents/MacOS/$APP_NAME"
@@ -33,20 +73,73 @@ plutil -extract CFBundleVersion raw "$PLIST" >/dev/null || fail "CFBundleVersion
 # Signature must verify strict (ad-hoc is fine; #13c upgrades to a stable identity).
 codesign --verify --deep --strict "$APP" || fail "codesign --verify --deep --strict failed"
 
-# Regression guard (audit 0.3.0 bug class): no source uses Bundle.module outside a DEBUG guard.
-# TermTile has zero runtime resources, so this must be empty; it guards a future resource regression.
-if grep -rn 'Bundle.module' Sources 2>/dev/null | grep -v '#if DEBUG' | grep -q .; then
+# Regression guard (audit 0.3.0 bug class): runtime code may only touch Bundle.module inside the
+# DEBUG-only fallback helper. Comments are ignored; release code must resolve from Bundle.main.
+if ! find Sources -name '*.swift' -type f -print0 | xargs -0 awk '
+	FNR == 1 {
+		depth = 0
+		debugDepth = 0
+		delete debugGuard
+	}
+	/^[[:space:]]*\/\// { next }
+	/^[[:space:]]*#if[[:space:]]+DEBUG([[:space:]]|$)/ {
+		depth++
+		debugGuard[depth] = 1
+		debugDepth++
+		next
+	}
+	/^[[:space:]]*#if[[:space:]]/ {
+		depth++
+		debugGuard[depth] = 0
+		next
+	}
+	/^[[:space:]]*#elseif[[:space:]]+DEBUG([[:space:]]|$)/ {
+		if (debugGuard[depth] != 1) {
+			debugGuard[depth] = 1
+			debugDepth++
+		}
+		next
+	}
+	/^[[:space:]]*#elseif[[:space:]]/ || /^[[:space:]]*#else([[:space:]]|$)/ {
+		if (debugGuard[depth] == 1) {
+			debugGuard[depth] = 0
+			debugDepth--
+		}
+		next
+	}
+	/^[[:space:]]*#endif([[:space:]]|$)/ {
+		if (debugGuard[depth] == 1) {
+			debugDepth--
+		}
+		delete debugGuard[depth]
+		if (depth > 0) {
+			depth--
+		}
+		next
+	}
+	/Bundle[.]module/ && debugDepth == 0 {
+		print FILENAME ":" FNR ": Bundle.module outside #if DEBUG"
+		found = 1
+	}
+	END { exit found ? 1 : 0 }
+'; then
 	fail "Bundle.module used outside a DEBUG guard - packaged resource path would be baked in"
 fi
 
 # --- Launch proof ----------------------------------------------------------------------------
+find .build -type d -name '*_*.bundle' -prune -print0 > "$BUILD_BUNDLE_LIST" 2>/dev/null || true
+while IFS= read -r -d '' bundle; do
+	[ -d "$bundle" ] || continue
+	rel="${bundle#./}"
+	mkdir -p "$BUILD_BUNDLE_BACKUP/$(dirname "$rel")"
+	mv "$bundle" "$BUILD_BUNDLE_BACKUP/$rel"
+done < "$BUILD_BUNDLE_LIST"
+
 CRASH_DIR="$HOME/Library/Logs/DiagnosticReports"
 before="$(ls "$CRASH_DIR" 2>/dev/null | grep -c "^$APP_NAME" || true)"
 
-"$BIN" >/dev/null 2>&1 &
+TERMTILE_GALLERY=1 "$BIN" >"$GALLERY_LOG" 2>&1 &
 PID=$!
-cleanup() { kill "$PID" 2>/dev/null || true; }
-trap cleanup EXIT
 
 # Poll liveness ~4s (accessory menu-bar app runs indefinitely; a crash makes kill -0 fail).
 alive=0
@@ -55,6 +148,10 @@ for _ in 1 2 3 4 5 6 7 8; do
 	sleep 0.5
 done
 [ "$alive" -ge 8 ] || fail "process died within ~4s (alive=$alive/8)"
+if ! grep -q "GALLERY shown" "$GALLERY_LOG"; then
+	sed 's/^/gallery: /' "$GALLERY_LOG" >&2 || true
+	fail "gallery did not render (missing GALLERY shown marker)"
+fi
 
 after="$(ls "$CRASH_DIR" 2>/dev/null | grep -c "^$APP_NAME" || true)"
 [ "$after" -le "$before" ] || fail "a new crash report appeared for $APP_NAME"
