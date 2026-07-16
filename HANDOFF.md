@@ -1,6 +1,6 @@
 # TermTile - Handoff
 
-_Last updated: 2026-07-16. This is the single spot to pick TermTile back up. Read it top-to-bottom,
+_Last updated: 2026-07-17. This is the single spot to pick TermTile back up. Read it top-to-bottom,
 then jump to **Start here**. (Companion handoffs: `RememBar/HANDOFF.md`, `MacFaceKit/README.md` -
 the three repos share the MacFaceKit design system.)_
 
@@ -13,7 +13,7 @@ the three repos share the MacFaceKit design system.)_
 | Lint | Run `swiftlint --strict` before claiming health |
 | Git | Check `git status --short` before release |
 | Latest published release | **v0.2.3** (2026-07-16), build 127, Developer ID signed/notarized/stapled |
-| Release target | None active; next version TBD |
+| Release target | **v0.2.4** hardening patch pending tag/release |
 | Public signing | Developer ID Application: Evan Navarro (`XG9SBNWNXT`) |
 | Notarization | Accepted; release CI notarizes, staples, and Gatekeeper-assesses before zipping |
 | Design-system dep | MacFaceKit `.upToNextMinor(from: "0.3.2")` (public git URL, auto-resolved) |
@@ -39,6 +39,9 @@ the three repos share the MacFaceKit design system.)_
   and **Repair Input Monitoring** actions for users whose older ad-hoc/dev TCC grants look enabled in
   Settings but do not match the current signed app. `v0.2.1` was the transitional signed but unstapled
   build used to stabilize macOS TCC grants across updates.
+- **Pending v0.2.4 hardening:** uninstall now routes privacy cleanup through the same scoped TCC
+  reset primitive, reports login/data/bundle/privacy partial failures explicitly, and bounds the
+  `tccutil` wait so a stuck reset cannot hang the UI indefinitely.
 - **Released in v0.2.0:** the richer identity card, GitHub/License links,
   adjustable gap, configurable shortcut, drag-reorder controls, Uninstall, clearer Accessibility/Input
   Monitoring guidance, branded update dialog, and stricter release-readiness tests.

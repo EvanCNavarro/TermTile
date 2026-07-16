@@ -36,17 +36,12 @@ struct TermTileApp: App {
         // instances the VM uses (it must deregister the real login item + purge the real defaults).
         let settings = UserDefaultsSettingsStore(suiteName: suiteName)
         let loginItem = SMAppServiceLoginItem()
-        // The real ~/Library (non-sandboxed → the user's real home; TermTile can't be sandboxed).
-        let library = (try? FileManager.default.url(for: .libraryDirectory, in: .userDomainMask,
-                                                    appropriateFor: nil, create: false))
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library", isDirectory: true)
         // NEVER arm the real uninstaller in a debug run (selftest/gallery) — a dev clicking Uninstall
         // in the interactive gallery would trash the user's REAL prefs/caches + the bundle. The VM
         // treats a nil uninstaller as a safe no-op; the button still renders for gallery validation.
         let isGallery = ProcessInfo.processInfo.environment["TERMTILE_GALLERY"] != nil
-        let uninstaller: Uninstaller? = (isSelftest || isGallery) ? nil
-            : Uninstaller(ownedPaths: OwnedPaths(library: library), loginItem: loginItem,
-                          settings: settings, bundleURL: Bundle.main.bundleURL)
+        let privacy = Self.makePrivacyComposition(isSelftest: isSelftest, isGallery: isGallery,
+                                                  settings: settings, loginItem: loginItem)
 
         appInfo = AppInfo.fromBundle()
         viewModel = MenuBarViewModel(
@@ -60,8 +55,8 @@ struct TermTileApp: App {
             makeActor: { bundleID in
                 TilingActor(system: AXWindowSystem(bundleID: bundleID), epsilon: eps)
             },
-            uninstaller: uninstaller,
-            permissionRepairer: (isSelftest || isGallery) ? nil : TCCPermissionRepairer())
+            uninstaller: privacy.uninstaller,
+            permissionRepairer: privacy.permissionRepairer)
 
         // Menu-bar utility: no dock icon, never takes window focus. Set here (init is reliable);
         // the delegate re-asserts it as a belt.
@@ -173,6 +168,29 @@ struct TermTileApp: App {
     }
 
     // MARK: - Composition helpers
+
+    private struct PrivacyComposition {
+        let permissionRepairer: (any PermissionRepairing)?
+        let uninstaller: Uninstaller?
+    }
+
+    private static func makePrivacyComposition(isSelftest: Bool, isGallery: Bool,
+                                               settings: any SettingsStore,
+                                               loginItem: any LoginItem) -> PrivacyComposition {
+        guard !isSelftest, !isGallery else {
+            return PrivacyComposition(permissionRepairer: nil, uninstaller: nil)
+        }
+
+        let permissionRepairer = TCCPermissionRepairer()
+        // The real ~/Library (non-sandboxed → the user's real home; TermTile can't be sandboxed).
+        let library = (try? FileManager.default.url(for: .libraryDirectory, in: .userDomainMask,
+                                                    appropriateFor: nil, create: false))
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library", isDirectory: true)
+        let uninstaller = Uninstaller(ownedPaths: OwnedPaths(library: library), loginItem: loginItem,
+                                      settings: settings, bundleURL: Bundle.main.bundleURL,
+                                      permissionRepairer: permissionRepairer)
+        return PrivacyComposition(permissionRepairer: permissionRepairer, uninstaller: uninstaller)
+    }
 
     /// The origin screen's AX-space visible frame (the recipe proven in AXProbe/main.swift:442-444,
     /// #19a): read `NSScreen` on the main-actor init, use `.screens.first` (ORIGIN screen, never

@@ -18,8 +18,8 @@ nothing until you ask it to.
   default, which you can re-record in the menu). Your windows are yours the rest of the time.
 - **Adjustable gap** — set the spacing between tiled windows from the menu.
 - **Auto-updates** — a built-in **Check for Updates…** keeps you current.
-- **Clean uninstall** — an **About** panel with a one-click uninstall that removes the app and its
-  data (and tells you the one thing it can't: revoking the Accessibility grant).
+- **Clean uninstall** — an **About** panel with a one-click uninstall that removes the app, its data,
+  launch-at-login registration, and TermTile's own Accessibility/Input Monitoring entries.
 
 ## Install
 
@@ -37,7 +37,8 @@ nothing until you ask it to.
 If macOS shows TermTile as already enabled but the app still says permission is missing, use
 TermTile's **Repair Accessibility** button. For drag-reorder, use **Repair Input Monitoring** if that
 permission looks enabled but TermTile still cannot start drag detection. These repair buttons clear
-only TermTile's stale macOS TCC row and open the correct Settings pane so you can approve the current signed app again.
+only TermTile's stale macOS TCC row and open the correct Settings pane so you can approve the
+current signed app again.
 
 Requires **macOS 14 (Sonoma) or later**, on **Apple Silicon**.
 

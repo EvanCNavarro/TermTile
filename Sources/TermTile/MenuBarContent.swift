@@ -177,8 +177,8 @@ struct MenuBarContent: View {
 
         let confirm = NSAlert()
         confirm.messageText = "Uninstall TermTile?"
-        confirm.informativeText = "Moves TermTile and its data to the Trash. You'll still need to remove "
-            + "its Accessibility permission in System Settings — that can't be revoked automatically."
+        confirm.informativeText = "Moves TermTile and its data to the Trash, deregisters launch at login, "
+            + "and resets TermTile's Accessibility and Input Monitoring entries."
         confirm.alertStyle = .warning
         confirm.addButton(withTitle: "Move to Trash")
         confirm.addButton(withTitle: "Cancel")
@@ -195,8 +195,11 @@ struct MenuBarContent: View {
             done.addButton(withTitle: "Show in Finder")
             actions.append { NSWorkspace.shared.activateFileViewerSelecting([url]) }
         }
-        done.addButton(withTitle: "Open Accessibility Settings…")
-        actions.append { NSWorkspace.shared.open(viewModel.accessibilitySettingsURL) }
+        if !outcome.failedPermissionRepairReports.isEmpty {
+            done.addButton(withTitle: "Open Privacy Settings…")
+            let privacyURL = URL(string: "x-apple.systempreferences:com.apple.preference.security")!
+            actions.append { NSWorkspace.shared.open(privacyURL) }
+        }
         done.addButton(withTitle: "Quit")
         actions.append {}
         let index = done.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
@@ -205,16 +208,24 @@ struct MenuBarContent: View {
     }
 
     /// Compose the post-uninstall message from the outcome's structured facts (presentation only —
-    /// the facts live on `UninstallOutcome`). Honest about partial removal; always ends with the
-    /// Accessibility-grant reminder (the one thing uninstall can't do).
+    /// the facts live on `UninstallOutcome`). Honest about partial removal and privacy-reset
+    /// failures without duplicating TCC service mapping in the UI.
     private func uninstallMessage(_ o: Uninstaller.UninstallOutcome) -> String {
         var parts = [o.isClean
             ? "TermTile and its data were moved to the Trash."
-            : "TermTile was removed, but some parts need a hand:"]
+            : "Uninstall is incomplete; some parts need a hand:"]
+        if !o.loginItem.isOK { parts.append("• Launch at login could not be deregistered.") }
         if !o.failedData.isEmpty { parts.append("• \(o.failedData.count) item(s) couldn't be removed.") }
         if o.bundleURLIfManual != nil { parts.append("• Drag TermTile.app to the Trash yourself.") }
-        parts.append("Last step: remove TermTile from System Settings → Privacy & Security → "
-            + "Accessibility. It can't be revoked automatically.")
+        if o.permissionRepairSucceeded {
+            parts.append("TermTile's Accessibility and Input Monitoring entries were reset.")
+        } else if !o.permissionRepairAttempted {
+            parts.append("TermTile's privacy entries were not changed in this build context.")
+        } else {
+            let labels = o.failedPermissionRepairReports.map(\.scope.label).joined(separator: ", ")
+            parts.append("• Privacy reset failed for: \(labels). Remove TermTile manually in "
+                + "System Settings → Privacy & Security.")
+        }
         return parts.joined(separator: "\n\n")
     }
 

@@ -49,6 +49,24 @@ struct UninstallerTests {
         func register() throws {}
         func unregister() throws { log.record("unregister") }
     }
+    final class SpyPermissionRepairer: PermissionRepairing {
+        let log: EventLog?
+        let exitCodes: [PermissionRepairScope: Int32]
+        private(set) var resetScopes: [[PermissionRepairScope]] = []
+
+        init(log: EventLog? = nil, exitCodes: [PermissionRepairScope: Int32] = [:]) {
+            self.log = log
+            self.exitCodes = exitCodes
+        }
+
+        func reset(_ scopes: [PermissionRepairScope]) -> [PermissionRepairReport] {
+            resetScopes.append(scopes)
+            log?.record("privacy:\(scopes.map(\.label).joined(separator: "+"))")
+            return scopes.map { scope in
+                PermissionRepairReport(scope: scope, exitCode: exitCodes[scope] ?? 0)
+            }
+        }
+    }
 
     // KEYSTONE — removeData trashes ONLY owned paths; decoys survive; a folder is removed whole.
     @Test("scope safety: only owned paths trashed, real decoys survive")
@@ -144,8 +162,8 @@ struct UninstallerTests {
         #expect(readonly.removeBundle() == .needsManual(bundle))
     }
 
-    // uninstall() ORDER: unregister → data → bundle; outcome carries login result + TCC bundleID.
-    @Test("uninstall orchestrates unregister BEFORE bundle trash, and reports everything")
+    // uninstall() ORDER: unregister → scoped privacy reset → data → bundle.
+    @Test("uninstall orchestrates unregister and privacy reset BEFORE bundle trash, and reports everything")
     func uninstallOrder() throws {
         let lib = try makeLibrary()
         defer { try? fm.removeItem(at: lib) }
@@ -157,25 +175,31 @@ struct UninstallerTests {
             log.record("trash:\(url.lastPathComponent)")
             try FileManager.default.removeItem(at: url)
         }
+        let permissionRepairer = SpyPermissionRepairer(log: log)
         let u = Uninstaller(ownedPaths: OwnedPaths(library: lib), loginItem: SpyLoginItem(log),
-                            settings: InMemorySettingsStore(), bundleURL: bundle, trash: trash)
+                            settings: InMemorySettingsStore(), bundleURL: bundle,
+                            permissionRepairer: permissionRepairer, trash: trash)
         let outcome = u.uninstall()
 
         #expect(outcome.loginItem.isOK)                         // login item deregistered
         #expect(outcome.bundle == .trashed(bundle))
-        #expect(outcome.tccResetBundleID == bid)                // guidance datum, single-sourced
+        #expect(outcome.permissionRepairAttempted)
+        #expect(outcome.permissionRepairReports.map(\.scope) == [.accessibility, .inputMonitoring])
+        #expect(outcome.failedPermissionRepairReports.isEmpty)
+        #expect(permissionRepairer.resetScopes == [[.accessibility, .inputMonitoring]])
         #expect(outcome.removedData.contains { $0.lastPathComponent == "\(bid).plist" })  // data cleared
         #expect(outcome.isClean)                                // fully-clean predicate, one source
-        // ORDER (full arc): unregister → data(plist) → bundle
+        // ORDER (full arc): unregister → privacy reset → data(plist) → bundle
         let iUnreg = log.events.firstIndex(of: "unregister")
+        let iPrivacy = log.events.firstIndex(of: "privacy:Accessibility+Input Monitoring")
         let iData = log.events.firstIndex(of: "trash:\(bid).plist")
         let iBundle = log.events.firstIndex(of: "trash:TermTile.app")
-        #expect(iUnreg != nil && iData != nil && iBundle != nil)
-        #expect(iUnreg! < iData! && iData! < iBundle!)
+        #expect(iUnreg != nil && iPrivacy != nil && iData != nil && iBundle != nil)
+        #expect(iUnreg! < iPrivacy! && iPrivacy! < iData! && iData! < iBundle!)
     }
 
     // isClean is the single-source success predicate — false when any part didn't fully complete.
-    @Test("isClean reflects failures / dereg failure / manual-bundle")
+    @Test("isClean reflects failures / dereg failure / manual-bundle / privacy reset failure")
     func isCleanPredicate() throws {
         let lib = try makeLibrary()
         defer { try? fm.removeItem(at: lib) }
@@ -189,6 +213,30 @@ struct UninstallerTests {
                                 trash: { u in if u.path == failURL.path { throw CocoaError(.fileWriteNoPermission) }
                                               try FileManager.default.removeItem(at: u) })
         #expect(!uFail.uninstall().isClean)
+
+        let permissionRepairer = SpyPermissionRepairer(exitCodes: [.inputMonitoring: 1])
+        let privacyFail = Uninstaller(ownedPaths: OwnedPaths(library: lib), loginItem: InMemoryLoginItem(),
+                                      settings: InMemorySettingsStore(), bundleURL: nil,
+                                      permissionRepairer: permissionRepairer)
+        let outcome = privacyFail.uninstall()
+        #expect(outcome.permissionRepairAttempted)
+        #expect(!outcome.isClean)
+        #expect(outcome.failedPermissionRepairReports.map(\.scope) == [.inputMonitoring])
+    }
+
+    @Test("uninstall outcome distinguishes no injected privacy repairer from successful reset")
+    func privacyRepairAttemptIsExplicit() throws {
+        let lib = try makeLibrary()
+        defer { try? fm.removeItem(at: lib) }
+        let u = Uninstaller(ownedPaths: OwnedPaths(library: lib), loginItem: InMemoryLoginItem(),
+                            settings: InMemorySettingsStore(), bundleURL: nil)
+
+        let outcome = u.uninstall()
+
+        #expect(!outcome.permissionRepairAttempted)
+        #expect(outcome.permissionRepairReports.isEmpty)
+        #expect(!outcome.permissionRepairSucceeded)
+        #expect(!outcome.isClean)
     }
 
     // Idempotency: a second removeData removes nothing (owned already gone).

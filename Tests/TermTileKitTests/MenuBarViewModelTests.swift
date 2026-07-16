@@ -174,8 +174,9 @@ struct MenuBarViewModelTests {
         let (vm, _) = makeVM(uninstaller: u)
         let outcome = vm.uninstall()
         #expect(outcome != nil)
-        #expect(outcome?.tccResetBundleID == AppIdentity.bundleID)
-        #expect(outcome?.isClean == true)   // nothing to remove in the empty temp lib → clean
+        #expect(outcome?.permissionRepairAttempted == false)
+        #expect(outcome?.permissionRepairReports.isEmpty == true)
+        #expect(outcome?.isClean == false)   // no repairer means privacy cleanup was not complete
     }
 
     @Test("uninstall is a no-op (nil) when no uninstaller is injected")

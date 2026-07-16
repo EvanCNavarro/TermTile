@@ -1,4 +1,5 @@
 import Foundation
+import Dispatch
 import TermTileCore
 
 /// The macOS TCC grants TermTile depends on. The service names are the `tccutil reset` arguments for
@@ -7,6 +8,13 @@ import TermTileCore
 public enum PermissionRepairScope: Equatable, Sendable {
     case accessibility
     case inputMonitoring
+
+    public var label: String {
+        switch self {
+        case .accessibility: "Accessibility"
+        case .inputMonitoring: "Input Monitoring"
+        }
+    }
 
     var tccutilService: String {
         switch self {
@@ -40,6 +48,9 @@ public protocol PermissionRepairing: AnyObject {
 public final class TCCPermissionRepairer: PermissionRepairing {
     public typealias Runner = (_ executable: String, _ arguments: [String]) -> Int32
 
+    private static let processTimeout: DispatchTimeInterval = .seconds(2)
+    private static let timedOutExitCode: Int32 = 124
+
     private let bundleID: String
     private let runner: Runner
 
@@ -62,11 +73,16 @@ public final class TCCPermissionRepairer: PermissionRepairing {
 
     private static func runProcess(_ executable: String, _ arguments: [String]) -> Int32 {
         let process = Process()
+        let finished = DispatchSemaphore(value: 0)
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
+        process.terminationHandler = { _ in finished.signal() }
         do {
             try process.run()
-            process.waitUntilExit()
+            guard finished.wait(timeout: .now() + processTimeout) == .success else {
+                if process.isRunning { process.terminate() }
+                return timedOutExitCode
+            }
             return process.terminationStatus
         } catch {
             return 127

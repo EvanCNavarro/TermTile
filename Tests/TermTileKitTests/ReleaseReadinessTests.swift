@@ -19,6 +19,10 @@ struct ReleaseReadinessTests {
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }
 
+    private static func normalizedWhitespace(_ text: String) -> String {
+        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
     private static func swiftFiles(under path: String) -> [(path: String, contents: String)] {
         let root = repoRoot()
         let base = root.appending(path: path)
@@ -117,6 +121,27 @@ struct ReleaseReadinessTests {
         }
     }
 
+    @Test("0.2.4 release notes explain uninstall privacy cleanup")
+    func releaseNotes024CoverUninstallPrivacyCleanup() {
+        let notes = Self.file("release-notes/0.2.4.md")
+        #expect(!notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                "release-notes/0.2.4.md must exist before tagging v0.2.4")
+
+        for required in [
+            "Uninstall",
+            "TCC",
+            "Repair Accessibility",
+            "Repair Input Monitoring",
+            "Accessibility",
+            "Input Monitoring",
+            "notarized",
+            "stapled"
+        ] {
+            #expect(notes.localizedCaseInsensitiveContains(required),
+                    "release-notes/0.2.4.md must mention \(required)")
+        }
+    }
+
     @Test("release docs do not claim public CI can self-sign releases")
     func releaseDocsRequireDeveloperIDForPublicRelease() {
         let docs = Self.file("docs/RELEASING.md")
@@ -192,31 +217,78 @@ struct ReleaseReadinessTests {
     @Test("public docs explain in-app stale permission repair")
     func publicDocsExplainPermissionRepair() {
         let readme = Self.file("README.md")
+        let normalizedReadme = Self.normalizedWhitespace(readme)
         for required in [
             "Repair Accessibility",
             "Repair Input Monitoring",
             "stale macOS TCC row",
             "approve the current signed app again"
         ] {
-            #expect(readme.localizedCaseInsensitiveContains(required),
+            #expect(normalizedReadme.localizedCaseInsensitiveContains(required),
                     "README.md must mention \(required)")
         }
+    }
+
+    @Test("public docs describe uninstall privacy cleanup without stale manual-only copy")
+    func publicDocsDescribeUninstallPrivacyCleanup() {
+        let readme = Self.file("README.md")
+        #expect(readme.contains("launch-at-login registration"),
+                "README.md must mention login item cleanup")
+        #expect(readme.contains("Accessibility/Input Monitoring entries"),
+                "README.md must mention scoped privacy cleanup")
+        #expect(!readme.contains("the one thing it can't"),
+                "README.md must not claim uninstall cannot clean up privacy rows")
+    }
+
+    @Test("current app source does not claim privacy permissions are manual-only")
+    func currentSourceAvoidsStaleManualOnlyPrivacyCopy() {
+        for source in Self.swiftFiles(under: "Sources") {
+            #expect(!source.contents.contains("can't be revoked automatically"),
+                    "\(source.path) must not contradict the TCC repair/reset implementation")
+            #expect(!source.contents.contains("uninstall can't do"),
+                    "\(source.path) must not describe privacy reset as impossible")
+        }
+    }
+
+    @Test("uninstall copy names every partial failure class")
+    func uninstallCopyNamesPartialFailureClasses() {
+        let menu = Self.file("Sources/TermTile/MenuBarContent.swift")
+        #expect(menu.contains("Launch at login could not be deregistered"),
+                "uninstall message must explain login-item deregistration failures")
+        #expect(menu.contains("couldn't be removed"),
+                "uninstall message must explain data removal failures")
+        #expect(menu.contains("Drag TermTile.app to the Trash yourself"),
+                "uninstall message must explain manual bundle removal")
+        #expect(menu.contains("Privacy reset failed"),
+                "uninstall message must explain privacy reset failures")
     }
 
     @Test("accessibility repair is offered before and after the local trust latch")
     func accessibilityRepairAvailableForBothUntrustedStates() {
         let menu = Self.file("Sources/TermTile/MenuBarContent.swift")
         guard let firstGrant = menu.range(of: "case .needsFirstGrant:"),
-              let grantBroken = menu.range(of: "case .grantBroken:") else {
+              let grantBroken = menu.range(of: "case .grantBroken:"),
+              let repairButtonDeclaration = menu.range(of: "private var repairAccessibilityButton") else {
             Issue.record("MenuBarContent.swift must render both untrusted Accessibility states")
             return
         }
         let needsFirstGrantBlock = String(menu[firstGrant.upperBound..<grantBroken.lowerBound])
-        let grantBrokenBlock = String(menu[grantBroken.upperBound...])
+        let grantBrokenBlock = String(menu[grantBroken.upperBound..<repairButtonDeclaration.lowerBound])
         #expect(needsFirstGrantBlock.contains("repairAccessibilityButton"),
                 "first-grant-looking state must still offer repair for older users without wasTrusted")
         #expect(grantBrokenBlock.contains("repairAccessibilityButton"),
                 "grant-broken state must offer repair")
+    }
+
+    @Test("TCC repair process has a bounded wait")
+    func permissionRepairProcessWaitIsBounded() {
+        let source = Self.file("Sources/TermTileKit/PermissionRepairer.swift")
+        #expect(source.contains("processTimeout"),
+                "TCC repair must have a named timeout")
+        #expect(source.contains("finished.wait(timeout:"),
+                "TCC repair must not wait indefinitely on tccutil")
+        #expect(source.contains("process.terminate()"),
+                "TCC repair must terminate a stuck tccutil process")
     }
 
     @Test("menu identity links do not require MacFaceKit SwiftPM resource bundles at runtime")

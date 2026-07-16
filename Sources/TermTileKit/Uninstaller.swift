@@ -1,20 +1,21 @@
 import Foundation
 import TermTileCore
 
-/// In-app uninstall: moves TermTile's owned data + `.app` bundle to the Trash (never `rm`) and
-/// deregisters the login item. It touches ONLY the exact literals in `OwnedPaths` — no glob, no
-/// directory scan — so a neighbour is structurally unreachable. `@MainActor` because the About
-/// panel's button drives it; `trash` is injectable so tests prove scope without the real Trash.
+/// In-app uninstall: deregisters the login item, clears TermTile's own TCC rows, and moves
+/// TermTile's owned data + `.app` bundle to the Trash (never `rm`). It touches ONLY the exact
+/// literals in `OwnedPaths` — no glob, no directory scan — so a neighbour is structurally
+/// unreachable. `@MainActor` because the About panel's button drives it; `trash` is injectable so
+/// tests prove scope without the real Trash.
 ///
 /// The prefs domain is cleared via `SettingsStore.purge()` (not a loose plist trash): `cfprefsd`
 /// caches the domain and would rewrite a separately-trashed plist on the next flush, leaving
-/// residue that — with the un-revokable Accessibility grant on the same bundleID — poisons a future
-/// reinstall. The CALLER must then `exit(0)` (a graceful `NSApp.terminate` re-flushes UserDefaults).
+/// residue that can poison a future reinstall. The CALLER must then `exit(0)` (a graceful
+/// `NSApp.terminate` re-flushes UserDefaults).
 ///
-/// Ordering (unregister → data → bundle) is NOT because trashing the running bundle stops us — it
-/// doesn't (a same-volume APFS move; macOS holds the executable by inode, the process keeps
-/// running). It's so `unregister()` runs while the bundle is still resolvable (else a ghost
-/// background-item), and so the prefs purge happens before quit.
+/// Ordering (unregister → privacy reset → data → bundle) is NOT because trashing the running bundle
+/// stops us — it doesn't (a same-volume APFS move; macOS holds the executable by inode, the process
+/// keeps running). It's so `unregister()` runs while the bundle is still resolvable (else a ghost
+/// background-item), and so privacy/data cleanup happens before quit.
 @MainActor
 public struct Uninstaller {
     /// Where a trashed bundle ended up, or why it couldn't be trashed (→ Finder-reveal fallback).
@@ -36,15 +37,24 @@ public struct Uninstaller {
         public let failedData: [(url: URL, error: Error)]
         public let bundle: BundleOutcome
         public let loginItem: DeregResult
-        /// The bundleID the user must reset in System Settings > Accessibility (the one thing an
-        /// uninstall can't do). Sourced from `AppIdentity` so the UI renders it single-sourced.
-        public let tccResetBundleID: String
+        public let permissionRepairAttempted: Bool
+        /// Scoped TCC cleanup reports. Empty means no repairer was injected (tests/unbundled), not
+        /// that a shell command was invented somewhere else.
+        public let permissionRepairReports: [PermissionRepairReport]
+
+        public var failedPermissionRepairReports: [PermissionRepairReport] {
+            permissionRepairReports.filter { !$0.succeeded }
+        }
+        public var permissionRepairSucceeded: Bool {
+            permissionRepairAttempted && failedPermissionRepairReports.isEmpty
+        }
 
         /// One source of truth for "was this a fully clean uninstall?" — so #21's UI doesn't
         /// re-derive the predicate. Clean = no data failures, login item deregistered, bundle not
-        /// left for manual removal.
+        /// left for manual removal, and privacy reset completed successfully.
         public var isClean: Bool {
             guard failedData.isEmpty, loginItem.isOK else { return false }
+            guard permissionRepairSucceeded else { return false }
             if case .needsManual = bundle { return false }
             return true
         }
@@ -60,6 +70,7 @@ public struct Uninstaller {
     private let loginItem: any LoginItem
     private let settings: any SettingsStore
     private let bundleURL: URL?
+    private let permissionRepairer: (any PermissionRepairing)?
     private let trash: (URL) throws -> Void
 
     public init(
@@ -67,12 +78,14 @@ public struct Uninstaller {
         loginItem: any LoginItem,
         settings: any SettingsStore,
         bundleURL: URL?,
+        permissionRepairer: (any PermissionRepairing)? = nil,
         trash: ((URL) throws -> Void)? = nil
     ) {
         self.ownedPaths = ownedPaths
         self.loginItem = loginItem
         self.settings = settings
         self.bundleURL = bundleURL
+        self.permissionRepairer = permissionRepairer
         // FileManager.default resolved inline (not stored) — matches the codebase's Sendable pattern.
         self.trash = trash ?? { url in
             var out: NSURL?
@@ -107,13 +120,23 @@ public struct Uninstaller {
         do { try loginItem.unregister(); return .ok } catch { return .failed(error) }
     }
 
-    /// The full flow in the safe order: unregister (while the bundle resolves) → purge+trash data
-    /// (while alive) → trash the bundle. The caller renders the outcome and then `exit(0)`.
+    /// Clear TermTile's own privacy rows; this never grants permission and is intentionally routed
+    /// through `PermissionRepairing` so TCC service names stay single-sourced.
+    public func resetPrivacyPermissions() -> [PermissionRepairReport] {
+        permissionRepairer?.reset([.accessibility, .inputMonitoring]) ?? []
+    }
+
+    /// The full flow in the safe order: unregister (while the bundle resolves) → reset privacy rows
+    /// → purge+trash data (while alive) → trash the bundle. The caller renders the outcome and then
+    /// `exit(0)`.
     public func uninstall() -> UninstallOutcome {
         let login = deregisterLoginItem()
+        let privacyAttempted = permissionRepairer != nil
+        let privacy = resetPrivacyPermissions()
         let (removed, failed) = removeData()
         let bundle = removeBundle()
         return UninstallOutcome(removedData: removed, failedData: failed, bundle: bundle,
-                                loginItem: login, tccResetBundleID: AppIdentity.bundleID)
+                                loginItem: login, permissionRepairAttempted: privacyAttempted,
+                                permissionRepairReports: privacy)
     }
 }
