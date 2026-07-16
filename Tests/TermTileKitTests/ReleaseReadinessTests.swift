@@ -79,6 +79,25 @@ struct ReleaseReadinessTests {
         }
     }
 
+    @Test("0.2.2 release notes explain notarized and stapled distribution")
+    func releaseNotes022CoverNotarizedDistribution() {
+        let notes = Self.file("release-notes/0.2.2.md")
+        #expect(!notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                "release-notes/0.2.2.md must exist before tagging v0.2.2")
+
+        for required in [
+            "notarized",
+            "stapled",
+            "Gatekeeper",
+            "Developer ID",
+            "Accessibility",
+            "Input Monitoring"
+        ] {
+            #expect(notes.localizedCaseInsensitiveContains(required),
+                    "release-notes/0.2.2.md must mention \(required)")
+        }
+    }
+
     @Test("release docs do not claim public CI can self-sign releases")
     func releaseDocsRequireDeveloperIDForPublicRelease() {
         let docs = Self.file("docs/RELEASING.md")
@@ -92,17 +111,23 @@ struct ReleaseReadinessTests {
                 "release docs must not describe the removed public CI self-signed fallback")
     }
 
-    @Test("notarization runbook captures the blocked queue evidence")
-    func notarizationRunbookCapturesCurrentEvidence() {
+    @Test("notarization runbook captures accepted evidence and release gate")
+    func notarizationRunbookCapturesAcceptedEvidence() {
         let docs = Self.file("docs/NOTARIZATION.md")
+        #expect(docs.contains("Accepted"),
+                "Notarization runbook must record that Apple returned Accepted")
         #expect(docs.contains("a4b780fa-92be-4f61-bfc8-5aedd613ada8"),
                 "Notarization runbook must record the minimal-app differential job")
         #expect(docs.contains("NotaryProbe"),
                 "Notarization runbook must mention the minimal differential app")
-        #expect(docs.contains("Do not create more submissions"),
-                "Notarization runbook must prevent repeated queue-noise submissions")
-        #expect(docs.contains("scripts/notary-status.sh"),
-                "Notarization runbook must point at the status-only polling script")
+        #expect(docs.contains("scripts/notarize-app.sh"),
+                "Notarization runbook must point at the release Notary/staple script")
+        #expect(docs.contains("stapler validate"),
+                "Notarization runbook must require stapler validation")
+        #expect(docs.contains("spctl --assess"),
+                "Notarization runbook must require Gatekeeper assessment")
+        #expect(docs.contains(".github/workflows/release.yml"),
+                "Notarization runbook must tie the release gate to CI")
     }
 
     @Test("notarization runbook uses placeholder credential examples")
@@ -120,14 +145,24 @@ struct ReleaseReadinessTests {
                 "runbook must not hard-code a developer machine key filename")
     }
 
-    @Test("public docs describe Developer ID signing without claiming notarization")
+    @Test("public docs version-qualify Developer ID notarized and stapled distribution")
     func publicDocsDescribeCurrentSigningState() {
         for path in ["README.md", "SECURITY.md"] {
             let docs = Self.file(path)
             #expect(docs.contains("Developer ID signed"),
                     "\(path) must describe the current public signing state")
-            #expect(docs.contains("not notarized yet"),
-                    "\(path) must keep the current Gatekeeper limitation explicit")
+            #expect(docs.contains("v0.2.2 and newer"),
+                    "\(path) must version-qualify notarized/stapled claims before v0.2.2 is live")
+            #expect(docs.localizedCaseInsensitiveContains("notarized"),
+                    "\(path) must describe the notarized distribution state")
+            #expect(docs.localizedCaseInsensitiveContains("stapled"),
+                    "\(path) must describe the stapled distribution state")
+            #expect(docs.contains("v0.2.1"),
+                    "\(path) must preserve the v0.2.1 transitional release caveat")
+            #expect(docs.localizedCaseInsensitiveContains("unstapled"),
+                    "\(path) must say v0.2.1 was signed but unstapled")
+            #expect(!docs.contains("not notarized yet"),
+                    "\(path) must not describe the pre-0.2.2 Gatekeeper limitation")
             #expect(!docs.contains("ad-hoc signed today"),
                     "\(path) must not describe the pre-0.2.1 ad-hoc release state")
             #expect(!docs.contains("ad-hoc signed, not notarized"),

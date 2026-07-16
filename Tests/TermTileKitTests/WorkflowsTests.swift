@@ -140,6 +140,32 @@ struct WorkflowsTests {
         }
     }
 
+    @Test("release.yml: notarizes and staples the app before packaging")
+    func releaseNotarizesAndStaplesBeforePackaging() {
+        let s = Self.workflow("release.yml")
+        #expect(s.contains("- name: Notarize and staple .app"),
+                "release.yml must have an explicit Notarize and staple .app step")
+        #expect(s.contains("scripts/notarize-app.sh \"${{ steps.build.outputs.app_path }}\""),
+                "release.yml must reuse scripts/notarize-app.sh for the Notary/staple workflow")
+        #expect(s.contains("TERMTILE_NOTARY_KEY_P8_BASE64: ${{ secrets.TERMTILE_NOTARY_KEY_P8_BASE64 }}"),
+                "release.yml must read the Notary p8 key from GitHub secrets")
+        #expect(s.contains("TERMTILE_NOTARY_KEY_ID: ${{ secrets.TERMTILE_NOTARY_KEY_ID }}"),
+                "release.yml must read the Notary key id from GitHub secrets")
+        #expect(s.contains("TERMTILE_NOTARY_ISSUER_ID: ${{ secrets.TERMTILE_NOTARY_ISSUER_ID }}"),
+                "release.yml must read the Notary issuer id from GitHub secrets")
+
+        let smoke = s.range(of: "- name: Smoke packaged app")?.lowerBound
+        let notarize = s.range(of: "- name: Notarize and staple .app")?.lowerBound
+        let package = s.range(of: "- name: Package + checksum")?.lowerBound
+        #expect(smoke != nil, "release.yml must keep the pre-notarization packaged-app smoke step")
+        #expect(notarize != nil, "release.yml must have a notarization step")
+        #expect(package != nil, "release.yml must have a Package + checksum step")
+        if let smoke, let notarize, let package {
+            #expect(smoke < notarize && notarize < package,
+                    "release CI must smoke the signed app, notarize/staple it, then zip the stapled app")
+        }
+    }
+
     @Test("release.yml: appcast uses embedded release notes and is published")
     func releasePublishesSignedAppcastWithNotes() {
         let s = Self.workflow("release.yml")
@@ -166,12 +192,20 @@ struct WorkflowsTests {
                 "release.yml must read the signing certificate from the secrets context")
         #expect(s.contains("secrets.TERMTILE_RELEASE_SIGNING_CERT_PASSWORD"),
                 "release.yml must read the signing certificate password from the secrets context")
+        #expect(s.contains("secrets.TERMTILE_NOTARY_KEY_P8_BASE64"),
+                "release.yml must read the Notary p8 key from the secrets context")
+        #expect(s.contains("secrets.TERMTILE_NOTARY_KEY_ID"),
+                "release.yml must read the Notary key id from the secrets context")
+        #expect(s.contains("secrets.TERMTILE_NOTARY_ISSUER_ID"),
+                "release.yml must read the Notary issuer id from the secrets context")
         // A secret/token assignment must resolve through a `${{ }}` context (secrets.* or github.*),
         // never a bare literal (e.g. `VIRUSTOTAL_API_KEY: abc123...`). Context refs are safe.
         let codeLines = Self.lines(s).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }
         let inlinedSecret = codeLines.contains { l in
             (l.contains("API_KEY:") || l.contains("PRIVATE_KEY:") || l.contains("TOKEN:")
-             || l.contains("CERT_P12_BASE64:") || l.contains("CERT_PASSWORD:"))
+             || l.contains("CERT_P12_BASE64:") || l.contains("CERT_PASSWORD:")
+             || l.contains("NOTARY_KEY_P8_BASE64:") || l.contains("NOTARY_KEY_ID:")
+             || l.contains("NOTARY_ISSUER_ID:"))
                 && !l.contains("${{")
         }
         #expect(!inlinedSecret, "no workflow line may assign a secret to an inlined literal")

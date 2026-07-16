@@ -27,6 +27,8 @@ the appcast from this repo's releases). There is no telemetry.
 - **SHA-256** checksum published beside each release zip.
 - **Developer ID signed** public releases keep a stable Apple code identity for macOS
   Accessibility/Input Monitoring grants across updates.
+- **Notarized and stapled** v0.2.2 and newer release artifacts include Apple's Gatekeeper ticket in
+  the app bundle before the release zip is created.
 - **EdDSA-signed auto-updates** — Sparkle refuses an update whose signature doesn't verify against
   the public key baked into the app.
 - **Dependabot** keeps CI action versions current; **Semgrep** (`p/security-audit`, `p/secrets`) and
@@ -34,7 +36,6 @@ the appcast from this repo's releases). There is no telemetry.
 
 ## Known limitations
 
-Releases are currently **Developer ID signed, but not notarized yet**. macOS Gatekeeper can still show
-an "Apple could not verify" warning on first launch (see the README install steps). Notarization adds
-Apple's malware scan and Gatekeeper ticket, which removes that warning once Apple returns an accepted
-ticket for the release artifact.
+TermTile is Apple Silicon only for now. v0.2.1 was Developer ID signed but unstapled; v0.2.2 and
+newer release artifacts are Developer ID signed, notarized, and stapled. If Gatekeeper rejects a
+current notarized release, treat that as a release-blocking defect.

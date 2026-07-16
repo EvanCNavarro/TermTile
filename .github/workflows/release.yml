@@ -98,6 +98,25 @@ jobs:
           REQUIRE_CODESIGN_TEAM_ID: XG9SBNWNXT
         run: scripts/test-packaged-app.sh "${{ steps.build.outputs.app_path }}"
 
+      - name: Notarize and staple .app
+        env:
+          TERMTILE_NOTARY_KEY_P8_BASE64: ${{ secrets.TERMTILE_NOTARY_KEY_P8_BASE64 }}
+          TERMTILE_NOTARY_KEY_ID: ${{ secrets.TERMTILE_NOTARY_KEY_ID }}
+          TERMTILE_NOTARY_ISSUER_ID: ${{ secrets.TERMTILE_NOTARY_ISSUER_ID }}
+          TERMTILE_NOTARY_TIMEOUT: 120m
+        run: |
+          set -euo pipefail
+          test -n "${TERMTILE_NOTARY_KEY_P8_BASE64}" || {
+            echo "::error::TERMTILE_NOTARY_KEY_P8_BASE64 is not set"; exit 1;
+          }
+          test -n "${TERMTILE_NOTARY_KEY_ID}" || {
+            echo "::error::TERMTILE_NOTARY_KEY_ID is not set"; exit 1;
+          }
+          test -n "${TERMTILE_NOTARY_ISSUER_ID}" || {
+            echo "::error::TERMTILE_NOTARY_ISSUER_ID is not set"; exit 1;
+          }
+          scripts/notarize-app.sh "${{ steps.build.outputs.app_path }}"
+
       - name: Package + checksum
         id: package
         run: |

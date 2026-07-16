@@ -30,16 +30,20 @@ the "What's new" section will be empty — so write it first.
 # 1. Write the notes (before tagging):
 $EDITOR release-notes/0.2.2.md
 
-# 2. Commit + tag + push — the tag fires release.yml:
-git add release-notes/0.2.2.md && git commit -m "docs: 0.2.2 release notes"
+# 2. Commit the complete release-gating diff + notes, then tag + push — the tag fires release.yml:
+git status --short
+git add .github/workflows/release.yml Tests README.md SECURITY.md docs HANDOFF.md release-notes/0.2.2.md
+git diff --cached --stat
+git commit -m "release: gate v0.2.2 on notarization"
 git tag -a v0.2.2 -m "TermTile v0.2.2"
 git push origin master v0.2.2
 ```
 
 `release.yml` (on the `v*` tag) then: vendors Sparkle → runs the test/lint gate → builds + signs
-the `.app` → smoke-tests it → zips + checksums → generates the EdDSA-signed appcast with embedded notes → attests
-provenance → (optional) VirusTotal → publishes the GitHub Release with the zip, `.sha256`, and
-`appcast.xml`. Existing users get the update offered automatically via the `SUFeedURL`.
+the `.app` → smoke-tests it → notarizes and staples it → zips + checksums the stapled app →
+generates the EdDSA-signed appcast with embedded notes → attests provenance → (optional) VirusTotal
+→ publishes the GitHub Release with the zip, `.sha256`, and `appcast.xml`. Existing users get the
+update offered automatically via the `SUFeedURL`.
 
 ## Signing
 
@@ -64,16 +68,17 @@ Required release secrets:
 - `SPARKLE_ED_PRIVATE_KEY`
 - `VIRUSTOTAL_API_KEY` (optional)
 
-Prepared Notary credentials:
+Required Notary credentials:
 
 - `TERMTILE_NOTARY_KEY_P8_BASE64`
 - `TERMTILE_NOTARY_KEY_ID`
 - `TERMTILE_NOTARY_ISSUER_ID`
 
-Developer ID notarization is prepared but not release-gated yet. `scripts/notarize-app.sh` submits a
-parent-preserving zip to Apple with `notarytool`, requires an `Accepted` result, staples the ticket,
-validates the stapled app, and runs `spctl --assess`. `scripts/notary-status.sh` is read-only status
-tooling for existing submissions; use it while Apple jobs are pending instead of creating duplicate
-uploads. Wire notarization into `release.yml` only after a real submission completes reliably; a stuck
-Notary job should block the notarized cut, not silently ship a fake notarized release. See
+Developer ID notarization is release-gated. `release.yml` runs `scripts/notarize-app.sh` after the
+Developer ID smoke test and before `Package + checksum`, so the public zip contains the stapled app.
+The script submits a parent-preserving zip to Apple with `notarytool`, requires an `Accepted` result,
+staples the ticket, validates the stapled app, and runs `spctl --assess`. If Apple Notary stalls or
+rejects the app, the release workflow fails instead of publishing an unnotarized artifact.
+
+`scripts/notary-status.sh` remains read-only tooling for existing submissions and debugging. See
 `docs/NOTARIZATION.md`.

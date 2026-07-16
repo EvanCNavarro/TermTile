@@ -12,9 +12,10 @@ the three repos share the MacFaceKit design system.)_
 | Tests | Run `swift test` before claiming health |
 | Lint | Run `swiftlint --strict` before claiming health |
 | Git | Check `git status --short` before release |
-| Latest release | **v0.2.1** (2026-07-16), build 123 |
+| Latest published release | **v0.2.1** (2026-07-16), Developer ID signed but unstapled |
+| Release target | **v0.2.2** notarized/stapled release |
 | Public signing | Developer ID Application: Evan Navarro (`XG9SBNWNXT`) |
-| Notarization | Pending Apple Notary processing; see `docs/NOTARIZATION.md` |
+| Notarization | Accepted; release CI notarizes, staples, and Gatekeeper-assesses before zipping |
 | Design-system dep | MacFaceKit `.upToNextMinor(from: "0.3.2")` (public git URL, auto-resolved) |
 
 ## Start here (next session, in order)
@@ -23,19 +24,19 @@ the three repos share the MacFaceKit design system.)_
    If the build reds with "invalid redeclaration", check for stray `* 2.swift` Finder/Xcode duplicate
    files (`find Sources Tests -name '* 2.swift'`) and delete them; the tracked originals are truth.
    (This bit RememBar this session; TermTile is currently clean.)
-2. **Poll notarization, do not resubmit.** Use `docs/NOTARIZATION.md` and `scripts/notary-status.sh`
-   to check the existing fixed TermTile and `NotaryProbe` jobs. If Apple returns `Accepted`, staple
-   and assess the exact accepted artifact, then wire notarization into release CI for the follow-up
-   release.
+2. **Verify notarized release artifacts.** Use `docs/NOTARIZATION.md` after every public release:
+   fresh-download the zip, verify checksum/provenance, then run `codesign`, `stapler validate`, and
+   `spctl --assess` against the downloaded `TermTile.app`.
 3. **Pick up product work** from the backlog. TermTile does one thing (tile a chosen app's windows into
    an even grid); the open arcs are polish + reach: onboarding/first-run guidance, more target apps,
    smoother tiling. Check `.engine/BACKLOG.md` + `.engine/state/` (STOKE plans) for the tracked queue.
 
 ## Where the project is
 
-- **Released & live:** v0.2.1 - menu-bar window-tiler: pick a terminal (iTerm2/WezTerm), press
+- **Current release target:** v0.2.2 - menu-bar window-tiler: pick a terminal (iTerm2/WezTerm), press
   **Rearrange now**, and windows snap into even columns of two. `v0.2.1` is Developer ID signed to
-  stabilize macOS TCC grants across updates, but is not notarized yet.
+  stabilize macOS TCC grants across updates; `v0.2.2` adds notarization, stapling, and Gatekeeper
+  assessment to the release workflow.
 - **Released in v0.2.0:** the richer identity card, GitHub/License links,
   adjustable gap, configurable shortcut, drag-reorder controls, Uninstall, clearer Accessibility/Input
   Monitoring guidance, branded update dialog, and stricter release-readiness tests.
@@ -64,8 +65,8 @@ the three repos share the MacFaceKit design system.)_
 
 ## Open items / deferred
 
-- **Notarized follow-up release** - gated on Apple Notary returning an accepted ticket for the existing
-  fixed jobs or a future final artifact. See `docs/NOTARIZATION.md`.
+- **Post-release artifact verification** - after every release, fresh-download the zip and run the
+  `docs/NOTARIZATION.md` verification checklist before calling the release complete.
 - `[DEP:#33]` — RememBar's `ProcessRunner` 1s drainer-wait ceiling (shared-pattern note; RememBar's concern,
   low risk). Tracked in that repo.
 - Twin-drift with RememBar is intentional + documented: TermTile's `Updater` is a lazy instance gated by
