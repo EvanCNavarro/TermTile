@@ -12,7 +12,7 @@ the three repos share the MacFaceKit design system.)_
 | Tests | Run `swift test` before claiming health |
 | Lint | Run `swiftlint --strict` before claiming health |
 | Git | Check `git status --short` before release |
-| Latest published release | **v0.2.2** (2026-07-16), build 125, Developer ID signed/notarized/stapled |
+| Latest published release | **v0.2.3** (2026-07-16), build 127, Developer ID signed/notarized/stapled |
 | Release target | None active; next version TBD |
 | Public signing | Developer ID Application: Evan Navarro (`XG9SBNWNXT`) |
 | Notarization | Accepted; release CI notarizes, staples, and Gatekeeper-assesses before zipping |
@@ -26,17 +26,19 @@ the three repos share the MacFaceKit design system.)_
    (This bit RememBar this session; TermTile is currently clean.)
 2. **Verify notarized release artifacts after the next public release.** Use `docs/NOTARIZATION.md`:
    fresh-download the zip, verify checksum/provenance, then run `codesign`, `stapler validate`, and
-   `spctl --assess` against the downloaded `TermTile.app`. This was completed for `v0.2.2`.
+   `spctl --assess` against the downloaded `TermTile.app`. This was completed for `v0.2.3`.
 3. **Pick up product work** from the backlog. TermTile does one thing (tile a chosen app's windows into
    an even grid); the open arcs are polish + reach: onboarding/first-run guidance, more target apps,
    smoother tiling. Check `.engine/BACKLOG.md` + `.engine/state/` (STOKE plans) for the tracked queue.
 
 ## Where the project is
 
-- **Latest release:** v0.2.2 - menu-bar window-tiler: pick a terminal (iTerm2/WezTerm), press
+- **Latest release:** v0.2.3 - menu-bar window-tiler: pick a terminal (iTerm2/WezTerm), press
   **Rearrange now**, and windows snap into even columns of two. It is Developer ID signed,
-  notarized, stapled, and Gatekeeper-assessed by release CI. `v0.2.1` was the transitional signed but
-  unstapled build used to stabilize macOS TCC grants across updates.
+  notarized, stapled, and Gatekeeper-assessed by release CI. It adds in-app **Repair Accessibility**
+  and **Repair Input Monitoring** actions for users whose older ad-hoc/dev TCC grants look enabled in
+  Settings but do not match the current signed app. `v0.2.1` was the transitional signed but unstapled
+  build used to stabilize macOS TCC grants across updates.
 - **Released in v0.2.0:** the richer identity card, GitHub/License links,
   adjustable gap, configurable shortcut, drag-reorder controls, Uninstall, clearer Accessibility/Input
   Monitoring guidance, branded update dialog, and stricter release-readiness tests.
@@ -65,7 +67,7 @@ the three repos share the MacFaceKit design system.)_
 
 ## Open items / deferred
 
-- **Post-release artifact verification** - completed for `v0.2.2`; repeat the
+- **Post-release artifact verification** - completed for `v0.2.3`; repeat the
   `docs/NOTARIZATION.md` checklist for each future release before calling it complete.
 - `[DEP:#33]` — RememBar's `ProcessRunner` 1s drainer-wait ceiling (shared-pattern note; RememBar's concern,
   low risk). Tracked in that repo.
