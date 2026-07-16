@@ -26,8 +26,7 @@ the three repos share the MacFaceKit design system.)_
    (This bit RememBar this session; TermTile is currently clean.)
 2. **Verify notarized release artifacts after the next public release.** Use `docs/NOTARIZATION.md`:
    fresh-download the zip, verify checksum/provenance, then run `codesign`, `stapler validate`, and
-   `spctl --assess` against the downloaded `TermTile.app`. This was completed for `v0.2.4` except
-   GitHub attestation verification, which returned HTTP 503 after repeated retries.
+   `spctl --assess` against the downloaded `TermTile.app`. This was completed for `v0.2.4`.
 3. **Pick up product work** from the backlog. TermTile does one thing (tile a chosen app's windows into
    an even grid); the open arcs are polish + reach: onboarding/first-run guidance, more target apps,
    smoother tiling. Check `.engine/BACKLOG.md` + `.engine/state/` (STOKE plans) for the tracked queue.
@@ -70,10 +69,10 @@ the three repos share the MacFaceKit design system.)_
 
 ## Open items / deferred
 
-- **Post-release artifact verification** - completed for `v0.2.4` checksum, codesign, stapler,
-  Gatekeeper, bundle metadata, appcast, and release workflow. Retry `gh attestation verify
-  TermTile-v0.2.4.zip --repo EvanCNavarro/TermTile`; GitHub's attestation API returned HTTP 503
-  repeatedly during release verification.
+- **Post-release artifact verification** - completed for `v0.2.4`: checksum, codesign, stapler,
+  Gatekeeper, bundle metadata, appcast, release workflow, and `gh attestation verify
+  TermTile-v0.2.4.zip --repo EvanCNavarro/TermTile` (passed at 2026-07-16T23:46:45Z after transient
+  GitHub API 503s).
 - `[DEP:#33]` — RememBar's `ProcessRunner` 1s drainer-wait ceiling (shared-pattern note; RememBar's concern,
   low risk). Tracked in that repo.
 - Twin-drift with RememBar is intentional + documented: TermTile's `Updater` is a lazy instance gated by
