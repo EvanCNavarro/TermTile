@@ -42,9 +42,12 @@ struct PackagingScriptsTests {
         }
         #expect(!signLines.isEmpty, "no codesign --sign \"$SIGN_IDENTITY\" line found")
         #expect(signLines.allSatisfy { !$0.contains("--deep") }, "no sign line may contain --deep")
+        #expect(signLines.allSatisfy { $0.contains("--options runtime") },
+                "every sign line must enable hardened runtime for notarization")
         // Resolution: explicit TERMTILE_SIGN_IDENTITY wins; else auto-use the local dev cert IF present;
         // else fall back to ad-hoc so CI (no env, no keychain cert) needs no signing setup (#13c).
         let script = Self.script("build-app.sh")
+        #expect(script.contains("sign_code()"), "build-app.sh must keep signing flags centralized")
         #expect(script.contains("TERMTILE_SIGN_IDENTITY"), "explicit sign-identity override must exist")
         #expect(script.contains("SIGN_IDENTITY=\"-\""),
                 "SIGN_IDENTITY must fall back to ad-hoc (\"-\") so CI needs no keychain")
@@ -109,6 +112,29 @@ struct PackagingScriptsTests {
         #expect(!codeLines.contains { $0.contains("killall") }, "smoke must never invoke killall")
     }
 
+    @Test("test-packaged-app.sh: can require stable non-ad-hoc code signing")
+    func smokeCanRejectAdHocSigning() {
+        let s = Self.script("test-packaged-app.sh")
+        #expect(s.contains("REQUIRE_STABLE_CODESIGN"),
+                "release smoke must be able to require stable code signing")
+        #expect(s.contains("Signature=adhoc"),
+                "stable-signing mode must explicitly reject ad-hoc signatures")
+        #expect(s.contains(#"cdhash H\""#),
+                "stable-signing mode must reject cdhash-only designated requirements")
+        #expect(s.contains("Authority="),
+                "stable-signing mode must require a certificate authority in the signature")
+        #expect(s.contains("REQUIRE_DEVELOPER_ID_CODESIGN"),
+                "release smoke must be able to require Developer ID signing")
+        #expect(s.contains("Authority=Developer ID Application:"),
+                "Developer ID mode must require a Developer ID Application authority")
+        #expect(s.contains("REQUIRE_CODESIGN_TEAM_ID"),
+                "Developer ID mode must pin the expected Apple Team ID")
+        #expect(s.contains("TeamIdentifier=$REQUIRE_CODESIGN_TEAM_ID"),
+                "Developer ID mode must verify the signed artifact's TeamIdentifier")
+        #expect(s.contains("certificate leaf[subject.OU] = $REQUIRE_CODESIGN_TEAM_ID"),
+                "Developer ID mode must verify the designated requirement binds the expected team")
+    }
+
     // 7. The smoke must not let local `.build` resource bundles mask a missing packaged bundle.
     @Test("test-packaged-app.sh: hides local SwiftPM resource bundles before launch")
     func smokeHidesLocalSwiftPMResourceBundles() {
@@ -149,11 +175,38 @@ struct PackagingScriptsTests {
                 "Bundle.module guard must not rely on same-line grep filtering")
     }
 
-    // 10. Both scripts exist and are executable (a text-present stub that isn't chmod +x never runs).
-    @Test("both packaging scripts exist and are executable")
+    @Test("notarize-app.sh: submits, staples, validates, and Gatekeeper-assesses the app")
+    func notarizeScriptIsRealWorkflow() {
+        let s = Self.script("notarize-app.sh")
+        #expect(s.contains("TERMTILE_NOTARY_KEY_P8_BASE64"),
+                "notarize-app.sh must be able to materialize the CI .p8 key from a secret")
+        #expect(s.contains("TERMTILE_NOTARY_KEY_PATH"),
+                "notarize-app.sh must support a local key path for pre-release validation")
+        #expect(s.contains("ditto -c -k --keepParent"),
+                "notarize-app.sh must submit a parent-preserving zip archive")
+        #expect(s.contains("notarytool submit") && s.contains("--wait"),
+                "notarize-app.sh must wait for Apple notarization to complete")
+        #expect(s.contains(#""Accepted""#),
+                "notarize-app.sh must fail unless Apple returns Accepted")
+        #expect(s.contains("PIPESTATUS"),
+                "notarize-app.sh must preserve notarytool's exit status through tee")
+        #expect(s.contains("notarytool info"),
+                "notarize-app.sh must report the job status when a wait times out")
+        #expect(s.contains("notarytool log"),
+                "notarize-app.sh must fetch Apple's log on failure")
+        #expect(s.contains("stapler staple"),
+                "notarize-app.sh must staple the notarization ticket to the app")
+        #expect(s.contains("stapler validate"),
+                "notarize-app.sh must validate the stapled ticket")
+        #expect(s.contains("spctl --assess"),
+                "notarize-app.sh must prove Gatekeeper accepts the final app")
+    }
+
+    // 11. Scripts exist and are executable (a text-present stub that isn't chmod +x never runs).
+    @Test("packaging scripts exist and are executable")
     func scriptsAreExecutable() {
         let fm = FileManager.default
-        for name in ["build-app.sh", "test-packaged-app.sh"] {
+        for name in ["build-app.sh", "test-packaged-app.sh", "notarize-app.sh"] {
             let path = Self.repoRoot().appending(path: "scripts/\(name)").path
             #expect(fm.fileExists(atPath: path), "\(name) must exist")
             #expect(fm.isExecutableFile(atPath: path), "\(name) must be executable (chmod +x)")

@@ -70,8 +70,34 @@ PLIST="$APP/Contents/Info.plist"
 	|| fail "LSUIElement must be true (menu-bar only)"
 plutil -extract CFBundleVersion raw "$PLIST" >/dev/null || fail "CFBundleVersion missing"
 
-# Signature must verify strict (ad-hoc is fine; #13c upgrades to a stable identity).
+# Signature must verify strict. Local/dev smoke may still accept ad-hoc; release smoke sets
+# REQUIRE_STABLE_CODESIGN=1 so public artifacts cannot regress to TCC-breaking cdhash-only identity.
 codesign --verify --deep --strict "$APP" || fail "codesign --verify --deep --strict failed"
+if [ "${REQUIRE_STABLE_CODESIGN:-0}" = "1" ]; then
+	SIGNATURE_INFO="$(codesign -dv --verbose=4 "$APP" 2>&1)"
+	DESIGNATED_REQ="$(codesign -d -r- "$APP" 2>&1)"
+	if echo "$SIGNATURE_INFO" | grep -q "Signature=adhoc"; then
+		fail "stable signing required, but app is ad-hoc signed"
+	fi
+	if ! echo "$SIGNATURE_INFO" | grep -q "Authority="; then
+		fail "stable signing required, but app signature has no certificate authority"
+	fi
+	if echo "$DESIGNATED_REQ" | grep -q "cdhash H\""; then
+		fail "stable signing required, but designated requirement is cdhash-only"
+	fi
+	if [ "${REQUIRE_DEVELOPER_ID_CODESIGN:-0}" = "1" ]; then
+		if ! echo "$SIGNATURE_INFO" | grep -Fq "Authority=Developer ID Application:"; then
+			fail "Developer ID signing required, but signature is not Developer ID Application"
+		fi
+		test -n "${REQUIRE_CODESIGN_TEAM_ID:-}" || fail "REQUIRE_CODESIGN_TEAM_ID is required"
+		if ! echo "$SIGNATURE_INFO" | grep -Fq "TeamIdentifier=$REQUIRE_CODESIGN_TEAM_ID"; then
+			fail "Developer ID signing required, but TeamIdentifier != $REQUIRE_CODESIGN_TEAM_ID"
+		fi
+		if ! echo "$DESIGNATED_REQ" | grep -Fq "certificate leaf[subject.OU] = $REQUIRE_CODESIGN_TEAM_ID"; then
+			fail "Developer ID signing required, but designated requirement does not bind the expected team"
+		fi
+	fi
+fi
 
 # Regression guard (audit 0.3.0 bug class): runtime code may only touch Bundle.module inside the
 # DEBUG-only fallback helper. Comments are ignored; release code must resolve from Bundle.main.

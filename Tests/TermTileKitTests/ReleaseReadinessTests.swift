@@ -59,6 +59,26 @@ struct ReleaseReadinessTests {
         }
     }
 
+    @Test("0.2.1 release notes explain Developer ID signing and one-time TCC reset risk")
+    func releaseNotes021CoverSigningTransition() {
+        let notes = Self.file("release-notes/0.2.1.md")
+        #expect(!notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                "release-notes/0.2.1.md must exist before tagging v0.2.1")
+
+        for required in [
+            "Developer ID",
+            "ad-hoc",
+            "Accessibility",
+            "Input Monitoring",
+            "remove TermTile",
+            "Privacy & Security > Input Monitoring",
+            "Notarization"
+        ] {
+            #expect(notes.localizedCaseInsensitiveContains(required),
+                    "release-notes/0.2.1.md must mention \(required)")
+        }
+    }
+
     @Test("menu identity links do not require MacFaceKit SwiftPM resource bundles at runtime")
     func menuIdentityLinksAvoidBundleBackedBrandAssets() {
         for source in Self.swiftFiles(under: "Sources") {

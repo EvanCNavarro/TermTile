@@ -86,6 +86,42 @@ struct WorkflowsTests {
         #expect(s.contains("swiftlint --strict"), "release.yml must run the same strict lint gate before publishing")
     }
 
+    @Test("release.yml: imports a stable signing identity before building public artifacts")
+    func releaseImportsStableSigningIdentity() {
+        let s = Self.workflow("release.yml")
+        #expect(s.contains("TERMTILE_RELEASE_SIGNING_CERT_P12_BASE64"),
+                "release.yml must import a stable signing certificate from GitHub secrets")
+        #expect(s.contains("TERMTILE_RELEASE_SIGNING_CERT_PASSWORD"),
+                "release.yml must unlock the signing certificate with a GitHub secret")
+        #expect(s.contains("DeveloperIDG2CA.cer"),
+                "release.yml must import Apple's Developer ID G2 intermediate into the CI keychain")
+        #expect(s.contains("security add-certificates"),
+                "release.yml must add the Developer ID intermediate before resolving signing identities")
+        #expect(s.contains("security import"),
+                "release.yml must import the signing identity into a temporary keychain")
+        #expect(s.contains("TERMTILE_SIGN_IDENTITY: ${{ vars.TERMTILE_SIGN_IDENTITY }}"),
+                "release.yml must take the release signing identity from the repo variable")
+        #expect(s.contains("TERMTILE_SIGN_IDENTITY repo variable is not set"),
+                "release.yml must fail fast when the release signing identity variable is missing")
+        #expect(s.contains("Developer\\ ID\\ Application:*"),
+                "release.yml must require a Developer ID Application identity for public releases")
+        #expect(!s.contains("vars.TERMTILE_SIGN_IDENTITY || 'TermTile Dev Signing'"),
+                "public release workflow must not fall back to self-signed dev identity")
+    }
+
+    @Test("release.yml: release smoke rejects ad-hoc signatures before publishing")
+    func releaseRejectsAdHocArtifacts() {
+        let s = Self.workflow("release.yml")
+        #expect(s.contains("REQUIRE_STABLE_CODESIGN: \"1\""),
+                "release.yml must require stable code signing for release smoke")
+        #expect(s.contains("REQUIRE_DEVELOPER_ID_CODESIGN: \"1\""),
+                "release.yml must require Developer ID signing for release smoke")
+        #expect(s.contains("REQUIRE_CODESIGN_TEAM_ID: XG9SBNWNXT"),
+                "release.yml must pin the expected Developer ID Team ID")
+        #expect(s.contains("scripts/test-packaged-app.sh \"${{ steps.build.outputs.app_path }}\""),
+                "release.yml must run the packaged smoke with the stable-signing guard enabled")
+    }
+
     @Test("release.yml: runs packaged-app smoke before publishing")
     func releaseRunsPackagedAppSmokeBeforePublishing() {
         let s = Self.workflow("release.yml")
@@ -126,11 +162,17 @@ struct WorkflowsTests {
                 "release.yml must read the VirusTotal key from the secrets context")
         #expect(s.contains("secrets.SPARKLE_ED_PRIVATE_KEY"),
                 "release.yml must read the Sparkle private key from the secrets context")
+        #expect(s.contains("secrets.TERMTILE_RELEASE_SIGNING_CERT_P12_BASE64"),
+                "release.yml must read the signing certificate from the secrets context")
+        #expect(s.contains("secrets.TERMTILE_RELEASE_SIGNING_CERT_PASSWORD"),
+                "release.yml must read the signing certificate password from the secrets context")
         // A secret/token assignment must resolve through a `${{ }}` context (secrets.* or github.*),
         // never a bare literal (e.g. `VIRUSTOTAL_API_KEY: abc123...`). Context refs are safe.
         let codeLines = Self.lines(s).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }
         let inlinedSecret = codeLines.contains { l in
-            (l.contains("API_KEY:") || l.contains("PRIVATE_KEY:") || l.contains("TOKEN:")) && !l.contains("${{")
+            (l.contains("API_KEY:") || l.contains("PRIVATE_KEY:") || l.contains("TOKEN:")
+             || l.contains("CERT_P12_BASE64:") || l.contains("CERT_PASSWORD:"))
+                && !l.contains("${{")
         }
         #expect(!inlinedSecret, "no workflow line may assign a secret to an inlined literal")
     }

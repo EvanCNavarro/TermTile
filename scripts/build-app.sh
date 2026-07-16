@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# build-app.sh - assemble the SPM binary into a distributable, ad-hoc-signed TermTile.app.
+# build-app.sh - assemble the SPM binary into a signed distributable TermTile.app.
 #
 # #13a (ADAPTs RememBar's build-remembar-app.sh - audit sec 2/sec 3). Everything env-overridable so
-# e2e/CI reuse the SAME build path (no drift). Menu-bar-only (LSUIElement); no embedded frameworks
-# (Sparkle deferred -> #16), so signing is a single inside-out ad-hoc pass, NO --deep (audit sec 2:
-# --deep can corrupt nested signatures), verified --deep --strict. CFBundleVersion is the monotonic
-# commit count, NEVER dots-stripped (audit sec 8.5: 0.10.1->0101 collides). A stable Developer-ID
-# identity (so TCC grants survive rebuilds) is #13c - this ad-hoc build resets the grant per cdhash.
+# e2e/CI reuse the SAME build path (no drift). Menu-bar-only (LSUIElement); Sparkle is embedded,
+# so signing is an inside-out pass with hardened runtime enabled and NO --deep on sign operations
+# (audit sec 2: --deep can corrupt nested signatures), then verified --deep --strict.
+# CFBundleVersion is the monotonic commit count, NEVER dots-stripped (audit sec 8.5:
+# 0.10.1->0101 collides).
 set -euo pipefail
 
 APP_NAME="${APP_NAME:-TermTile}"
@@ -116,15 +116,19 @@ else
 fi
 echo "build-app.sh: signing with identity: $SIGN_IDENTITY" >&2
 xattr -cr "$APP"
-codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/XPCServices/Downloader.xpc" >&2
-codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/XPCServices/Installer.xpc" >&2
-codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/Autoupdate" >&2
-codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_V/Updater.app" >&2
-codesign --force --sign "$SIGN_IDENTITY" "$SPARKLE_DST" >&2
+sign_code() {
+	codesign --force --options runtime --sign "$SIGN_IDENTITY" "$1" >&2
+}
+
+sign_code "$SPARKLE_V/XPCServices/Downloader.xpc"
+sign_code "$SPARKLE_V/XPCServices/Installer.xpc"
+sign_code "$SPARKLE_V/Autoupdate"
+sign_code "$SPARKLE_V/Updater.app"
+sign_code "$SPARKLE_DST"
 # NB: the SPM resource bundle (glyph) is a FLAT resource bundle (no Info.plist / no Mach-O), so it is
 # NOT code-signed on its own — the outer app signature below seals it as a resource.
-codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/$APP_NAME" >&2
-codesign --force --sign "$SIGN_IDENTITY" "$APP" >&2
+sign_code "$APP/Contents/MacOS/$APP_NAME"
+sign_code "$APP"
 codesign --verify --deep --strict "$APP" >&2
 
 # Last stdout line = the .app path, so callers can `tail -1` (RememBar convention).

@@ -37,12 +37,32 @@ git push origin master v0.2.0
 ```
 
 `release.yml` (on the `v*` tag) then: vendors Sparkle → runs the test/lint gate → builds + signs
-the `.app` → zips + checksums → generates the EdDSA-signed appcast with embedded notes → attests
+the `.app` → smoke-tests it → zips + checksums → generates the EdDSA-signed appcast with embedded notes → attests
 provenance → (optional) VirusTotal → publishes the GitHub Release with the zip, `.sha256`, and
 `appcast.xml`. Existing users get the update offered automatically via the `SUFeedURL`.
 
-## Not yet (Option A → B)
+## Signing
 
-Releases are currently **ad-hoc signed** — users right-click → Open past Gatekeeper once. A paid
-Apple Developer ID + notarization removes that warning and adds Apple's own malware scan; wire it
-by swapping `TERMTILE_SIGN_IDENTITY` and adding a `notarytool`/`stapler` step.
+Public releases must not be ad-hoc signed. macOS Accessibility/Input Monitoring grants bind to the
+app's designated code requirement; an ad-hoc build makes that requirement the per-build cdhash, so an
+update can leave System Settings showing TermTile enabled while the new binary is denied.
+
+`release.yml` imports a signing identity from GitHub secrets and sets `TERMTILE_SIGN_IDENTITY` before
+calling `scripts/build-app.sh`. Set the repo variable `TERMTILE_SIGN_IDENTITY` to the exact Keychain
+identity name, for example `Developer ID Application: Evan Navarro (TEAMID)`. If that variable is
+absent, CI falls back to the stable self-signed `TermTile Dev Signing` identity. The fallback does
+**not** provide Gatekeeper trust or notarization, but it gives TCC a stable code identity across
+releases from that signing line.
+
+Required release secrets:
+
+- `TERMTILE_RELEASE_SIGNING_CERT_P12_BASE64`
+- `TERMTILE_RELEASE_SIGNING_CERT_PASSWORD`
+- `SPARKLE_ED_PRIVATE_KEY`
+- `VIRUSTOTAL_API_KEY` (optional)
+
+Developer ID notarization is prepared but not release-gated yet. `scripts/notarize-app.sh` submits a
+parent-preserving zip to Apple with `notarytool`, requires an `Accepted` result, staples the ticket,
+validates the stapled app, and runs `spctl --assess`. Wire it into `release.yml` only after a real
+submission completes reliably; a stuck Notary job should block the notarized cut, not silently ship a
+fake notarized release.

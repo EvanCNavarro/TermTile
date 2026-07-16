@@ -35,12 +35,56 @@ jobs:
       - name: Lint
         run: swiftlint --strict
 
+      # Public releases must never be ad-hoc signed: TCC grants bind ad-hoc builds to a per-build
+      # cdhash, so every update can silently break Accessibility/Input Monitoring.
+      - name: Import release signing identity
+        env:
+          TERMTILE_RELEASE_SIGNING_CERT_P12_BASE64: ${{ secrets.TERMTILE_RELEASE_SIGNING_CERT_P12_BASE64 }}
+          TERMTILE_RELEASE_SIGNING_CERT_PASSWORD: ${{ secrets.TERMTILE_RELEASE_SIGNING_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${TERMTILE_RELEASE_SIGNING_CERT_P12_BASE64}" || {
+            echo "::error::TERMTILE_RELEASE_SIGNING_CERT_P12_BASE64 is not set"; exit 1;
+          }
+          test -n "${TERMTILE_RELEASE_SIGNING_CERT_PASSWORD}" || {
+            echo "::error::TERMTILE_RELEASE_SIGNING_CERT_PASSWORD is not set"; exit 1;
+          }
+          KEYCHAIN="${RUNNER_TEMP}/termtile-release-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          P12="${RUNNER_TEMP}/termtile-release-signing.p12"
+          DEVELOPER_ID_G2_CA="${RUNNER_TEMP}/DeveloperIDG2CA.cer"
+          printf '%s' "${TERMTILE_RELEASE_SIGNING_CERT_P12_BASE64}" | base64 --decode > "${P12}"
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}"
+          security set-keychain-settings -lut 21600 "${KEYCHAIN}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}"
+          security list-keychains -d user -s "${KEYCHAIN}"
+          security default-keychain -s "${KEYCHAIN}"
+          curl -fsSL --max-time 60 \
+            "https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer" \
+            -o "${DEVELOPER_ID_G2_CA}"
+          security add-certificates -k "${KEYCHAIN}" "${DEVELOPER_ID_G2_CA}"
+          security import "${P12}" -k "${KEYCHAIN}" \
+            -P "${TERMTILE_RELEASE_SIGNING_CERT_PASSWORD}" \
+            -A -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}"
+          security find-identity -v -p codesigning "${KEYCHAIN}"
+
       # CALL the packaging script (do not duplicate the build - audit "CI should call the scripts").
       # build-app.sh prints the built .app path as its LAST stdout line.
       - name: Build .app
         id: build
+        env:
+          TERMTILE_SIGN_IDENTITY: ${{ vars.TERMTILE_SIGN_IDENTITY }}
         run: |
           set -euo pipefail
+          test -n "${TERMTILE_SIGN_IDENTITY}" || {
+            echo "::error::TERMTILE_SIGN_IDENTITY repo variable is not set"; exit 1;
+          }
+          case "${TERMTILE_SIGN_IDENTITY}" in
+            Developer\ ID\ Application:*) ;;
+            *) echo "::error::TERMTILE_SIGN_IDENTITY must be a Developer ID Application identity"; exit 1 ;;
+          esac
           # Marketing version (CFBundleShortVersionString) = the tag minus its leading "v", so every
           # release reports its own version — NOT build-app.sh's hardcoded default. CFBundleVersion
           # (what Sparkle compares) stays the monotonic git rev-list count.
@@ -48,6 +92,10 @@ jobs:
           echo "app_path=${APP_PATH}" >> "${GITHUB_OUTPUT}"
 
       - name: Smoke packaged app
+        env:
+          REQUIRE_STABLE_CODESIGN: "1"
+          REQUIRE_DEVELOPER_ID_CODESIGN: "1"
+          REQUIRE_CODESIGN_TEAM_ID: XG9SBNWNXT
         run: scripts/test-packaged-app.sh "${{ steps.build.outputs.app_path }}"
 
       - name: Package + checksum
