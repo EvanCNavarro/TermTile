@@ -79,6 +79,62 @@ struct ReleaseReadinessTests {
         }
     }
 
+    @Test("release docs do not claim public CI can self-sign releases")
+    func releaseDocsRequireDeveloperIDForPublicRelease() {
+        let docs = Self.file("docs/RELEASING.md")
+        #expect(docs.contains("TERMTILE_SIGN_IDENTITY"),
+                "release docs must describe the release signing identity")
+        #expect(docs.contains("Developer ID Application"),
+                "release docs must require Developer ID Application for public releases")
+        #expect(docs.contains("does not fall back"),
+                "release docs must make the no-fallback public release policy explicit")
+        #expect(!docs.contains("CI falls back to the stable self-signed"),
+                "release docs must not describe the removed public CI self-signed fallback")
+    }
+
+    @Test("notarization runbook captures the blocked queue evidence")
+    func notarizationRunbookCapturesCurrentEvidence() {
+        let docs = Self.file("docs/NOTARIZATION.md")
+        #expect(docs.contains("a4b780fa-92be-4f61-bfc8-5aedd613ada8"),
+                "Notarization runbook must record the minimal-app differential job")
+        #expect(docs.contains("NotaryProbe"),
+                "Notarization runbook must mention the minimal differential app")
+        #expect(docs.contains("Do not create more submissions"),
+                "Notarization runbook must prevent repeated queue-noise submissions")
+        #expect(docs.contains("scripts/notary-status.sh"),
+                "Notarization runbook must point at the status-only polling script")
+    }
+
+    @Test("notarization runbook uses placeholder credential examples")
+    func notarizationRunbookAvoidsAccountSpecificCredentialExamples() {
+        let docs = Self.file("docs/NOTARIZATION.md")
+        #expect(docs.contains("TERMTILE_NOTARY_KEY_PATH=/path/to/AuthKey.p8"),
+                "runbook should show a local-key placeholder, not a machine-specific path")
+        #expect(docs.contains("TERMTILE_NOTARY_KEY_ID=YOUR_KEY_ID"),
+                "runbook should show a key-id placeholder, not an account-specific key id")
+        #expect(docs.contains("TERMTILE_NOTARY_ISSUER_ID=YOUR_ISSUER_ID"),
+                "runbook should show an issuer-id placeholder, not an account-specific issuer id")
+        #expect(docs.contains("TERMTILE_NOTARY_FETCH_LOGS=1"),
+                "runbook should include the explicit log-fetch env flag")
+        #expect(!docs.contains("$HOME/Downloads/AuthKey_"),
+                "runbook must not hard-code a developer machine key filename")
+    }
+
+    @Test("public docs describe Developer ID signing without claiming notarization")
+    func publicDocsDescribeCurrentSigningState() {
+        for path in ["README.md", "SECURITY.md"] {
+            let docs = Self.file(path)
+            #expect(docs.contains("Developer ID signed"),
+                    "\(path) must describe the current public signing state")
+            #expect(docs.contains("not notarized yet"),
+                    "\(path) must keep the current Gatekeeper limitation explicit")
+            #expect(!docs.contains("ad-hoc signed today"),
+                    "\(path) must not describe the pre-0.2.1 ad-hoc release state")
+            #expect(!docs.contains("ad-hoc signed, not notarized"),
+                    "\(path) must not describe the pre-0.2.1 ad-hoc release state")
+        }
+    }
+
     @Test("menu identity links do not require MacFaceKit SwiftPM resource bundles at runtime")
     func menuIdentityLinksAvoidBundleBackedBrandAssets() {
         for source in Self.swiftFiles(under: "Sources") {

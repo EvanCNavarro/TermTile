@@ -27,6 +27,68 @@ struct PackagingScriptsTests {
 
     private static func lines(_ text: String) -> [String] { text.split(separator: "\n").map(String.init) }
 
+    private static func runNotaryStatus(
+        arguments: [String] = [],
+        fetchLogs: Bool = false
+    ) throws -> String {
+        let fm = FileManager.default
+        let temp = fm.temporaryDirectory.appending(
+            path: "termtile-notary-status-\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
+        let bin = temp.appending(path: "bin", directoryHint: .isDirectory)
+        let fakeXcrun = bin.appending(path: "xcrun")
+        let callsLog = temp.appending(path: "xcrun-calls.log")
+        let key = temp.appending(path: "AuthKey.p8")
+        try fm.createDirectory(at: bin, withIntermediateDirectories: true)
+        try "fake-key".write(to: key, atomically: true, encoding: .utf8)
+        try """
+        #!/usr/bin/env bash
+        set -euo pipefail
+        echo "$*" >> "$TERMTILE_FAKE_XCRUN_LOG"
+        test "${1:-}" = "notarytool" || { echo "unexpected xcrun command: $*" >&2; exit 98; }
+        shift
+        case "${1:-}" in
+          history) echo '{"history":[]}' ;;
+          info) echo '{"status":"In Progress"}' ;;
+          log) echo '{"logFileUrl":null}' ;;
+          submit) echo "submit must not be called" >&2; exit 97 ;;
+          *) echo "unexpected notarytool command: $*" >&2; exit 99 ;;
+        esac
+        """.write(to: fakeXcrun, atomically: true, encoding: .utf8)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeXcrun.path)
+        defer { try? fm.removeItem(at: temp) }
+
+        let process = Process()
+        process.executableURL = repoRoot().appending(path: "scripts/notary-status.sh")
+        process.arguments = arguments
+
+        var env = ProcessInfo.processInfo.environment
+        env["PATH"] = "\(bin.path):\(env["PATH"] ?? "")"
+        env["TERMTILE_FAKE_XCRUN_LOG"] = callsLog.path
+        env["TERMTILE_NOTARY_KEY_PATH"] = key.path
+        env["TERMTILE_NOTARY_KEY_ID"] = "TESTKEYID"
+        env["TERMTILE_NOTARY_ISSUER_ID"] = "TESTISSUERID"
+        env["TERMTILE_NOTARY_FETCH_LOGS"] = "0"
+        if fetchLogs {
+            env["TERMTILE_NOTARY_FETCH_LOGS"] = "1"
+        }
+        process.environment = env
+
+        let output = Pipe()
+        let error = Pipe()
+        process.standardOutput = output
+        process.standardError = error
+        try process.run()
+        process.waitUntilExit()
+
+        let stdout = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let stderr = String(data: error.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        #expect(process.terminationStatus == 0,
+                "notary-status.sh failed stdout=\(stdout) stderr=\(stderr)")
+        return (try? String(contentsOf: callsLog, encoding: .utf8)) ?? ""
+    }
+
     // 1. Inside-out codesign via the #13c identity parameter: sign lines use
     //    `--sign "$SIGN_IDENTITY"`, which resolves explicit env → local dev cert → ad-hoc FALLBACK
     //    (so CI needs no keychain), and must NOT carry `--deep` (per Sparkle/audit — `--deep` corrupts
@@ -178,10 +240,12 @@ struct PackagingScriptsTests {
     @Test("notarize-app.sh: submits, staples, validates, and Gatekeeper-assesses the app")
     func notarizeScriptIsRealWorkflow() {
         let s = Self.script("notarize-app.sh")
-        #expect(s.contains("TERMTILE_NOTARY_KEY_P8_BASE64"),
-                "notarize-app.sh must be able to materialize the CI .p8 key from a secret")
-        #expect(s.contains("TERMTILE_NOTARY_KEY_PATH"),
-                "notarize-app.sh must support a local key path for pre-release validation")
+        #expect(s.contains("scripts/lib/notary-auth.sh"),
+                "notarize-app.sh must source the shared Notary auth helper")
+        #expect(s.contains("termtile_notary_prepare_auth"),
+                "notarize-app.sh must initialize credentials through the shared helper")
+        #expect(s.contains(#""${TERMTILE_NOTARY_ARGS[@]}""#),
+                "notarize-app.sh must pass Notary credentials through the shared args array")
         #expect(s.contains("ditto -c -k --keepParent"),
                 "notarize-app.sh must submit a parent-preserving zip archive")
         #expect(s.contains("notarytool submit") && s.contains("--wait"),
@@ -202,11 +266,68 @@ struct PackagingScriptsTests {
                 "notarize-app.sh must prove Gatekeeper accepts the final app")
     }
 
+    @Test("notary auth helper: one credential authority for Notary scripts")
+    func notaryAuthHelperIsSharedCredentialAuthority() {
+        let s = Self.script("lib/notary-auth.sh")
+        #expect(s.contains("termtile_notary_prepare_auth"),
+                "Notary auth helper must expose credential preparation")
+        #expect(s.contains("TERMTILE_NOTARY_KEY_P8_BASE64"),
+                "Notary auth helper must materialize the CI .p8 key from a secret")
+        #expect(s.contains("TERMTILE_NOTARY_KEY_PATH"),
+                "Notary auth helper must support a local key path for pre-release validation")
+        #expect(s.contains("TERMTILE_NOTARY_ARGS=("),
+                "Notary auth helper must expose one shared notarytool args array")
+        #expect(s.contains("chmod 600"),
+                "Notary auth helper must lock down any materialized .p8 key file")
+    }
+
+    @Test("notary-status.sh: polls existing submissions without uploading")
+    func notaryStatusScriptDoesNotSubmit() {
+        let s = Self.script("notary-status.sh")
+        #expect(s.contains("scripts/lib/notary-auth.sh"),
+                "notary-status.sh must source the shared Notary auth helper")
+        #expect(s.contains("notarytool history"),
+                "notary-status.sh with no IDs must read submission history")
+        #expect(s.contains("notarytool info"),
+                "notary-status.sh with IDs must read existing submission status")
+        #expect(s.contains("TERMTILE_NOTARY_FETCH_LOGS"),
+                "notary-status.sh must make log fetching explicit, not noisy by default")
+        #expect(!s.contains("notarytool submit"),
+                "notary-status.sh must not create new Notary submissions")
+    }
+
+    @Test("notary-status.sh behavior: reads history/info/log only, never submit")
+    func notaryStatusBehaviorIsReadOnly() throws {
+        let historyCalls = try Self.runNotaryStatus()
+        #expect(historyCalls.contains("notarytool history"),
+                "no-ID status check must read Notary history")
+        #expect(!historyCalls.contains("notarytool submit"),
+                "no-ID status check must not submit")
+
+        let infoCalls = try Self.runNotaryStatus(arguments: ["job-one", "job-two"])
+        #expect(infoCalls.contains("notarytool info job-one"),
+                "ID status check must inspect the first requested job")
+        #expect(infoCalls.contains("notarytool info job-two"),
+                "ID status check must inspect every requested job")
+        #expect(!infoCalls.contains("notarytool log"),
+                "ID status check must not fetch logs unless explicitly requested")
+        #expect(!infoCalls.contains("notarytool submit"),
+                "ID status check must not submit")
+
+        let logCalls = try Self.runNotaryStatus(arguments: ["job-one"], fetchLogs: true)
+        #expect(logCalls.contains("notarytool info job-one"),
+                "log mode must still inspect the requested job")
+        #expect(logCalls.contains("notarytool log job-one"),
+                "log mode must fetch logs for the requested job")
+        #expect(!logCalls.contains("notarytool submit"),
+                "log mode must not submit")
+    }
+
     // 11. Scripts exist and are executable (a text-present stub that isn't chmod +x never runs).
     @Test("packaging scripts exist and are executable")
     func scriptsAreExecutable() {
         let fm = FileManager.default
-        for name in ["build-app.sh", "test-packaged-app.sh", "notarize-app.sh"] {
+        for name in ["build-app.sh", "test-packaged-app.sh", "notarize-app.sh", "notary-status.sh"] {
             let path = Self.repoRoot().appending(path: "scripts/\(name)").path
             #expect(fm.fileExists(atPath: path), "\(name) must exist")
             #expect(fm.isExecutableFile(atPath: path), "\(name) must be executable (chmod +x)")

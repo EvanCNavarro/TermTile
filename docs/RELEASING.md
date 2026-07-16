@@ -6,7 +6,7 @@ Versioning mirrors RememBar's discipline (RememBar-audit §7), with one delibera
 
 - **Marketing version** (`CFBundleShortVersionString`, what users see) = the git tag minus its
   leading `v`. `release.yml` passes `SHORT_VERSION="${GITHUB_REF_NAME#v}"` to `build-app.sh`, so
-  tag `v0.2.0` ships as `0.2.0`. Tags follow SemVer: `vMAJOR.MINOR.PATCH`.
+  tag `v0.2.1` ships as `0.2.1`. Tags follow SemVer: `vMAJOR.MINOR.PATCH`.
 - **Build version** (`CFBundleVersion`, what Sparkle compares to decide "is this newer?") =
   `git rev-list --count HEAD` — a monotonic commit count. This is the improvement over RememBar's
   dots-stripped scheme (audit §8.5): `1.0.0` and `0.10.0` both dots-strip to `100` and collide;
@@ -28,12 +28,12 @@ the "What's new" section will be empty — so write it first.
 
 ```
 # 1. Write the notes (before tagging):
-$EDITOR release-notes/0.2.0.md
+$EDITOR release-notes/0.2.2.md
 
 # 2. Commit + tag + push — the tag fires release.yml:
-git add release-notes/0.2.0.md && git commit -m "docs: 0.2.0 release notes"
-git tag -a v0.2.0 -m "TermTile v0.2.0"
-git push origin master v0.2.0
+git add release-notes/0.2.2.md && git commit -m "docs: 0.2.2 release notes"
+git tag -a v0.2.2 -m "TermTile v0.2.2"
+git push origin master v0.2.2
 ```
 
 `release.yml` (on the `v*` tag) then: vendors Sparkle → runs the test/lint gate → builds + signs
@@ -49,10 +49,13 @@ update can leave System Settings showing TermTile enabled while the new binary i
 
 `release.yml` imports a signing identity from GitHub secrets and sets `TERMTILE_SIGN_IDENTITY` before
 calling `scripts/build-app.sh`. Set the repo variable `TERMTILE_SIGN_IDENTITY` to the exact Keychain
-identity name, for example `Developer ID Application: Evan Navarro (TEAMID)`. If that variable is
-absent, CI falls back to the stable self-signed `TermTile Dev Signing` identity. The fallback does
-**not** provide Gatekeeper trust or notarization, but it gives TCC a stable code identity across
-releases from that signing line.
+identity name, for example `Developer ID Application: Evan Navarro (TEAMID)`. Public release CI
+does not fall back to the stable self-signed `TermTile Dev Signing` identity: the workflow fails if
+`TERMTILE_SIGN_IDENTITY` is missing or is not a `Developer ID Application` identity.
+
+`scripts/build-app.sh` still has a local-development fallback to `TermTile Dev Signing`, then ad-hoc
+signing, so fresh clones can build and local developer machines can keep stable TCC grants. That
+fallback is not the public release policy.
 
 Required release secrets:
 
@@ -61,8 +64,16 @@ Required release secrets:
 - `SPARKLE_ED_PRIVATE_KEY`
 - `VIRUSTOTAL_API_KEY` (optional)
 
+Prepared Notary credentials:
+
+- `TERMTILE_NOTARY_KEY_P8_BASE64`
+- `TERMTILE_NOTARY_KEY_ID`
+- `TERMTILE_NOTARY_ISSUER_ID`
+
 Developer ID notarization is prepared but not release-gated yet. `scripts/notarize-app.sh` submits a
 parent-preserving zip to Apple with `notarytool`, requires an `Accepted` result, staples the ticket,
-validates the stapled app, and runs `spctl --assess`. Wire it into `release.yml` only after a real
-submission completes reliably; a stuck Notary job should block the notarized cut, not silently ship a
-fake notarized release.
+validates the stapled app, and runs `spctl --assess`. `scripts/notary-status.sh` is read-only status
+tooling for existing submissions; use it while Apple jobs are pending instead of creating duplicate
+uploads. Wire notarization into `release.yml` only after a real submission completes reliably; a stuck
+Notary job should block the notarized cut, not silently ship a fake notarized release. See
+`docs/NOTARIZATION.md`.

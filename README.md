@@ -27,7 +27,8 @@ nothing until you ask it to.
    [latest release](https://github.com/EvanCNavarro/TermTile/releases/latest) and unzip it. Drag
    **TermTile.app** to `/Applications`.
 2. **First launch (macOS Sequoia / 15):** double-clicking shows *"Apple could not verify…"* — expected
-   for an app that isn't notarized yet. To open it: **System Settings → Privacy & Security**, scroll to
+   for a Developer ID signed app that is not notarized yet. To open it: **System Settings →
+   Privacy & Security**, scroll to
    the **Security** section, and click **"Open Anyway"** next to the TermTile message, then confirm.
 3. **Grant Accessibility** so it can arrange windows: **System Settings → Privacy & Security →
    Accessibility → enable TermTile.** TermTile shows a one-click button to this screen when it detects
@@ -60,6 +61,8 @@ release carries what you need to check the file before running it:
   ```
 - **SHA-256** — published as a `.sha256` asset next to the zip; verify with
   `shasum -a 256 -c TermTile-<version>.zip.sha256`.
+- **Developer ID signed** — public releases use Apple's Developer ID Application signing so macOS
+  Accessibility/Input Monitoring grants keep a stable code identity across updates.
 - **Signed updates** — the Sparkle auto-update feed is EdDSA-signed, so an update with a missing or
   bad signature is refused.
 
@@ -80,8 +83,8 @@ in `TermTileCore`, the Accessibility adapter in `TermTileKit`, a thin SwiftUI me
 
 ## Not yet
 
-- **Notarization** — releases are ad-hoc signed today (hence the Gatekeeper step above). A signed +
-  notarized build (removing the warning) lands with an Apple Developer ID.
+- **Notarization** — releases are Developer ID signed, but not notarized yet. A notarized build
+  removes the Gatekeeper warning once Apple Notary returns an accepted ticket.
 - **Intel Macs** — the build is Apple Silicon only for now.
 - Multi-display / Spaces awareness is on the roadmap.
 
