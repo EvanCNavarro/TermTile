@@ -59,6 +59,7 @@ public final class MenuBarViewModel {
     let settings: any SettingsStore
     @ObservationIgnored private let loginItem: any LoginItem
     @ObservationIgnored private let isTrustedProbe: @Sendable () -> Bool
+    @ObservationIgnored private let requestAccessibilityTrust: @Sendable () -> Bool
     @ObservationIgnored private let visibleFrame: CGRect
     @ObservationIgnored private let epsilon: CGFloat
     @ObservationIgnored private let makeActor: @Sendable (String) -> TilingActor
@@ -74,27 +75,34 @@ public final class MenuBarViewModel {
     /// composition root (production — its closures capture this VM, so it can't exist at init: the
     /// same cycle-break the hotkey uses). The VM owns its lifecycle via `syncReorderMonitor()`.
     @ObservationIgnored private var dragReorder: (any DragReorderControlling)?
+    /// Clears stale macOS TCC rows for this bundle ID. Optional so selftest/gallery cannot mutate a
+    /// developer's real permission database.
+    @ObservationIgnored private let permissionRepairer: (any PermissionRepairing)?
 
     public init(
         settings: any SettingsStore,
         loginItem: any LoginItem,
         appsProvider: any TargetAppsProviding,
         isTrustedProbe: @escaping @Sendable () -> Bool,
+        requestAccessibilityTrust: @escaping @Sendable () -> Bool = { false },
         visibleFrame: CGRect,
         epsilon: CGFloat,
         makeActor: @escaping @Sendable (String) -> TilingActor,
         uninstaller: Uninstaller? = nil,
-        dragReorder: (any DragReorderControlling)? = nil
+        dragReorder: (any DragReorderControlling)? = nil,
+        permissionRepairer: (any PermissionRepairing)? = nil
     ) {
         let loaded = settings.load()
         self.settings = settings
         self.loginItem = loginItem
         self.isTrustedProbe = isTrustedProbe
+        self.requestAccessibilityTrust = requestAccessibilityTrust
         self.visibleFrame = visibleFrame
         self.epsilon = epsilon
         self.makeActor = makeActor
         self.uninstaller = uninstaller
         self.dragReorder = dragReorder
+        self.permissionRepairer = permissionRepairer
         self.targetBundleID = loaded.targetBundleID
         self.availableApps = appsProvider.runningTargetApps()
         self.isAccessibilityTrusted = false   // set by syncTrust() below (single source)
@@ -150,6 +158,28 @@ public final class MenuBarViewModel {
     /// Accessibility one). `Privacy_ListenEvent` is the Input-Monitoring pane anchor.
     public var inputMonitoringSettingsURL: URL {
         URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!
+    }
+
+    /// Repair path for users who granted an older/ad-hoc TermTile build and now have a stale TCC row:
+    /// clear only TermTile's Accessibility grant, then re-probe so the Settings pane can show the
+    /// current app for the user to approve. This never grants permission silently.
+    @discardableResult
+    public func repairAccessibilityPermission() -> [PermissionRepairReport] {
+        guard let permissionRepairer else { return [] }
+        let reports = permissionRepairer.reset([.accessibility])
+        _ = requestAccessibilityTrust()
+        refreshTrust()
+        return reports
+    }
+
+    /// Repair path for stale Input Monitoring grants. Reset the old row, then run the same request
+    /// path used when drag-reorder is first enabled so macOS registers the current app in the pane.
+    @discardableResult
+    public func repairInputMonitoringPermission() -> [PermissionRepairReport] {
+        guard let permissionRepairer else { return [] }
+        let reports = permissionRepairer.reset([.inputMonitoring])
+        syncReorderMonitor()
+        return reports
     }
 
     /// The drag-reorder seam the controller's monitor calls (#26). Both hit the CURRENT `actor` (which
@@ -295,5 +325,10 @@ public final class MenuBarViewModel {
     /// menu open (the user reaches System Settings via the fix-it row's `Link` instead).
     public static let liveTrustProbe: @Sendable () -> Bool = {
         AccessibilityTrust.isTrusted(prompting: false)
+    }
+
+    /// The production prompt path used only after the user explicitly chooses the repair action.
+    public static let liveTrustPrompt: @Sendable () -> Bool = {
+        AccessibilityTrust.isTrusted(prompting: true)
     }
 }

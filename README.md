@@ -34,6 +34,11 @@ nothing until you ask it to.
    access is missing.
 4. Click the **TermTile** menu-bar item → pick your terminal in **Target app** → press **Rearrange now**.
 
+If macOS shows TermTile as already enabled but the app still says permission is missing, use
+TermTile's **Repair Accessibility** button. For drag-reorder, use **Repair Input Monitoring** if that
+permission looks enabled but TermTile still cannot start drag detection. These repair buttons clear
+only TermTile's stale macOS TCC row and open the correct Settings pane so you can approve the current signed app again.
+
 Requires **macOS 14 (Sonoma) or later**, on **Apple Silicon**.
 
 ## Privacy & permissions
@@ -47,7 +52,8 @@ TermTile is local and quiet:
 - **The only network request** is the update check: TermTile fetches its signed appcast from this
   repository's GitHub releases to see if a newer version exists. Nothing about you is sent.
 
-**Permissions it asks for:** Accessibility (to move and resize windows). That's it.
+**Permissions it asks for:** Accessibility to move and resize windows. If you enable
+**Reorder windows on drag**, TermTile also asks for Input Monitoring so it can detect the drag gesture.
 
 ## Verify this download
 

@@ -98,6 +98,25 @@ struct ReleaseReadinessTests {
         }
     }
 
+    @Test("0.2.3 release notes explain stale permission repair")
+    func releaseNotes023CoverPermissionRepair() {
+        let notes = Self.file("release-notes/0.2.3.md")
+        #expect(!notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                "release-notes/0.2.3.md must exist before tagging v0.2.3")
+
+        for required in [
+            "Repair Accessibility",
+            "Repair Input Monitoring",
+            "stale",
+            "older",
+            "ad-hoc",
+            "TCC"
+        ] {
+            #expect(notes.localizedCaseInsensitiveContains(required),
+                    "release-notes/0.2.3.md must mention \(required)")
+        }
+    }
+
     @Test("release docs do not claim public CI can self-sign releases")
     func releaseDocsRequireDeveloperIDForPublicRelease() {
         let docs = Self.file("docs/RELEASING.md")
@@ -168,6 +187,36 @@ struct ReleaseReadinessTests {
             #expect(!docs.contains("ad-hoc signed, not notarized"),
                     "\(path) must not describe the pre-0.2.1 ad-hoc release state")
         }
+    }
+
+    @Test("public docs explain in-app stale permission repair")
+    func publicDocsExplainPermissionRepair() {
+        let readme = Self.file("README.md")
+        for required in [
+            "Repair Accessibility",
+            "Repair Input Monitoring",
+            "stale macOS TCC row",
+            "approve the current signed app again"
+        ] {
+            #expect(readme.localizedCaseInsensitiveContains(required),
+                    "README.md must mention \(required)")
+        }
+    }
+
+    @Test("accessibility repair is offered before and after the local trust latch")
+    func accessibilityRepairAvailableForBothUntrustedStates() {
+        let menu = Self.file("Sources/TermTile/MenuBarContent.swift")
+        guard let firstGrant = menu.range(of: "case .needsFirstGrant:"),
+              let grantBroken = menu.range(of: "case .grantBroken:") else {
+            Issue.record("MenuBarContent.swift must render both untrusted Accessibility states")
+            return
+        }
+        let needsFirstGrantBlock = String(menu[firstGrant.upperBound..<grantBroken.lowerBound])
+        let grantBrokenBlock = String(menu[grantBroken.upperBound...])
+        #expect(needsFirstGrantBlock.contains("repairAccessibilityButton"),
+                "first-grant-looking state must still offer repair for older users without wasTrusted")
+        #expect(grantBrokenBlock.contains("repairAccessibilityButton"),
+                "grant-broken state must offer repair")
     }
 
     @Test("menu identity links do not require MacFaceKit SwiftPM resource bundles at runtime")

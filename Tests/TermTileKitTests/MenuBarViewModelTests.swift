@@ -36,7 +36,9 @@ struct MenuBarViewModelTests {
         login: any LoginItem = InMemoryLoginItem(),
         apps: [TargetApp] = [TargetApp(bundleID: "com.googlecode.iterm2", name: "iTerm2")],
         trusted: Bool = false,
-        uninstaller: Uninstaller? = nil
+        requestAccessibilityTrust: @escaping @Sendable () -> Bool = { false },
+        uninstaller: Uninstaller? = nil,
+        permissionRepairer: (any PermissionRepairing)? = nil
     ) -> (vm: MenuBarViewModel, fake: InMemoryWindowSystem) {
         let fake = InMemoryWindowSystem(windows: windows)
         let vm = MenuBarViewModel(
@@ -44,10 +46,12 @@ struct MenuBarViewModelTests {
             loginItem: login,
             appsProvider: InMemoryTargetAppsProvider(seed: apps),
             isTrustedProbe: { trusted },
+            requestAccessibilityTrust: requestAccessibilityTrust,
             visibleFrame: visible,
             epsilon: eps,
             makeActor: { _ in TilingActor(system: fake, epsilon: self.eps) },
-            uninstaller: uninstaller)
+            uninstaller: uninstaller,
+            permissionRepairer: permissionRepairer)
         return (vm, fake)
     }
 
@@ -312,7 +316,17 @@ struct MenuBarViewModelTests {
         func requestInputMonitoring() { requestCount += 1 }
     }
 
-    func makeVMWithReorder(store: InMemorySettingsStore, trusted: Bool, granted: Bool)
+    @MainActor
+    final class SpyPermissionRepairer: PermissionRepairing {
+        private(set) var resetScopes: [[PermissionRepairScope]] = []
+        func reset(_ scopes: [PermissionRepairScope]) -> [PermissionRepairReport] {
+            resetScopes.append(scopes)
+            return scopes.map { PermissionRepairReport(scope: $0, exitCode: 0) }
+        }
+    }
+
+    func makeVMWithReorder(store: InMemorySettingsStore, trusted: Bool, granted: Bool,
+                           permissionRepairer: (any PermissionRepairing)? = nil)
         -> (MenuBarViewModel, SpyDragReorder) {
         let fake = InMemoryWindowSystem(windows: [])
         let spy = SpyDragReorder(granted: granted)
@@ -321,7 +335,8 @@ struct MenuBarViewModelTests {
             appsProvider: InMemoryTargetAppsProvider(seed: []),
             isTrustedProbe: { trusted }, visibleFrame: visible, epsilon: eps,
             makeActor: { _ in TilingActor(system: fake, epsilon: self.eps) },
-            dragReorder: spy)
+            dragReorder: spy,
+            permissionRepairer: permissionRepairer)
         return (vm, spy)
     }
 
@@ -366,6 +381,51 @@ struct MenuBarViewModelTests {
     @Test("input-monitoring settings URL is the Privacy_ListenEvent deep link")
     func inputMonitoringURLIsDeepLink() {
         #expect(makeVM().0.inputMonitoringSettingsURL.absoluteString.contains("Privacy_ListenEvent"))
+    }
+
+    @Test("repairAccessibilityPermission resets only the Accessibility TCC grant")
+    func repairAccessibilityPermissionResetsOnlyAccessibility() {
+        let repairer = SpyPermissionRepairer()
+        final class Box: @unchecked Sendable { var promptCount = 0 }
+        let box = Box()
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
+                               hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
+        let (vm, _) = makeVM(store: store, trusted: false, requestAccessibilityTrust: {
+            box.promptCount += 1
+            return false
+        }, permissionRepairer: repairer)
+        vm.repairAccessibilityPermission()
+        #expect(repairer.resetScopes == [[.accessibility]])
+        #expect(box.promptCount == 1)
+        #expect(vm.accessibilityState == .grantBroken)
+    }
+
+    @Test("repairAccessibilityPermission is inert when no repairer is injected")
+    func repairAccessibilityPermissionNoopsWithoutRepairer() {
+        final class Box: @unchecked Sendable { var promptCount = 0 }
+        let box = Box()
+        let (vm, _) = makeVM(trusted: false, requestAccessibilityTrust: {
+            box.promptCount += 1
+            return false
+        })
+        #expect(vm.repairAccessibilityPermission().isEmpty)
+        #expect(box.promptCount == 0)
+    }
+
+    @Test("repairInputMonitoringPermission resets ListenEvent and re-requests the grant")
+    func repairInputMonitoringPermissionResetsAndRequests() {
+        let repairer = SpyPermissionRepairer()
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
+                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap))
+        let (vm, drag) = makeVMWithReorder(store: store, trusted: true, granted: false,
+                                           permissionRepairer: repairer)
+        let before = drag.requestCount
+        vm.repairInputMonitoringPermission()
+        #expect(repairer.resetScopes == [[.inputMonitoring]])
+        #expect(drag.requestCount > before)
+        #expect(!drag.isRunning)
     }
 
     // #25b — setHotKey: valid combo commits + persists + fires the change handler; invalid is

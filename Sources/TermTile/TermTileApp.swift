@@ -54,12 +54,14 @@ struct TermTileApp: App {
             loginItem: loginItem,
             appsProvider: WorkspaceTargetAppsProvider(),
             isTrustedProbe: MenuBarViewModel.liveTrustProbe,
+            requestAccessibilityTrust: MenuBarViewModel.liveTrustPrompt,
             visibleFrame: visibleFrame,
             epsilon: eps,
             makeActor: { bundleID in
                 TilingActor(system: AXWindowSystem(bundleID: bundleID), epsilon: eps)
             },
-            uninstaller: uninstaller)
+            uninstaller: uninstaller,
+            permissionRepairer: (isSelftest || isGallery) ? nil : TCCPermissionRepairer())
 
         // Menu-bar utility: no dock icon, never takes window focus. Set here (init is reliable);
         // the delegate re-asserts it as a belt.
