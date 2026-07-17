@@ -66,7 +66,7 @@ release carries what you need to check the file before running it:
   gh attestation verify TermTile-<version>.zip --repo EvanCNavarro/TermTile
   ```
 - **SHA-256** — published as a `.sha256` asset next to the zip; verify with
-  `shasum -a 256 -c TermTile-<version>.zip.sha256`.
+  `env LC_ALL=C LANG=C shasum -a 256 -c TermTile-<version>.zip.sha256`.
 - **Developer ID signed** — public releases use Apple's Developer ID Application signing so macOS
   Accessibility/Input Monitoring grants keep a stable code identity across updates.
 - **Notarized and stapled** — v0.2.2 and newer release artifacts are submitted to Apple Notary,

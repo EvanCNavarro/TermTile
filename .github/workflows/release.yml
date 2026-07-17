@@ -125,9 +125,9 @@ jobs:
           ZIP="dist/TermTile-${GITHUB_REF_NAME}.zip"
           ditto -c -k --keepParent "${APP_PATH}" "${ZIP}"
           # Checksum with a BASENAME-relative path (cd into dist/) so a user who downloads both
-          # files can verify with `shasum -a 256 -c TermTile-<tag>.zip.sha256` — a dist/ prefix
+          # files can verify with `env LC_ALL=C LANG=C shasum -a 256 -c TermTile-<tag>.zip.sha256` — a dist/ prefix
           # would make -c fail to find the file even though the hash is right.
-          ( cd dist && shasum -a 256 "TermTile-${GITHUB_REF_NAME}.zip" | tee "TermTile-${GITHUB_REF_NAME}.zip.sha256" )
+          ( cd dist && env LC_ALL=C LANG=C shasum -a 256 "TermTile-${GITHUB_REF_NAME}.zip" | tee "TermTile-${GITHUB_REF_NAME}.zip.sha256" )
           echo "zip=${ZIP}" >> "${GITHUB_OUTPUT}"
 
       # Single-source release notes (RememBar-audit §7): release-notes/<version>.md, authored before

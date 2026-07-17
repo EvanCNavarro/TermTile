@@ -90,6 +90,6 @@ ditto -x -k TermTile-vX.Y.Z.zip unpacked
 codesign --verify --deep --strict --verbose=2 unpacked/TermTile.app
 xcrun stapler validate unpacked/TermTile.app
 spctl --assess --type execute --verbose=4 unpacked/TermTile.app
-shasum -a 256 -c TermTile-vX.Y.Z.zip.sha256
+env LC_ALL=C LANG=C shasum -a 256 -c TermTile-vX.Y.Z.zip.sha256
 gh attestation verify TermTile-vX.Y.Z.zip --repo EvanCNavarro/TermTile
 ```
