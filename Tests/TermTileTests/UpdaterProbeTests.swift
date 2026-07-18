@@ -49,6 +49,37 @@ struct UpdaterProbeTests {
         #expect(fake.foregroundCheckCount == 1)
         #expect(fake.informationCheckCount == 0)
     }
+
+    @Test("available update keeps the menu check command actionable")
+    func availableUpdateKeepsMenuCheckCommandActionable() {
+        let fake = FakeUpdateChecking()
+        fake.canCheckForUpdates = false
+        let updater = Updater(startSession: { _ in StartedUpdateSession(updater: fake) })
+
+        updater.refreshAvailability()
+        updater.recordAvailableUpdate(version: "9.9.9")
+
+        #expect(!updater.canCheckForUpdates)
+        #expect(updater.canOpenUpdateCheck)
+    }
+
+    @Test("available update waits for active Sparkle session to finish before enabling menu command")
+    func availableUpdateWaitsForActiveSessionBeforeEnablingMenuCommand() {
+        let fake = FakeUpdateChecking()
+        fake.canCheckForUpdates = false
+        let updater = Updater(startSession: { _ in StartedUpdateSession(updater: fake) })
+
+        updater.refreshAvailability()
+        fake.sessionInProgress = true
+        updater.recordAvailableUpdate(version: "9.9.9")
+
+        #expect(!updater.canOpenUpdateCheck)
+
+        fake.sessionInProgress = false
+        updater.recordPassiveAvailabilityCheckFinished(error: nil)
+
+        #expect(updater.canOpenUpdateCheck)
+    }
 }
 
 @MainActor

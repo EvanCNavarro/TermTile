@@ -5,8 +5,9 @@
 # e2e/CI reuse the SAME build path (no drift). Menu-bar-only (LSUIElement); Sparkle is embedded,
 # so signing is an inside-out pass with hardened runtime enabled and NO --deep on sign operations
 # (audit sec 2: --deep can corrupt nested signatures), then verified --deep --strict.
-# CFBundleVersion is the monotonic commit count, NEVER dots-stripped (audit sec 8.5:
-# 0.10.1->0101 collides).
+# CFBundleVersion is the monotonic commit count by default, NEVER dots-stripped (audit sec 8.5:
+# 0.10.1->0101 collides). TERMTILE_BUILD_NUMBER is reserved for local downgrade/update-indicator
+# verification builds that must compare below an already-published Sparkle appcast.
 set -euo pipefail
 
 APP_NAME="${APP_NAME:-TermTile}"
@@ -26,7 +27,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 # Monotonic build number from commit count - padded-safe, never dots-stripped (audit sec 8.5).
-BUILD_NUMBER="$(git rev-list --count HEAD)"
+if [ -n "${TERMTILE_BUILD_NUMBER:-}" ]; then
+	if [ "${GITHUB_ACTIONS:-false}" = "true" ]; then
+		echo "TERMTILE_BUILD_NUMBER is local-only and cannot be used in GitHub Actions" >&2
+		exit 1
+	fi
+	[[ "$TERMTILE_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || {
+		echo "TERMTILE_BUILD_NUMBER must be a positive integer (got: $TERMTILE_BUILD_NUMBER)" >&2
+		exit 1
+	}
+	BUILD_NUMBER="$TERMTILE_BUILD_NUMBER"
+else
+	BUILD_NUMBER="$(git rev-list --count HEAD)"
+fi
 
 # Build, then locate the product via --show-bin-path (RememBar crown-jewel - never a hardcoded
 # path; the flag must ride the SAME -c invocation or it prints the debug dir).

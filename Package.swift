@@ -12,10 +12,10 @@ let package = Package(
     ],
     dependencies: [
         // Shared 400faces macOS design system (tokens + components) — public + tagged, resolvable from
-        // any clone / CI without a local checkout. Pinned to the 0.3.x line: the app uses 0.3.x APIs
-        // (UpdateWindowController, PrimaryButton, shared attention indicators), and up-to-next-minor keeps builds
-        // reproducible while still taking patch fixes. Bump deliberately for a 0.4+ kit.
-        .package(url: "https://github.com/400faces/MacFaceKit.git", .upToNextMinor(from: "0.3.3"))
+        // any clone / CI without a local checkout. Pinned to the 0.4.x line: the app uses 0.4.x APIs
+        // (UpdateWindowController, PrimaryButton, shared attention indicator polish), and up-to-next-minor
+        // keeps builds reproducible while still taking patch fixes. Bump deliberately for a 0.5+ kit.
+        .package(url: "https://github.com/400faces/MacFaceKit.git", .upToNextMinor(from: "0.4.0"))
     ],
     targets: [
         // Functional core (ADR-0001): pure layout math + domain types. CoreGraphics only —

@@ -296,6 +296,15 @@ struct ReleaseReadinessTests {
                 "HANDOFF.md must not leave the post-release verification item pinned to v0.2.5")
     }
 
+    @Test("handoff records the current MacFaceKit dependency line")
+    func handoffRecordsCurrentMacFaceKitDependencyLine() {
+        let docs = Self.file("HANDOFF.md")
+        #expect(docs.contains("MacFaceKit `.upToNextMinor(from: \"0.4.0\")`"),
+                "HANDOFF.md should match the current shared design-system dependency line")
+        #expect(!docs.contains("pinned `.upToNextMinor(from: \"0.3.3\")`"),
+                "HANDOFF.md must not leave the recent UI arc pinned to the old MacFaceKit line")
+    }
+
     @Test("public docs describe passive update availability checks")
     func publicDocsDescribePassiveUpdateAvailabilityChecks() {
         for path in ["README.md", "SECURITY.md"] {
@@ -522,11 +531,20 @@ struct ReleaseReadinessTests {
     @Test("MacFaceKit dependency includes the shared attention API")
     func macFaceKitDependencyIncludesSharedAttentionAPI() {
         let package = Self.file("Package.swift")
-        #expect(package.contains(".upToNextMinor(from: \"0.3.3\")"),
-                "fresh resolution must start at MacFaceKit v0.3.3 or newer for shared attention indicators")
+        #expect(package.contains(".upToNextMinor(from: \"0.4.0\")"),
+                "fresh resolution must start at MacFaceKit v0.4.0 for shared attention indicator polish")
         let resolved = Self.resolvedVersion(for: "macfacekit")
         #expect(resolved != nil, "Package.resolved must include MacFaceKit")
-        #expect(resolved.map { Self.semver($0, isAtLeast: "0.3.3", below: "0.4.0") } == true,
-                "TermTile must consume MacFaceKit >= 0.3.3 and < 0.4.0 for shared attention indicators")
+        #expect(resolved.map { Self.semver($0, isAtLeast: "0.4.0", below: "0.5.0") } == true,
+                "TermTile must consume MacFaceKit >= 0.4.0 and < 0.5.0 for shared attention polish")
+    }
+
+    @Test("verification commands document the real Swift package gate")
+    func verificationCommandsDocumentSwiftGate() {
+        let docs = Self.file("docs/verification/COMMANDS.md")
+        #expect(docs.contains("scripts/fetch-sparkle.sh && swift build && swift test && swiftlint --strict"),
+                "verification commands should document the real Swift package health gate")
+        #expect(!docs.localizedCaseInsensitiveContains("npm run check"),
+                "TermTile is a Swift package, so verification docs should not point at npm")
     }
 }

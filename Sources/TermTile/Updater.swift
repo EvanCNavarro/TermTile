@@ -104,6 +104,15 @@ final class Updater: NSObject {
     /// Sparkle's own state.
     var canCheckForUpdates: Bool { updater?.canCheckForUpdates ?? true }
 
+    /// Menu-facing policy: once the passive probe has already found an update, keep the user command
+    /// actionable so "Check for Updates" can present the foreground update flow.
+    var canOpenUpdateCheck: Bool {
+        if availability.hasAvailableUpdate {
+            return updater?.sessionInProgress != true
+        }
+        return canCheckForUpdates
+    }
+
     private func writeUpdateProbeSmoke(_ event: String) {
         guard ProcessInfo.processInfo.environment["TERMTILE_UPDATE_PROBE_SMOKE"] != nil else { return }
         FileHandle.standardError.write(Data("UPDATE_PROBE_SMOKE \(event)\n".utf8))

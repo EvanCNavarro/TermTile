@@ -3,11 +3,11 @@
 ## Status
 
 Planned on 2026-07-18. Investigation complete. MacFaceKit Phase 1/2 implementation is complete and
-published; TermTile app implementation has not started for this follow-up yet. Initial code-review
-findings against this plan have been addressed in the sequencing below.
+published; TermTile Phases 3-6 are complete. Initial and final code-review findings against this plan
+have been addressed in the sequencing below.
 
-Current progress: Phases 0-2 complete, 40% total plan progress. MacFaceKit `v0.4.0`
-(`5e8eb0fc6c3644dc0bc665e18a1a8a449cfbd981`) is the consumer-ready shared indicator revision.
+Current progress: Phases 0-6 complete, 100% total plan progress. MacFaceKit `v0.4.0`
+(`5e8eb0fc6c3644dc0bc665e18a1a8a449cfbd981`) is consumed by TermTile for shared indicator polish.
 
 At the end of every implementation turn for this plan, report:
 
@@ -47,7 +47,9 @@ Screenshot evidence from 2026-07-18:
 
 - `TermTileApp` passes `updater.availability.hasAvailableUpdate` into `TermTileGlyph`.
 - `MenuBarContent` passes the same availability source into the "Check for Updates" `MenuAction`.
-- TermTile is still pinned to MacFaceKit `0.3.3` until Phase 4.
+- TermTile was pinned to MacFaceKit `0.3.3` before Phase 3.
+- TermTile now consumes MacFaceKit `0.4.0`
+  (`5e8eb0fc6c3644dc0bc665e18a1a8a449cfbd981`) through normal SwiftPM resolution.
 - Baseline MacFaceKit `0.3.3` used `AttentionDot` as the shared primitive with default `size: 5`,
   `color: Tokens.warning`.
 - Baseline MacFaceKit `0.3.3` overlaid `IconButton` attention with `ZStack(alignment: .topTrailing)`.
@@ -97,12 +99,8 @@ Every premise must be re-verified from code during the relevant OBSERVE step bef
 
 ## Do Now
 
-- Prove whether the TermTile menu-bar label can render a colored dot, then choose the smallest
-  TermTile-specific rendering fix only if required.
-- Keep all TermTile app-surface indicators on MacFaceKit `Tokens.warning`/`Tokens.attentionDot` unless
-  native menu-bar evidence proves host-specific sizing is needed.
-- After menu-bar proof, bump TermTile to MacFaceKit `v0.4.0` and wire the "Check for Updates" action to
-  the shared row/trigger attention accessibility hint without duplicating row UI.
+- No implementation work remains for this plan.
+- Public release work is separate and requires an explicit release version/tag decision.
 
 ## Completed Upstream Work
 
@@ -112,12 +110,23 @@ Every premise must be re-verified from code during the relevant OBSERVE step bef
 
 ## Depends On Future State
 
-- The final menu-bar implementation depends on a live screenshot/pixel check after trying a colored
-  SwiftUI overlay in the real `MenuBarExtra`.
-- The TermTile dependency update now has a real upstream target: MacFaceKit `v0.4.0`
-  (`5e8eb0fc6c3644dc0bc665e18a1a8a449cfbd981`).
-- The dependency assertion in Phase 4 must target `v0.4.0` or a concrete new API symbol from that release
-  rather than letting the currently sufficient `>= 0.3.3` check pass as proof.
+- Public release work is intentionally outside this polish plan until a release version is chosen.
+
+## Continuation Audit: 2026-07-18
+
+- Dependency inversion found: the original Phase 3 tried to use MacFaceKit's shared-size indicator before
+  TermTile consumed the MacFaceKit release that defines it. The dependency bump must move before the
+  TermTile shared-token implementation.
+- Bundled task found: TermTile glyph placement, dropdown row semantics, dependency resolution, and live
+  menu-bar proof were grouped too tightly. They are now separated into dependency readiness, app wiring,
+  native proof, and documentation/review.
+- Trap: a render test can prove SwiftUI composition, dimensions, and orange pixels, but it cannot prove
+  `MenuBarExtra` host tinting. The native screenshot/pixel check remains a separate pitstop.
+- Do-now split at audit time: bump to `v0.4.0`, add red-first source/render/accessibility tests, then
+  implement the smallest TermTile wiring changes.
+- Depends-on-future-state split at audit time: if native `MenuBarExtra` still hides or tints the colored
+  dot after the shared SwiftUI implementation, then and only then add an app-specific precomposited
+  status image path.
 
 ## Execution Plan
 
@@ -183,24 +192,9 @@ Status: Complete in MacFaceKit `v0.4.0` (`5e8eb0f`).
      accessibility hints; `OverflowMenu` forwards the first attended action hint to the closed trigger and
      the row; render tests prove attended rows keep stable dimensions with trailing orange-family pixels.
 
-### Phase 3: TermTile Menu-Bar Glyph Indicator Proof
+### Phase 3: TermTile Dependency Readiness
 
-1. OBSERVE: with the installed downgrade-test app, confirm `UPDATE_PROBE_SMOKE available` still occurs.
-2. RED: add or strengthen render tests proving `TermTileGlyph(hasAvailableUpdate: true)` preserves stable
-   dimensions and exposes an update-available accessibility label.
-3. BUILD: first try a bottom-trailing shared-size `AttentionDot` in `TermTileGlyph`.
-4. VERIFY: run a native menu-bar screenshot/pixel check looking for thresholded orange-family pixels, then
-   visually inspect the crop for placement and clipping.
-5. BUILD: if `MenuBarExtra` tints or clips the SwiftUI dot, switch to the smallest app-specific rendering
-   route that preserves color, such as a precomposited original-color status image.
-6. VERIFY: repeat native screenshot/pixel checks in resting and active menu-bar states using the documented
-   threshold/predicate plus visual inspection.
-7. PITSTOP:
-   - Look back: verify the menu-bar dot is visible, orange, not clipped, and not confused with the glyph.
-   - Look back: fix image/template behavior before proceeding.
-   - Look forward: only then consume the MacFaceKit row/button polish.
-
-### Phase 4: TermTile Dependency And Wiring
+Status: Complete.
 
 1. OBSERVE: inspect `Package.swift`, `Package.resolved`, and the real MacFaceKit tag/revision state.
 2. OBSERVE: identify the exact MacFaceKit tag/revision that contains bottom-trailing icon attention,
@@ -210,17 +204,50 @@ Status: Complete in MacFaceKit `v0.4.0` (`5e8eb0f`).
      (`5e8eb0fc6c3644dc0bc665e18a1a8a449cfbd981`) is newer than `0.3.3` and contains the required API.
 3. RED: add or update a dependency/readiness test requiring that exact tag/revision or a concrete new API
    symbol from the MacFaceKit attention polish; do not let the existing `>= 0.3.3` check pass as proof.
-4. RED: add a TermTile menu test requiring the "Check for Updates" action to remain the single overflow
-   attention source and to carry TermTile-owned accessibility semantics, such as "Update available."
-5. BUILD: update MacFaceKit through normal dependency resolution.
-6. BUILD: use the new MacFaceKit row attention API without adding TermTile-specific duplicate row code.
-7. VERIFY: run focused TermTile menu/glyph/release-readiness tests.
-8. PITSTOP:
+4. BUILD: update MacFaceKit through normal dependency resolution.
+5. VERIFY: run the dependency/readiness test.
+6. PITSTOP:
    - Look back: verify no `.build/checkouts` patch, no duplicate dot primitive, and no second availability
      state.
-   - Look forward: proceed to native proof.
+   - Look back: fix dependency comments, stale docs, or package-resolution drift before continuing.
+   - Look forward: proceed to TermTile app wiring only after `Tokens.attentionDot` and
+     `attentionAccessibilityHint` compile from the real dependency.
+   - Completed finding: TermTile now resolves MacFaceKit `0.4.0` at
+     `5e8eb0fc6c3644dc0bc665e18a1a8a449cfbd981`; readiness tests require `>= 0.4.0` and compile
+     against `Tokens.attentionDot`.
+
+### Phase 4: TermTile Glyph And Menu Wiring
+
+Status: Complete.
+
+1. OBSERVE: inspect `TermTileGlyph`, `MenuBarContent`, existing render tests, and source-invariant tests.
+2. RED: add or strengthen render tests proving `TermTileGlyph(hasAvailableUpdate: true)` preserves stable
+   dimensions and renders orange-family pixels in the lower-right quadrant.
+3. RED: add a source/accessibility test proving the glyph exposes an update-available accessibility label
+   and uses the shared MacFaceKit attention size instead of a local hardcoded dot size.
+4. RED: add a TermTile menu test requiring the "Check for Updates" action to remain the single overflow
+   attention source and to carry TermTile-owned accessibility semantics, such as "Update available."
+5. BUILD: place the glyph indicator at bottom-trailing using a TermTile-owned original-color composited
+   `NSImage` backed by MacFaceKit `Tokens.attentionDot` and `Tokens.warning`, because native
+   `MenuBarExtra` evidence showed the SwiftUI overlay could render offscreen but disappear in the real
+   menu-bar host.
+6. BUILD: pass `attentionAccessibilityHint` from TermTile into the "Check for Updates" `MenuAction`.
+7. VERIFY: run focused TermTile menu/glyph/release-readiness tests.
+8. PITSTOP:
+   - Look back: verify render size, lower-right orange pixels, source invariants, and menu semantics.
+   - Look back: fix any layout, accessibility, stale-doc, or test-flake issues before native proof.
+   - Look forward: proceed to native proof; do not add app-specific image composition unless the real
+     menu-bar host evidence requires it.
+   - Completed finding: the SwiftUI overlay rendered offscreen but did not survive `MenuBarExtra`; the
+     final glyph uses a TermTile-owned original-color composited image and still sources attention size
+     and color from MacFaceKit tokens.
+   - Completed finding: the "Check for Updates" action supplies the TermTile-owned
+     `attentionAccessibilityHint: "Update available"` and uses `Updater.canOpenUpdateCheck` so the row
+     remains actionable once a passive probe finds an available update.
 
 ### Phase 5: Native Visual And Downgrade Smoke Verification
+
+Status: Complete.
 
 1. VERIFY: build and install an indicator-capable downgrade-test app with bundle version lower than the
    public appcast.
@@ -236,8 +263,16 @@ Status: Complete in MacFaceKit `v0.4.0` (`5e8eb0f`).
 6. PITSTOP:
    - Look back: fix any visual mismatch immediately.
    - Look forward: only docs/review/final gate remain.
+   - Completed finding: `/Applications/TermTile.app` was installed as `0.2.5`/build `137` from current
+     code using `TERMTILE_BUILD_NUMBER=137`, while the public appcast is `0.2.6`/build `138`.
+   - Completed finding: packaged smoke passed and `TERMTILE_UPDATE_PROBE_SMOKE=1` reported `armed`,
+     `available`, and `finished`.
+   - Completed finding: final artifacts are recorded in
+     `docs/verification/update-indicator-visibility/phase-5-native-proof.md`.
 
 ### Phase 6: Documentation, Review, And Final Gate
+
+Status: Complete.
 
 1. BUILD: update MacFaceKit README/DESIGN and TermTile verification docs with the final indicator
    behavior and screenshots.
@@ -248,3 +283,10 @@ Status: Complete in MacFaceKit `v0.4.0` (`5e8eb0f`).
 6. FINAL PITSTOP:
    - Look back: inspect final diffs, screenshots, tests, dependency files, and git status.
    - Look forward: identify only true future enhancements; do not defer polish required for this feature.
+   - Completed finding: final review found no code-level issues after the active-session menu gate,
+     release-CI override guard, and stale SwiftUI-overlay doc wording were fixed.
+   - Completed finding: final TermTile gate passed with 267 tests and 0 SwiftLint violations.
+   - Completed finding: packaged smoke passed against `/Applications/TermTile.app` installed as local
+     downgrade proof `0.2.5`/build `137`.
+   - Future enhancement: broaden visual proof across additional macOS appearance/menu-bar highlight
+     combinations before the next public release if release scope allows.

@@ -141,9 +141,24 @@ struct PackagingScriptsTests {
     func buildNumberIsMonotonic() {
         let s = Self.script("build-app.sh")
         #expect(s.contains("git rev-list --count"), "build number must come from git rev-list --count")
+        #expect(s.contains("TERMTILE_BUILD_NUMBER"),
+                "local downgrade verification builds need an explicit CFBundleVersion override")
         #expect(!s.contains("tr -d '.'"), "must not dots-strip the version (tr -d '.')")
         #expect(!s.contains("//./"), "must not dots-strip the version (bash //./ substitution)")
         #expect(!s.contains("s/\\.//g"), "must not dots-strip the version (sed s/./g)")
+    }
+
+    @Test("build-app.sh: build-number override is explicit and validated")
+    func buildNumberOverrideIsExplicitAndValidated() {
+        let s = Self.script("build-app.sh")
+        #expect(s.contains("TERMTILE_BUILD_NUMBER"),
+                "the override should have an app-specific env name, not a generic BUILD_NUMBER")
+        #expect(s.contains("[[ \"$TERMTILE_BUILD_NUMBER\" =~ ^[1-9][0-9]*$ ]]"),
+                "the override should reject non-positive or non-numeric bundle versions")
+        #expect(s.contains("GITHUB_ACTIONS"),
+                "release CI must reject local-only build-number overrides")
+        #expect(s.contains("git rev-list --count HEAD"),
+                "the default release path must remain the monotonic git commit count")
     }
 
     // 3. Menu-bar-only bundle + a lint gate on the generated plist.

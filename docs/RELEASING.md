@@ -12,6 +12,11 @@ Versioning mirrors RememBar's discipline (RememBar-audit §7), with one delibera
   dots-stripped scheme (audit §8.5): `1.0.0` and `0.10.0` both dots-strip to `100` and collide;
   a commit count never does. It only has to increase, and it always does.
 
+For local downgrade/update-indicator verification only, `scripts/build-app.sh` accepts
+`TERMTILE_BUILD_NUMBER=<positive integer>` so a locally built candidate can compare below an already
+published Sparkle appcast. Public releases should leave it unset and use the default commit-count
+build number.
+
 ## Release notes are single-source
 
 One file per version — `release-notes/<version>.md` — authored **before** tagging. `release.yml`

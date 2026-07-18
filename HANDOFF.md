@@ -14,10 +14,10 @@ the three repos share the MacFaceKit design system.)_
 | Git | Check `git status --short` before release |
 | Latest published release | **v0.2.6** (2026-07-18), build 138, Developer ID signed/notarized/stapled |
 | Release target | None active; v0.2.6 is published |
-| Latest unreleased work | None; update indicators and drag/fullscreen QOL fix shipped in v0.2.6 |
+| Latest unreleased work | Update-indicator visibility polish after v0.2.6; see below. |
 | Public signing | Developer ID Application: Evan Navarro (`XG9SBNWNXT`) |
 | Notarization | Accepted; release CI notarizes, staples, and Gatekeeper-assesses before zipping |
-| Design-system dep | MacFaceKit `.upToNextMinor(from: "0.3.3")` (public git URL, auto-resolved) |
+| Design-system dep | MacFaceKit `.upToNextMinor(from: "0.4.0")` (public git URL, auto-resolved) |
 
 ## Start here (next session, in order)
 
@@ -43,11 +43,13 @@ the three repos share the MacFaceKit design system.)_
   and published with a signed Sparkle appcast. It keeps the v0.2.4 uninstall privacy cleanup and stale
   permission repair flows. `v0.2.1` was the transitional signed but unstapled build used to stabilize
   macOS TCC grants across updates.
+- **Unreleased indicator polish:** larger shared attention dots, a menu-bar host fix for the colored dot,
+  row-level **Check for Updates** attention, and MacFaceKit v0.4.0 consumption.
 - **Released in v0.2.0:** the richer identity card, GitHub/License links,
   adjustable gap, configurable shortcut, drag-reorder controls, Uninstall, clearer Accessibility/Input
   Monitoring guidance, branded update dialog, and stricter release-readiness tests.
 - **The big recent UI arc:** adopted the shared **MacFaceKit** design system
-  (`github.com/400faces/MacFaceKit`, public, pinned `.upToNextMinor(from: "0.3.3")`). TermTile is now a
+  (`github.com/400faces/MacFaceKit`, public, pinned `.upToNextMinor(from: "0.4.0")`). TermTile is now a
   UI-twin of RememBar: same identity card, icon buttons, shared attention indicator, and **branded update
   dialog** (via `TermTileUserDriver`, a thin Sparkle→`UpdateWindowController` adapter; the
   window/morph/model live once in the kit). The Rearrange-now hero uses the shared `PrimaryButton`.

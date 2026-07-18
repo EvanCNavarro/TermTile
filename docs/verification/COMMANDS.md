@@ -1,3 +1,3 @@
 # Verification Commands
 
-- `npm run check`
+- `scripts/fetch-sparkle.sh && swift build && swift test && swiftlint --strict`

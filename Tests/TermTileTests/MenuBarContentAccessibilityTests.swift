@@ -76,4 +76,23 @@ struct MenuBarContentAccessibilityTests {
         #expect(!source.contains("attention: true"),
                 "overflow attention must not be hardcoded")
     }
+
+    @Test("update overflow action carries TermTile-owned attention accessibility semantics")
+    func updateOverflowActionCarriesAttentionAccessibilitySemantics() {
+        let menuURL = Self.repoRoot().appending(path: "Sources/TermTile/MenuBarContent.swift")
+        let source = (try? String(contentsOf: menuURL, encoding: .utf8)) ?? ""
+        guard let updatesStart = source.range(of: "MenuAction(title: \"Check for Updates\""),
+              let quitStart = source.range(of: "MenuAction(title: \"Quit TermTile\"") else {
+            Issue.record("MenuBarContent.swift must render Check for Updates before Quit TermTile")
+            return
+        }
+
+        let updateAction = String(source[updatesStart.lowerBound..<quitStart.lowerBound])
+        #expect(updateAction.contains("enabled: updater.canOpenUpdateCheck"),
+                "the update action should stay actionable after a passive probe finds an update")
+        #expect(updateAction.contains("attention: updater.availability.hasAvailableUpdate"),
+                "the update action should remain the single availability-derived attention source")
+        #expect(updateAction.contains("attentionAccessibilityHint: \"Update available\""),
+                "TermTile should supply update-specific semantics through MacFaceKit's generic hook")
+    }
 }
