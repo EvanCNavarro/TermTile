@@ -155,6 +155,22 @@ struct ReleaseReadinessTests {
                 "release docs must not describe the removed public CI self-signed fallback")
     }
 
+    @Test("release docs preserve the library-validation boundary")
+    func releaseDocsPreserveLibraryValidationBoundary() {
+        let decision = Self.file("docs/decisions/0002-notarization-release-gate.md")
+        let releasing = Self.file("docs/RELEASING.md")
+        for docs in [decision, releasing] {
+            #expect(docs.contains("Developer ID"),
+                    "release docs must tie the entitlement boundary to Developer ID artifacts")
+            #expect(docs.contains("com.apple.security.cs.disable-library-validation"),
+                    "release docs must name the local-only library-validation entitlement")
+        }
+        #expect(decision.contains("must not carry"),
+                "the release-gate decision must forbid the local entitlement on public artifacts")
+        #expect(releasing.contains("release smoke rejects"),
+                "release instructions must say the release smoke rejects the local entitlement")
+    }
+
     @Test("notarization runbook captures accepted evidence and release gate")
     func notarizationRunbookCapturesAcceptedEvidence() {
         let docs = Self.file("docs/NOTARIZATION.md")

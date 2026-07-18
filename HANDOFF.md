@@ -1,6 +1,6 @@
 # TermTile - Handoff
 
-_Last updated: 2026-07-17. This is the single spot to pick TermTile back up. Read it top-to-bottom,
+_Last updated: 2026-07-18. This is the single spot to pick TermTile back up. Read it top-to-bottom,
 then jump to **Start here**. (Companion handoffs: `RememBar/HANDOFF.md`, `MacFaceKit/README.md` -
 the three repos share the MacFaceKit design system.)_
 
@@ -14,6 +14,7 @@ the three repos share the MacFaceKit design system.)_
 | Git | Check `git status --short` before release |
 | Latest published release | **v0.2.4** (2026-07-16), build 129, Developer ID signed/notarized/stapled |
 | Release target | None active; next version TBD |
+| Latest unreleased work | Task #36 optional `Bring app forward` behavior is implemented and documented locally |
 | Public signing | Developer ID Application: Evan Navarro (`XG9SBNWNXT`) |
 | Notarization | Accepted; release CI notarizes, staples, and Gatekeeper-assesses before zipping |
 | Design-system dep | MacFaceKit `.upToNextMinor(from: "0.3.2")` (public git URL, auto-resolved) |

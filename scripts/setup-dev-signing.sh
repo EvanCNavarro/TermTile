@@ -2,19 +2,19 @@
 # One-time local dev signing setup (#13c). Creates a STABLE self-signed code-signing identity
 # ("TermTile Dev Signing") in the login keychain so `build-app.sh` signs with a constant code identity.
 # Why: ad-hoc signing ("-") produces a fresh cdhash every build, which silently RESETS every macOS TCC
-# grant (Accessibility, Input Monitoring) on each rebuild — you'd re-approve TermTile after every build.
+# grant (Accessibility, Input Monitoring) on each rebuild - you'd re-approve TermTile after every build.
 # A stable identity keeps the grants; you approve once and they persist across rebuilds.
 #
-# This does NOT help distribution — real users need Developer ID + notarization (the v0.5.0 milestone).
+# This does NOT help distribution - real users need Developer ID + notarization (the v0.5.0 milestone).
 # It only stabilizes LOCAL dev builds. Idempotent: no-op if the identity already exists.
 #
 # macOS may prompt to unlock your login keychain during import, and codesign may prompt "Always Allow"
-# on first use — that's expected (a one-time click), and cheaper than re-granting permissions forever.
+# on first use - that's expected (a one-time click), and cheaper than re-granting permissions forever.
 set -euo pipefail
 
 IDENTITY="TermTile Dev Signing"
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
-  echo "✓ '$IDENTITY' already present — nothing to do."
+  echo "[OK] '$IDENTITY' already present - nothing to do."
   exit 0
 fi
 
@@ -41,10 +41,10 @@ openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" -out "$TMP/id.p
 security import "$TMP/id.p12" -k "$HOME/Library/Keychains/login.keychain-db" -P "" -A -T /usr/bin/codesign
 
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
-  echo "✓ '$IDENTITY' created. Rebuild with scripts/build-app.sh — it auto-detects + signs with it."
+  echo "[OK] '$IDENTITY' created. Rebuild with scripts/build-app.sh - it auto-detects + signs with it."
 else
-  echo "✗ Import did not register a codesigning identity. If the login keychain was locked, unlock it"
-  echo "  and re-run; or create the cert via Keychain Access → Certificate Assistant → Create a"
+  echo "[ERROR] Import did not register a codesigning identity. If the login keychain was locked, unlock it"
+  echo "  and re-run; or create the cert via Keychain Access -> Certificate Assistant -> Create a"
   echo "  Certificate (name '$IDENTITY', type Code Signing)."
   exit 1
 fi

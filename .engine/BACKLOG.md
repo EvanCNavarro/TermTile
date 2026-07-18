@@ -455,6 +455,24 @@ committed; findings notes are the durable output.
   intentional-design comments, and 11 edge-case tests (N=1/2/3, middle-window×strategies,
   cross-row bijection, untiled+partial-collision fallback, adaptive diagonal, corrupt rawValue,
   argmin tie) — a read-only skeptic confirmed no reachable crash, all invariants hold. 150 tests.)
+#36 · Optional bring selected target app forward after Rearrange · DONE
+  (2026-07-17: default-off `bringToFrontOnRearrange` setting persisted through `AppSettings`/
+  `SettingsStore`, wired through the single `MenuBarViewModel.rearrangeNow()` command path, and
+  injected via the `TargetAppForegrounding` Kit port. Production uses public AppKit activation
+  (`NSRunningApplication.activate(options: [.activateAllWindows])`) plus public app/window-order
+  verification; no private APIs, deprecated `activateIgnoringOtherApps`, monkey-patches, or Core
+  pollution. UX separates target selection under `Target`, keeps manual-command modifiers under
+  `Rearrange` (gap + `Bring app forward` + shortcut), drag behavior under `Drag`, and lifecycle
+  under `General`; VoiceOver gets a
+  contextual hint. Red-first tests cover settings defaults/round-trip, VM off/on/untrusted/order/
+  stale in-flight result guards, shared target-process resolution, foreground coordinator edge
+  cases, stale side-effect suppression before foregrounding, failure-warning UX, cross-clobber
+  persistence, conditional local Sparkle signing plus Developer-ID smoke entitlement rejection,
+  deprecated app-owned activation cleanup, and the
+  accessibility hint. Follow-up cleanup also guards the MacFaceKit update adapter against a duplicate
+  app-name literal by routing through `AppIdentity.appName`. Native gallery screenshot + live
+  Calculator proof recorded in docs/verification/task36-bring-to-front.md. Full gate: 225 tests,
+  build green, strict SwiftLint 0.)
 #25 · Global hotkey to trigger Rearrange now · DONE
   (2026-07-03: Carbon RegisterEventHotKey HotKeyMonitor [mirrors DragMonitor C-bridge] → default ⌃⌥⌘R
   fires the existing rearrangeNow(); no AX grant needed; ID-matched dispatch. Impl review [Carbon correct +

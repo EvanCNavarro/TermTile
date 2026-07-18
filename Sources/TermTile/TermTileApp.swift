@@ -56,6 +56,7 @@ struct TermTileApp: App {
                 TilingActor(system: AXWindowSystem(bundleID: bundleID), epsilon: eps)
             },
             uninstaller: privacy.uninstaller,
+            foregrounder: (!isSelftest && !isGallery) ? WorkspaceTargetAppForegrounder() : nil,
             permissionRepairer: privacy.permissionRepairer)
 
         // Menu-bar utility: no dock icon, never takes window focus. Set here (init is reliable);
@@ -130,7 +131,8 @@ struct TermTileApp: App {
                                         eps: CGFloat) -> MenuBarViewModel {
         let store = UserDefaultsSettingsStore(suiteName: "dev.ecn.apps.termtile.gallery")
         store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8,
-                               hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
+                               hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap,
+                               bringToFrontOnRearrange: false))
         return MenuBarViewModel(settings: store, loginItem: loginItem,
             appsProvider: WorkspaceTargetAppsProvider(), isTrustedProbe: { false },
             visibleFrame: visibleFrame, epsilon: eps,
@@ -153,7 +155,7 @@ struct TermTileApp: App {
             window.contentView = NSHostingView(rootView: content)
             window.center()
             window.makeKeyAndOrderFront(nil)
-            NSApplication.shared.activate(ignoringOtherApps: true)
+            NSApplication.shared.activate()
             FileHandle.standardError.write(Data("GALLERY shown\n".utf8))
         }
     }

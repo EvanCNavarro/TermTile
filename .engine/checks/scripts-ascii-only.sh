@@ -8,6 +8,8 @@
 # Exit non-zero iff any scripts/*.sh contains a byte > 0x7F. Uses perl (always present on macOS);
 # BSD grep has no -P.
 set -euo pipefail
+export LC_ALL=C
+export LANG=C
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 

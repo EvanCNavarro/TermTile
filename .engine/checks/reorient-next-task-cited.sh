@@ -1,5 +1,5 @@
 #!/bin/bash
-# TRAP-10: gate parsers read only the first physical line — every "Next task:" line in
+# TRAP-10: gate parsers read only the first physical line - every "Next task:" line in
 # reorient.md must carry its "←" source citation ON THAT LINE. Exit non-zero iff a
 # Next-task line lacks one. Absent file/lines = pass (nothing to violate).
 set -u

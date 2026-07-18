@@ -61,6 +61,10 @@ does not fall back to the stable self-signed `TermTile Dev Signing` identity: th
 signing, so fresh clones can build and local developer machines can keep stable TCC grants. That
 fallback is not the public release policy.
 
+Local self-signed/ad-hoc builds may carry `com.apple.security.cs.disable-library-validation` so the
+locally re-signed app can load embedded Sparkle. Developer ID release artifacts must not carry that
+entitlement; release smoke rejects it before notarization and packaging.
+
 Required release secrets:
 
 - `TERMTILE_RELEASE_SIGNING_CERT_P12_BASE64`

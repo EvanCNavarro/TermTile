@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ADR-0001 fail-closed guard: TermTileCore is the PURE functional core. It may import
-# CoreGraphics/Foundation domain types only — never AppKit or ApplicationServices (the
+# CoreGraphics/Foundation domain types only - never AppKit or ApplicationServices (the
 # side-effect surfaces that belong in TermTileKit). Exit non-zero iff any file under
 # Sources/TermTileCore/ imports a forbidden module.
 #
 # F3 (stoke-plan-8 audit): the match must catch attribute-prefixed / submodule import
-# forms, e.g. `@preconcurrency import ApplicationServices` — anchoring on `^import`
+# forms, e.g. `@preconcurrency import ApplicationServices` - anchoring on `^import`
 # fails OPEN for exactly the form AccessibilityTrust.swift uses. Match `import` anywhere
 # on the line, tolerant of leading attributes and trailing `.Submodule`.
 set -euo pipefail

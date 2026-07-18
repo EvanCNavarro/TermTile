@@ -86,6 +86,7 @@ if [ "${REQUIRE_STABLE_CODESIGN:-0}" = "1" ]; then
 		fail "stable signing required, but designated requirement is cdhash-only"
 	fi
 	if [ "${REQUIRE_DEVELOPER_ID_CODESIGN:-0}" = "1" ]; then
+		APP_ENTITLEMENTS="$(codesign -d --entitlements :- "$APP" 2>/dev/null || true)"
 		if ! echo "$SIGNATURE_INFO" | grep -Fq "Authority=Developer ID Application:"; then
 			fail "Developer ID signing required, but signature is not Developer ID Application"
 		fi
@@ -95,6 +96,9 @@ if [ "${REQUIRE_STABLE_CODESIGN:-0}" = "1" ]; then
 		fi
 		if ! echo "$DESIGNATED_REQ" | grep -Fq "certificate leaf[subject.OU] = $REQUIRE_CODESIGN_TEAM_ID"; then
 			fail "Developer ID signing required, but designated requirement does not bind the expected team"
+		fi
+		if echo "$APP_ENTITLEMENTS" | grep -Fq "com.apple.security.cs.disable-library-validation"; then
+			fail "Developer ID signing required, but app disables hardened-runtime library validation"
 		fi
 	fi
 fi

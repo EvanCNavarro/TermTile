@@ -58,7 +58,9 @@ public struct UserDefaultsSettingsStore: SettingsStore {
             hotKey: HotKeyConfig(keyCode: keyCode, modifiers: modifiers),
             reorderOnDrag: d.object(forKey: Key.reorderOnDrag) as? Bool ?? dflt.reorderOnDrag,
             reorderStrategy: (d.string(forKey: Key.reorderStrategy)).flatMap(ReorderStrategy.init(rawValue:))
-                ?? dflt.reorderStrategy)
+                ?? dflt.reorderStrategy,
+            bringToFrontOnRearrange: d.object(forKey: Key.bringToFrontOnRearrange) as? Bool
+                ?? dflt.bringToFrontOnRearrange)
     }
 
     public func save(_ settings: AppSettings) {
@@ -70,6 +72,7 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         d.set(Int(settings.hotKey.modifiers), forKey: Key.hotKeyModifiers)
         d.set(settings.reorderOnDrag, forKey: Key.reorderOnDrag)
         d.set(settings.reorderStrategy.rawValue, forKey: Key.reorderStrategy)
+        d.set(settings.bringToFrontOnRearrange, forKey: Key.bringToFrontOnRearrange)
     }
 
     /// The domain name is the suite when named (tests) or the app's bundleID for `.standard`
@@ -88,5 +91,6 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         static let hotKeyModifiers = "hotKeyModifiers"
         static let reorderOnDrag = "reorderOnDrag"
         static let reorderStrategy = "reorderStrategy"
+        static let bringToFrontOnRearrange = "bringToFrontOnRearrange"
     }
 }

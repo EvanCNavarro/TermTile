@@ -24,7 +24,7 @@ struct MenuBarContent: View {
             actions: overflowActions,
             links: identityLinks
         ) {
-            SectionCard("Tiling") {
+            SectionCard("Target") {
                 LabeledContent("Target app") {
                     Picker("", selection: Binding(
                         get: { viewModel.targetBundleID },
@@ -33,15 +33,42 @@ struct MenuBarContent: View {
                     }
                     .labelsHidden()
                 }
+            }
+
+            SectionCard("Rearrange") {
                 // Gap (#17a): setGap is synchronous. Step 4 lands on the 8-pt default.
                 LabeledContent("Gap") {
                     Stepper("\(Int(viewModel.gap)) pt", value: Binding(
                         get: { viewModel.gap }, set: { viewModel.setGap($0) }),
                         in: MenuBarViewModel.gapRange, step: 4)
                 }
+                Toggle("Bring app forward", isOn: Binding(
+                    get: { viewModel.bringToFrontOnRearrange },
+                    set: { viewModel.setBringToFrontOnRearrange($0) }))
+                .accessibilityHint("Brings the selected target app forward after Rearrange now runs.")
+                if let message = viewModel.foregroundWarningMessage {
+                    Label {
+                        Text(message)
+                            .font(Tokens.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                    }
+                    .foregroundStyle(Tokens.warning)
+                    .accessibilityLabel("App focus")
+                    .accessibilityValue(message)
+                }
+                // Global-hotkey recorder (#25b): click the field, press a combo (needs ⌥ or ⌃).
+                // The "⚠" marks a persisted combo that couldn't register (taken by another app).
+                LabeledContent("Shortcut") {
+                    HotKeyRecorder(current: viewModel.hotKey, registered: viewModel.hotKeyRegistered) {
+                        viewModel.setHotKey($0)
+                    }
+                    .frame(width: 120, height: 22)
+                }
             }
 
-            SectionCard("Drag to reorder") {
+            SectionCard("Drag") {
                 Toggle("Reorder windows on drag", isOn: Binding(
                     get: { viewModel.reorderOnDrag },
                     set: { viewModel.setReorderOnDrag($0) }))
@@ -72,14 +99,6 @@ struct MenuBarContent: View {
             }
 
             SectionCard("General") {
-                // Global-hotkey recorder (#25b): click the field, press a combo (needs ⌥ or ⌃).
-                // The "⚠" marks a persisted combo that couldn't register (taken by another app).
-                LabeledContent("Shortcut") {
-                    HotKeyRecorder(current: viewModel.hotKey, registered: viewModel.hotKeyRegistered) {
-                        viewModel.setHotKey($0)
-                    }
-                    .frame(width: 120, height: 22)
-                }
                 Toggle("Launch at login", isOn: Binding(
                     get: { viewModel.launchAtLogin },
                     set: { viewModel.setLaunchAtLogin($0) }))
@@ -173,7 +192,7 @@ struct MenuBarContent: View {
     /// popover. Confirmed removal always ends in `exit(0)` (a graceful quit lets cfprefsd re-flush the
     /// purged prefs — #22b), so each outcome button does its side effect, then exits.
     private func runUninstallFlow() {
-        NSApplication.shared.activate(ignoringOtherApps: true)   // bring the alert frontmost (accessory app)
+        NSApplication.shared.activate()   // bring the alert frontmost (accessory app)
 
         let confirm = NSAlert()
         confirm.messageText = "Uninstall TermTile?"

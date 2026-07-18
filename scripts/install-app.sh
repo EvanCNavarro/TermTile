@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# install-app.sh — build (stable identity if the dev cert is present) and install TermTile.app, then
+# install-app.sh - build (stable identity if the dev cert is present) and install TermTile.app, then
 # relaunch. Installs to /Applications (the standard, reliably Spotlight-indexed + LaunchServices-known
-# location — so the app is findable in Open panels / the Privacy permission pickers, exactly where a
+# location - so the app is findable in Open panels / the Privacy permission pickers, exactly where a
 # user who followed the README "drag to /Applications" would put it). ~/Applications is NOT reliably
 # indexed, which made the app invisible in those pickers. Set TERMTILE_INSTALL_DIR to override.
 # After copying, we force a Spotlight import + LaunchServices registration so a freshly-built bundle

@@ -120,6 +120,21 @@ struct PackagingScriptsTests {
         #expect(verifyLine?.contains("--strict") == true, "verify line must contain --strict")
     }
 
+    @Test("build-app.sh: app signature disables library validation only for local Sparkle builds")
+    func localAppSignatureAllowsEmbeddedSparkleWithoutWeakeningDeveloperIDReleases() {
+        let script = Self.script("build-app.sh")
+        #expect(script.contains("com.apple.security.cs.disable-library-validation"),
+                "local self-signed hardened-runtime builds must be allowed to load embedded Sparkle")
+        #expect(script.contains("TERMTILE_DISABLE_LIBRARY_VALIDATION"),
+                "library-validation policy must have an explicit override for exceptional builds")
+        #expect(script.contains("\"Developer ID Application:\"*)") && script.contains("DISABLE_LIBRARY_VALIDATION=0"),
+                "Developer ID releases must not disable library validation by default")
+        #expect(script.contains("--entitlements \"$ENTITLEMENTS\""),
+                "the app signing path must apply the entitlement file")
+        #expect(script.contains("sign_app_code()"),
+                "app signing with entitlements should stay centralized")
+    }
+
     // 2. Monotonic CFBundleVersion from commit count; never dots-stripped (audit §8.5 collision bug:
     //    `0.10.1 → 0101`). Positive presence of the real source + absence of every dots-strip idiom.
     @Test("build-app.sh: CFBundleVersion uses git rev-list --count, never dots-stripped")
@@ -195,6 +210,10 @@ struct PackagingScriptsTests {
                 "Developer ID mode must verify the signed artifact's TeamIdentifier")
         #expect(s.contains("certificate leaf[subject.OU] = $REQUIRE_CODESIGN_TEAM_ID"),
                 "Developer ID mode must verify the designated requirement binds the expected team")
+        #expect(s.contains("codesign -d --entitlements :- \"$APP\""),
+                "Developer ID mode must inspect the shipped app entitlements")
+        #expect(s.contains("com.apple.security.cs.disable-library-validation"),
+                "Developer ID mode must reject the local Sparkle library-validation entitlement")
     }
 
     // 7. The smoke must not let local `.build` resource bundles mask a missing packaged bundle.

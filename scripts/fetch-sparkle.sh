@@ -10,7 +10,7 @@ DEST="$PROJECT_DIR/Vendor/Sparkle.xcframework"
 [ -d "$DEST" ] && { echo "Sparkle already vendored at $DEST"; exit 0; }
 URL="https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-for-Swift-Package-Manager.zip"
 WORK="$(mktemp -d)"
-echo "Fetching Sparkle ${SPARKLE_VERSION}…"
+echo "Fetching Sparkle ${SPARKLE_VERSION}..."
 curl -fsSL --max-time 180 "$URL" -o "$WORK/spm.zip"
 unzip -q "$WORK/spm.zip" -d "$WORK/x"
 mkdir -p "$PROJECT_DIR/Vendor"

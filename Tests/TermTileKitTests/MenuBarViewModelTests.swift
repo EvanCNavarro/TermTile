@@ -38,6 +38,7 @@ struct MenuBarViewModelTests {
         trusted: Bool = false,
         requestAccessibilityTrust: @escaping @Sendable () -> Bool = { false },
         uninstaller: Uninstaller? = nil,
+        foregrounder: (any TargetAppForegrounding)? = nil,
         permissionRepairer: (any PermissionRepairing)? = nil
     ) -> (vm: MenuBarViewModel, fake: InMemoryWindowSystem) {
         let fake = InMemoryWindowSystem(windows: windows)
@@ -51,6 +52,7 @@ struct MenuBarViewModelTests {
             epsilon: eps,
             makeActor: { _ in TilingActor(system: fake, epsilon: self.eps) },
             uninstaller: uninstaller,
+            foregrounder: foregrounder,
             permissionRepairer: permissionRepairer)
         return (vm, fake)
     }
@@ -64,7 +66,7 @@ struct MenuBarViewModelTests {
         // Seed gap=10 (≠ the 8 default) into the store so the VM LOADS it — this also proves the
         // #17a settings→VM→TileConfig→layout flow: the EXACT targets below use the same gap.
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
         let (vm, fake) = makeVM(windows: seed, store: store)
         let t = targets(3)
         for k in 0..<3 { #expect(seed[k].frame != t[k]) }  // genuinely off-grid → writes provable
@@ -80,7 +82,7 @@ struct MenuBarViewModelTests {
     @Test("init loads persisted target")
     func initLoadsPersistedSettings() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
+        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
         let (vm, _) = makeVM(store: store)
         #expect(vm.targetBundleID == "com.example.other")
     }
@@ -162,6 +164,216 @@ struct MenuBarViewModelTests {
         #expect(store.load() == before)
     }
 
+    @Test("rearrangeNow does not foreground when bring-to-front is off")
+    func rearrangeNowNoForegroundWhenOff() async {
+        let foregrounder = SpyTargetAppForegrounder()
+        let (vm, _) = makeVM(windows: [off(1)], foregrounder: foregrounder)
+
+        await vm.rearrangeNow()
+
+        #expect(foregrounder.calledBundleIDs.isEmpty)
+    }
+
+    @Test("rearrangeNow foregrounds selected target after tiling when enabled")
+    func rearrangeNowForegroundsSelectedTargetAfterTiling() async {
+        let seed = [off(1), off(2), off(3)]
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
+                               gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+        let foregrounder = SpyTargetAppForegrounder()
+        let (vm, fake) = makeVM(windows: seed, store: store, trusted: true, foregrounder: foregrounder)
+        foregrounder.writeCount = { await fake.recordedWrites.count }
+
+        await vm.rearrangeNow()
+
+        #expect(foregrounder.calledBundleIDs == ["com.example.target"])
+        #expect(foregrounder.writesAtCall == [3])
+        #expect(vm.lastForegroundResult == .frontmost)
+    }
+
+    @Test("rearrangeNow does not foreground when Accessibility is untrusted")
+    func rearrangeNowNoForegroundWhenUntrusted() async {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: false,
+                               gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+        let foregrounder = SpyTargetAppForegrounder()
+        let (vm, _) = makeVM(windows: [off(1)], store: store, trusted: false, foregrounder: foregrounder)
+
+        await vm.rearrangeNow()
+
+        #expect(foregrounder.calledBundleIDs.isEmpty)
+        #expect(vm.lastForegroundResult == nil)
+    }
+
+    @Test("rearrangeNow records foreground activation failures")
+    func rearrangeNowRecordsForegroundFailure() async {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
+                               gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+        let foregrounder = SpyTargetAppForegrounder(result: .activationRejected)
+        let (vm, _) = makeVM(windows: [off(1)], store: store, trusted: true, foregrounder: foregrounder)
+
+        await vm.rearrangeNow()
+
+        #expect(vm.lastForegroundResult == .activationRejected)
+    }
+
+    @Test("foreground warning message appears only for failed focus attempts")
+    func foregroundWarningMessageAppearsOnlyForFailures() async {
+        let rejected = await vmAfterForegroundResult(.activationRejected)
+        #expect(rejected.foregroundWarningMessage == "macOS rejected the focus request.")
+
+        let unverified = await vmAfterForegroundResult(.requestAcceptedButUnverified)
+        #expect(unverified.foregroundWarningMessage
+                == "macOS accepted the focus request, but TermTile could not verify the app came forward.")
+
+        let notRunning = await vmAfterForegroundResult(.notRunning)
+        #expect(notRunning.foregroundWarningMessage == "The selected app is not running.")
+
+        let frontmost = await vmAfterForegroundResult(.frontmost)
+        #expect(frontmost.foregroundWarningMessage == nil)
+    }
+
+    @Test("target or focus-setting changes clear stale foreground warnings")
+    func foregroundWarningClearsWhenRelevantSettingChanges() async {
+        let vm = await vmAfterForegroundResult(.activationRejected)
+        #expect(vm.foregroundWarningMessage != nil)
+
+        await vm.setTarget("com.example.other")
+        #expect(vm.lastForegroundResult == nil)
+        #expect(vm.foregroundWarningMessage == nil)
+
+        let second = await vmAfterForegroundResult(.activationRejected)
+        second.setBringToFrontOnRearrange(false)
+        #expect(second.lastForegroundResult == nil)
+        #expect(second.foregroundWarningMessage == nil)
+    }
+
+    @Test("in-flight foreground result does not repopulate stale target warning")
+    func inFlightForegroundResultDoesNotRepopulateStaleTargetWarning() async {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.example.first", wasTrusted: true,
+                               gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+        let gate = AsyncGate()
+        let foregrounder = SpyTargetAppForegrounder(result: .activationRejected)
+        foregrounder.beforeReturn = { await gate.wait() }
+        let (vm, _) = makeVM(windows: [off(1)], store: store, trusted: true, foregrounder: foregrounder)
+
+        let rearrange = Task { await vm.rearrangeNow() }
+        for _ in 0..<100 where foregrounder.calledBundleIDs.isEmpty {
+            await Task.yield()
+        }
+        #expect(foregrounder.calledBundleIDs == ["com.example.first"])
+
+        await vm.setTarget("com.example.second")
+        await gate.open()
+        await rearrange.value
+
+        #expect(vm.targetBundleID == "com.example.second")
+        #expect(vm.lastForegroundResult == nil)
+        #expect(vm.foregroundWarningMessage == nil)
+    }
+
+    @Test("in-flight rearrange does not foreground stale target after target changes")
+    func inFlightRearrangeDoesNotForegroundStaleTargetAfterTargetChanges() async {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.example.first", wasTrusted: true,
+                               gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+        let activationStarted = AsyncGate()
+        let allowActivationToFinish = AsyncGate()
+        let system = BlockingWindowSystem(
+            windows: [off(1)],
+            activationStarted: activationStarted,
+            allowActivationToFinish: allowActivationToFinish)
+        let foregrounder = SpyTargetAppForegrounder(result: .activationRejected)
+        let vm = MenuBarViewModel(
+            settings: store,
+            loginItem: InMemoryLoginItem(),
+            appsProvider: InMemoryTargetAppsProvider(seed: []),
+            isTrustedProbe: { true },
+            visibleFrame: visible,
+            epsilon: eps,
+            makeActor: { _ in TilingActor(system: system, epsilon: self.eps) },
+            foregrounder: foregrounder)
+
+        let rearrange = Task { await vm.rearrangeNow() }
+        await activationStarted.wait()
+        await vm.setTarget("com.example.second")
+        await allowActivationToFinish.open()
+        await rearrange.value
+
+        #expect(foregrounder.calledBundleIDs.isEmpty)
+        #expect(vm.targetBundleID == "com.example.second")
+        #expect(vm.lastForegroundResult == nil)
+        #expect(vm.foregroundWarningMessage == nil)
+    }
+
+    @Test("in-flight foreground result does not repopulate warning after focus setting is disabled")
+    func inFlightForegroundResultDoesNotRepopulateAfterSettingDisabled() async {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
+                               gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+        let gate = AsyncGate()
+        let foregrounder = SpyTargetAppForegrounder(result: .activationRejected)
+        foregrounder.beforeReturn = { await gate.wait() }
+        let (vm, _) = makeVM(windows: [off(1)], store: store, trusted: true, foregrounder: foregrounder)
+
+        let rearrange = Task { await vm.rearrangeNow() }
+        for _ in 0..<100 where foregrounder.calledBundleIDs.isEmpty {
+            await Task.yield()
+        }
+        #expect(foregrounder.calledBundleIDs == ["com.example.target"])
+
+        vm.setBringToFrontOnRearrange(false)
+        await gate.open()
+        await rearrange.value
+
+        #expect(!vm.bringToFrontOnRearrange)
+        #expect(vm.lastForegroundResult == nil)
+        #expect(vm.foregroundWarningMessage == nil)
+    }
+
+    @Test("in-flight rearrange does not foreground after focus setting is disabled")
+    func inFlightRearrangeDoesNotForegroundAfterFocusSettingDisabled() async {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
+                               gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+        let activationStarted = AsyncGate()
+        let allowActivationToFinish = AsyncGate()
+        let system = BlockingWindowSystem(
+            windows: [off(1)],
+            activationStarted: activationStarted,
+            allowActivationToFinish: allowActivationToFinish)
+        let foregrounder = SpyTargetAppForegrounder(result: .activationRejected)
+        let vm = MenuBarViewModel(
+            settings: store,
+            loginItem: InMemoryLoginItem(),
+            appsProvider: InMemoryTargetAppsProvider(seed: []),
+            isTrustedProbe: { true },
+            visibleFrame: visible,
+            epsilon: eps,
+            makeActor: { _ in TilingActor(system: system, epsilon: self.eps) },
+            foregrounder: foregrounder)
+
+        let rearrange = Task { await vm.rearrangeNow() }
+        await activationStarted.wait()
+        vm.setBringToFrontOnRearrange(false)
+        await allowActivationToFinish.open()
+        await rearrange.value
+
+        #expect(foregrounder.calledBundleIDs.isEmpty)
+        #expect(!vm.bringToFrontOnRearrange)
+        #expect(vm.lastForegroundResult == nil)
+        #expect(vm.foregroundWarningMessage == nil)
+    }
+
     // uninstall() forwards to the injected Uninstaller and returns its outcome; nil when none.
     @Test("uninstall routes to the injected uninstaller")
     func uninstallRoutes() throws {
@@ -196,6 +408,86 @@ struct MenuBarViewModelTests {
         func purge() { lock.withLock { current = nil } }
     }
 
+    @MainActor
+    final class SpyTargetAppForegrounder: TargetAppForegrounding {
+        private(set) var calledBundleIDs: [String] = []
+        private(set) var writesAtCall: [Int] = []
+        var writeCount: (() async -> Int)?
+        var beforeReturn: (() async -> Void)?
+        let result: TargetForegroundResult
+
+        init(result: TargetForegroundResult = .frontmost) {
+            self.result = result
+        }
+
+        func bringToFront(bundleID: String) async -> TargetForegroundResult {
+            calledBundleIDs.append(bundleID)
+            if let writeCount {
+                writesAtCall.append(await writeCount())
+            }
+            if let beforeReturn {
+                await beforeReturn()
+            }
+            return result
+        }
+    }
+
+    actor AsyncGate {
+        private var isOpen = false
+        private var continuations: [CheckedContinuation<Void, Never>] = []
+
+        func wait() async {
+            if isOpen { return }
+            await withCheckedContinuation { continuation in
+                continuations.append(continuation)
+            }
+        }
+
+        func open() {
+            isOpen = true
+            let waiting = continuations
+            continuations.removeAll()
+            for continuation in waiting {
+                continuation.resume()
+            }
+        }
+    }
+
+    actor BlockingWindowSystem: WindowSystem {
+        private let seeded: [TrackedWindow]
+        private let activationStarted: AsyncGate
+        private let allowActivationToFinish: AsyncGate
+
+        init(windows: [TrackedWindow],
+             activationStarted: AsyncGate,
+             allowActivationToFinish: AsyncGate) {
+            self.seeded = windows
+            self.activationStarted = activationStarted
+            self.allowActivationToFinish = allowActivationToFinish
+        }
+
+        func tileableWindows() async -> [TrackedWindow] {
+            await activationStarted.open()
+            await allowActivationToFinish.wait()
+            return seeded
+        }
+
+        func writeFrame(_ id: CGWindowID, to target: CGRect) -> Bool {
+            true
+        }
+    }
+
+    private func vmAfterForegroundResult(_ result: TargetForegroundResult) async -> MenuBarViewModel {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
+                               gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+        let foregrounder = SpyTargetAppForegrounder(result: result)
+        let (vm, _) = makeVM(windows: [off(1)], store: store, trusted: true, foregrounder: foregrounder)
+        await vm.rearrangeNow()
+        return vm
+    }
+
     // B2 fix — a trusted-at-launch user (incl. migrating users: wasTrusted key absent → false)
     // latches wasTrusted=true ONCE at init, so a later grant-break is recognised as grantBroken.
     @Test("latches wasTrusted at init when already trusted")
@@ -210,7 +502,7 @@ struct MenuBarViewModelTests {
     // Idempotent on the PERSISTED flag — repeated refreshTrust after true writes nothing more.
     @Test("latch is idempotent")
     func latchIdempotent() {
-        let spy = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
+        let spy = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
         let (vm, _) = makeVM(store: spy, trusted: true)
         let base = spy.saveCount                    // 0 — already true, no init latch
         vm.refreshTrust(); vm.refreshTrust()
@@ -224,7 +516,7 @@ struct MenuBarViewModelTests {
         let (vm1, _) = makeVM(store: spy1, trusted: false)
         #expect(vm1.accessibilityState == .needsFirstGrant)
         #expect(spy1.saveCount == 0)
-        let spy2 = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
+        let spy2 = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
         let (vm2, _) = makeVM(store: spy2, trusted: false)
         #expect(vm2.accessibilityState == .grantBroken)
     }
@@ -287,7 +579,7 @@ struct MenuBarViewModelTests {
     func launchRequestsInputMonitoringIndependentOfAccessibility() {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.x", wasTrusted: false, gap: 8,
-                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap))
+                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false))
         let (_, spy) = makeVMWithReorder(store: store, trusted: false, granted: false)
         #expect(spy.requestCount >= 1)   // registered in the IM pane despite AX being untrusted
     }
@@ -301,6 +593,32 @@ struct MenuBarViewModelTests {
         vm.setReorderStrategy(.swap)
         #expect(vm.reorderStrategy == .swap)
         #expect(store.load().reorderStrategy == .swap)      // persisted
+    }
+
+    // #36 — bring-to-front is user-state only until Rearrange. Default false preserves the existing
+    // manual no-focus model; setter persists without tiling.
+    @Test("bringToFrontOnRearrange defaults false; setBringToFrontOnRearrange persists")
+    func setBringToFrontOnRearrangePersists() async {
+        let store = InMemorySettingsStore()
+        let (vm, fake) = makeVM(windows: [off(1)], store: store)
+        #expect(!vm.bringToFrontOnRearrange)
+        vm.setBringToFrontOnRearrange(true)
+        #expect(vm.bringToFrontOnRearrange)
+        #expect(store.load().bringToFrontOnRearrange == true)
+        let writes = await fake.recordedWrites
+        #expect(writes.isEmpty)
+        vm.setBringToFrontOnRearrange(false)
+        #expect(store.load().bringToFrontOnRearrange == false)
+    }
+
+    @Test("bringToFrontOnRearrange loads from settings")
+    func bringToFrontOnRearrangeLoadsFromSettings() {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8,
+                               hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap,
+                               bringToFrontOnRearrange: true))
+        let (vm, _) = makeVM(store: store)
+        #expect(vm.bringToFrontOnRearrange)
     }
 
     // #26 — a spy drag-reorder controller: records start/stop so the VM lifecycle is unit-provable.
@@ -348,7 +666,7 @@ struct MenuBarViewModelTests {
         // opted-in at launch (seeded) + trusted + granted → started at init
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
-                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap))
+                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false))
         let (vm, spy) = makeVMWithReorder(store: store, trusted: true, granted: true)
         #expect(spy.isRunning)
         vm.setReorderOnDrag(false)               // toggle off → stops
@@ -370,7 +688,7 @@ struct MenuBarViewModelTests {
     func reorderNeedsInputMonitoringState() {
         let on = InMemorySettingsStore()
         on.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
-                            hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap))
+                            hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false))
         #expect(makeVMWithReorder(store: on, trusted: true, granted: false).0.reorderNeedsInputMonitoring)
         #expect(!makeVMWithReorder(store: on, trusted: true, granted: true).0.reorderNeedsInputMonitoring)
         #expect(!makeVMWithReorder(store: on, trusted: false, granted: false).0.reorderNeedsInputMonitoring)
@@ -391,7 +709,7 @@ struct MenuBarViewModelTests {
         let box = Box()
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
-                               hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
+                               hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
         let (vm, _) = makeVM(store: store, trusted: false, requestAccessibilityTrust: {
             box.promptCount += 1
             return false
@@ -419,7 +737,7 @@ struct MenuBarViewModelTests {
         let repairer = SpyPermissionRepairer()
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
-                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap))
+                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false))
         let (vm, drag) = makeVMWithReorder(store: store, trusted: true, granted: false,
                                            permissionRepairer: repairer)
         let before = drag.requestCount
@@ -482,7 +800,7 @@ struct MenuBarViewModelTests {
     @Test("gap loads from settings")
     func gapLoadsFromSettings() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 24, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 24, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
         let (vm, _) = makeVM(store: store)
         #expect(vm.gap == 24)
     }
@@ -492,7 +810,7 @@ struct MenuBarViewModelTests {
     @Test("out-of-range persisted gap is clamped on load")
     func outOfRangeLoadedGapClamped() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 9999, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 9999, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
         let (vm, _) = makeVM(store: store)
         #expect(vm.gap == 40)                             // clamped, not 9999
     }
@@ -528,5 +846,18 @@ struct MenuBarViewModelTests {
         #expect(spy.load().targetBundleID == "com.googlecode.iterm2")
         await vm.setTarget("com.example.other")
         #expect(spy.load().gap == 12)                     // target change didn't clobber gap
+    }
+
+    @Test("setting writes preserve bringToFrontOnRearrange")
+    func persistPreservesBringToFrontOnRearrange() async {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8,
+                               hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .adaptive,
+                               bringToFrontOnRearrange: true))
+        let (vm, _) = makeVM(store: store)
+        vm.setGap(16)
+        #expect(store.load().bringToFrontOnRearrange == true)
+        await vm.setTarget("com.example.other")
+        #expect(store.load().bringToFrontOnRearrange == true)
     }
 }
