@@ -12,9 +12,9 @@ the three repos share the MacFaceKit design system.)_
 | Tests | Run `swift test` before claiming health |
 | Lint | Run `swiftlint --strict` before claiming health |
 | Git | Check `git status --short` before release |
-| Latest published release | **v0.2.5** (2026-07-18), build 134, Developer ID signed/notarized/stapled |
-| Release target | v0.2.6 candidate; not released until packaging/release pipeline publishes artifacts |
-| Latest unreleased work | Update-available indicators and drag/fullscreen QOL fix validated locally |
+| Latest published release | **v0.2.6** (2026-07-18), build 138, Developer ID signed/notarized/stapled |
+| Release target | None active; v0.2.6 is published |
+| Latest unreleased work | None; update indicators and drag/fullscreen QOL fix shipped in v0.2.6 |
 | Public signing | Developer ID Application: Evan Navarro (`XG9SBNWNXT`) |
 | Notarization | Accepted; release CI notarizes, staples, and Gatekeeper-assesses before zipping |
 | Design-system dep | MacFaceKit `.upToNextMinor(from: "0.3.3")` (public git URL, auto-resolved) |
@@ -25,22 +25,22 @@ the three repos share the MacFaceKit design system.)_
    If the build reds with "invalid redeclaration", check for stray `* 2.swift` Finder/Xcode duplicate
    files (`find Sources Tests -name '* 2.swift'`) and delete them; the tracked originals are truth.
    (This bit RememBar this session; TermTile is currently clean.)
-2. **Verify notarized release artifacts after the next public release.** Use `docs/NOTARIZATION.md`:
+2. **Verify notarized release artifacts after each public release.** Use `docs/NOTARIZATION.md`:
    fresh-download the zip, verify checksum/provenance, then run `codesign`, `stapler validate`, and
-   `spctl --assess` against the downloaded `TermTile.app`. This was completed for `v0.2.5`.
-3. **Before releasing v0.2.6, run the release pipeline.** The local implementation/validation plan in
-   `docs/decisions/0003-update-availability-indicators.md` is complete; public availability requires
-   the signed/notarized release job to publish the zip, release notes, and appcast.
-   Local candidate evidence, including live iTerm content-drag and screenshot-region checks, is in
-   `docs/verification/release-v0.2.6-local.md`.
+   `spctl --assess` against the downloaded `TermTile.app`. This was completed for `v0.2.6`;
+   evidence is in `docs/verification/release-v0.2.6.md`.
+3. **For the next release, repeat the tag workflow.** Author `release-notes/<version>.md`, run the
+   local gate, commit the complete release diff, create `v<version>`, and push `master` + the tag.
 
 ## Where the project is
 
-- **Latest release:** v0.2.5 - menu-bar window-tiler: pick a terminal (iTerm2/WezTerm), press
+- **Latest release:** v0.2.6 - menu-bar window-tiler: pick a terminal (iTerm2/WezTerm), press
   **Rearrange now**, and windows snap into even columns of two. The Rearrange section now has a
   default-off **Bring app forward** option that asks macOS to focus the selected target app after
-  tiling. It is Developer ID signed, notarized, stapled, Gatekeeper-assessed by release CI, and
-  published with a signed Sparkle appcast. It keeps the v0.2.4 uninstall privacy cleanup and stale
+  tiling. v0.2.6 adds Sparkle-backed update indicators in the menu-bar glyph and overflow menu, and
+  tightens drag-reorder so content/screenshot drags inside an unchanged focused window do not snap it
+  back to the grid. It is Developer ID signed, notarized, stapled, Gatekeeper-assessed by release CI,
+  and published with a signed Sparkle appcast. It keeps the v0.2.4 uninstall privacy cleanup and stale
   permission repair flows. `v0.2.1` was the transitional signed but unstapled build used to stabilize
   macOS TCC grants across updates.
 - **Released in v0.2.0:** the richer identity card, GitHub/License links,

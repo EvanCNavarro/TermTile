@@ -2,10 +2,11 @@
 
 ## Status
 
-Implemented locally in focused phases on 2026-07-18.
+Implemented locally in focused phases on 2026-07-18 and released publicly as TermTile v0.2.6.
 
-Current progress: Phase 10 complete, 100% local implementation complete. Public availability still
-depends on the release pipeline publishing v0.2.6 artifacts and appcast updates.
+Current progress: Phase 10 complete, 100% local implementation complete, and public release complete.
+The v0.2.6 release pipeline published the signed/notarized zip, checksum, provenance attestation,
+release notes, and Sparkle appcast.
 
 Final validated outcomes:
 
@@ -15,12 +16,13 @@ Final validated outcomes:
 - MacFaceKit owns the reusable attention dot and overflow attention API.
 - Drag-reorder now requires a real candidate-window frame change, so terminal text selection and
   screenshot-region drags inside an unchanged focused/maximized window do not trigger a grid snap.
-- `swift build && swift test && swiftlint --strict` passed with 256 tests and 0 lint violations.
+- `swift build && swift test && swiftlint --strict` passed with 257 tests and 0 lint violations.
 - `scripts/test-packaged-app.sh dist/TermTile.app` passed after rendering the gallery and arming the
   packaged passive update probe.
 - Live local `0.2.6` candidate checks confirmed iTerm content-drag and screenshot-region drags kept
   the focused `ChangeFabric` window bounds unchanged; evidence is recorded in
   `docs/verification/release-v0.2.6-local.md`.
+- Published artifact verification for v0.2.6 is recorded in `docs/verification/release-v0.2.6.md`.
 
 At the end of every implementation turn, report:
 

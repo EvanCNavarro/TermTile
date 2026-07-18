@@ -230,6 +230,28 @@ struct ReleaseReadinessTests {
         }
     }
 
+    @Test("0.2.6 public verification records shipped artifacts")
+    func releaseVerification026RecordsPublishedArtifacts() {
+        let docs = Self.file("docs/verification/release-v0.2.6.md")
+        #expect(!docs.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                "docs/verification/release-v0.2.6.md must record published v0.2.6 evidence")
+
+        for required in [
+            "v0.2.6",
+            "a9ec44a373a264420d19d86aeda158c5b5f9b131",
+            "Build version: `138`",
+            "gh attestation verify",
+            "appcast.xml",
+            "EdDSA",
+            "xcrun stapler validate",
+            "spctl --assess",
+            "Notarized Developer ID"
+        ] {
+            #expect(docs.localizedCaseInsensitiveContains(required),
+                    "docs/verification/release-v0.2.6.md must mention \(required)")
+        }
+    }
+
     @Test("public docs describe passive update availability checks")
     func publicDocsDescribePassiveUpdateAvailabilityChecks() {
         for path in ["README.md", "SECURITY.md"] {
