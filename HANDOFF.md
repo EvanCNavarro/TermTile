@@ -12,9 +12,9 @@ the three repos share the MacFaceKit design system.)_
 | Tests | Run `swift test` before claiming health |
 | Lint | Run `swiftlint --strict` before claiming health |
 | Git | Check `git status --short` before release |
-| Latest published release | **v0.2.4** (2026-07-16), build 129, Developer ID signed/notarized/stapled |
+| Latest published release | **v0.2.5** (2026-07-18), build 134, Developer ID signed/notarized/stapled |
 | Release target | None active; next version TBD |
-| Latest unreleased work | Task #36 optional `Bring app forward` behavior is implemented and documented locally |
+| Latest unreleased work | None; Task #36 optional `Bring app forward` behavior shipped in v0.2.5 |
 | Public signing | Developer ID Application: Evan Navarro (`XG9SBNWNXT`) |
 | Notarization | Accepted; release CI notarizes, staples, and Gatekeeper-assesses before zipping |
 | Design-system dep | MacFaceKit `.upToNextMinor(from: "0.3.2")` (public git URL, auto-resolved) |
@@ -27,21 +27,20 @@ the three repos share the MacFaceKit design system.)_
    (This bit RememBar this session; TermTile is currently clean.)
 2. **Verify notarized release artifacts after the next public release.** Use `docs/NOTARIZATION.md`:
    fresh-download the zip, verify checksum/provenance, then run `codesign`, `stapler validate`, and
-   `spctl --assess` against the downloaded `TermTile.app`. This was completed for `v0.2.4`.
+   `spctl --assess` against the downloaded `TermTile.app`. This was completed for `v0.2.5`.
 3. **Pick up product work** from the backlog. TermTile does one thing (tile a chosen app's windows into
    an even grid); the open arcs are polish + reach: onboarding/first-run guidance, more target apps,
    smoother tiling. Check `.engine/BACKLOG.md` + `.engine/state/` (STOKE plans) for the tracked queue.
 
 ## Where the project is
 
-- **Latest release:** v0.2.4 - menu-bar window-tiler: pick a terminal (iTerm2/WezTerm), press
-  **Rearrange now**, and windows snap into even columns of two. It is Developer ID signed,
-  notarized, stapled, and Gatekeeper-assessed by release CI. It adds in-app **Repair Accessibility**
-  and **Repair Input Monitoring** actions for users whose older ad-hoc/dev TCC grants look enabled in
-  Settings but do not match the current signed app. It also routes uninstall privacy cleanup through
-  the same scoped TCC reset primitive, reports login/data/bundle/privacy partial failures explicitly,
-  and bounds the `tccutil` wait so a stuck reset cannot hang the UI indefinitely. `v0.2.1` was the
-  transitional signed but unstapled build used to stabilize macOS TCC grants across updates.
+- **Latest release:** v0.2.5 - menu-bar window-tiler: pick a terminal (iTerm2/WezTerm), press
+  **Rearrange now**, and windows snap into even columns of two. The Rearrange section now has a
+  default-off **Bring app forward** option that asks macOS to focus the selected target app after
+  tiling. It is Developer ID signed, notarized, stapled, Gatekeeper-assessed by release CI, and
+  published with a signed Sparkle appcast. It keeps the v0.2.4 uninstall privacy cleanup and stale
+  permission repair flows. `v0.2.1` was the transitional signed but unstapled build used to stabilize
+  macOS TCC grants across updates.
 - **Released in v0.2.0:** the richer identity card, GitHub/License links,
   adjustable gap, configurable shortcut, drag-reorder controls, Uninstall, clearer Accessibility/Input
   Monitoring guidance, branded update dialog, and stricter release-readiness tests.
@@ -70,10 +69,10 @@ the three repos share the MacFaceKit design system.)_
 
 ## Open items / deferred
 
-- **Post-release artifact verification** - completed for `v0.2.4`: checksum, codesign, stapler,
-  Gatekeeper, bundle metadata, appcast, release workflow, and `gh attestation verify
-  TermTile-v0.2.4.zip --repo EvanCNavarro/TermTile` (passed at 2026-07-16T23:46:45Z after transient
-  GitHub API 503s).
+- **Post-release artifact verification** - completed for `v0.2.5`: checksum, codesign, stapler,
+  Gatekeeper, bundle metadata, latest appcast, release workflow, and `gh attestation verify
+  TermTile-v0.2.5.zip --repo EvanCNavarro/TermTile`. Evidence:
+  `docs/verification/release-v0.2.5.md`.
 - `[DEP:#33]` — RememBar's `ProcessRunner` 1s drainer-wait ceiling (shared-pattern note; RememBar's concern,
   low risk). Tracked in that repo.
 - Twin-drift with RememBar is intentional + documented: TermTile's `Updater` is a lazy instance gated by
