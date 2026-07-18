@@ -142,6 +142,25 @@ struct ReleaseReadinessTests {
         }
     }
 
+    @Test("0.2.5 release notes explain optional app focus on Rearrange")
+    func releaseNotes025CoverBringAppForward() {
+        let notes = Self.file("release-notes/0.2.5.md")
+        #expect(!notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                "release-notes/0.2.5.md must exist before tagging v0.2.5")
+
+        for required in [
+            "Bring app forward",
+            "Rearrange",
+            "target app",
+            "default off",
+            "macOS",
+            "focus"
+        ] {
+            #expect(notes.localizedCaseInsensitiveContains(required),
+                    "release-notes/0.2.5.md must mention \(required)")
+        }
+    }
+
     @Test("release docs do not claim public CI can self-sign releases")
     func releaseDocsRequireDeveloperIDForPublicRelease() {
         let docs = Self.file("docs/RELEASING.md")
