@@ -18,7 +18,8 @@ nothing until you ask it to.
   default, which you can re-record in the menu). Your windows are yours the rest of the time.
 - **Optional focus** — when enabled, Rearrange asks macOS to bring the selected target app forward.
 - **Adjustable gap** — set the spacing between tiled windows from the menu.
-- **Auto-updates** — a built-in **Check for Updates…** keeps you current.
+- **Auto-updates** — a passive update availability check can mark the menu-bar indicator and ellipsis
+  when an update is available; **Check for Updates…** opens the signed Sparkle update flow.
 - **Clean uninstall** — an **About** panel with a one-click uninstall that removes the app, its data,
   launch-at-login registration, and TermTile's own Accessibility/Input Monitoring entries.
 
@@ -51,8 +52,10 @@ TermTile is local and quiet:
   Accessibility API and writes new positions back. It never reads window *contents*, your keystrokes,
   or anything you type.
 - **No telemetry.** No analytics, no tracking.
-- **The only network request** is the update check: TermTile fetches its signed appcast from this
-  repository's GitHub releases to see if a newer version exists. Nothing about you is sent.
+- **The only network request** is the update check: on launch, TermTile runs a passive update
+  availability check against the signed appcast from this repository's GitHub releases so the
+  menu-bar indicator can show when a newer version exists. **Check for Updates…** uses the same signed
+  Sparkle feed when you ask to install an update. Nothing about you is sent.
 
 **Permissions it asks for:** Accessibility to move and resize windows. If you enable
 **Reorder windows on drag**, TermTile also asks for Input Monitoring so it can detect the drag gesture.

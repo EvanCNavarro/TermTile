@@ -73,6 +73,7 @@ struct TermTileApp: App {
             let vm = viewModel
             viewModel.setDragReorder(DragReorderController(
                 resolveWindow: { [weak vm] point in await vm?.resolveDraggedWindow(at: point) },
+                currentFrame: { [weak vm] id in await vm?.draggedWindowFrame(id: id) },
                 onDrop: { [weak vm] id in await vm?.reorderDroppedWindow(id) }))
         }
 
@@ -88,6 +89,7 @@ struct TermTileApp: App {
             }
         }
 
+        armUpdateAvailabilityProbeIfAllowed(isSelftest: isSelftest, isGallery: isGallery)
         armAutoUpdateCheckIfRequested()
 
         if isGallery {
@@ -108,6 +110,18 @@ struct TermTileApp: App {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1))   // let the app finish launching first
             up.checkForUpdates()
+        }
+    }
+
+    @MainActor
+    private func armUpdateAvailabilityProbeIfAllowed(isSelftest: Bool, isGallery: Bool) {
+        let environment = ProcessInfo.processInfo.environment
+        let isProbeSmoke = environment["TERMTILE_UPDATE_PROBE_SMOKE"] != nil
+        guard isProbeSmoke || (!isSelftest && !isGallery) else { return }
+        guard environment["TERMTILE_AUTOCHECK"] == nil else { return }
+        let up = updater
+        Task { @MainActor in
+            up.refreshAvailability()
         }
     }
 
@@ -164,7 +178,7 @@ struct TermTileApp: App {
         MenuBarExtra {
             MenuBarContent(viewModel: viewModel, updater: updater, appInfo: appInfo)
         } label: {
-            TermTileGlyph()   // the logo glyph, not the "TermTile" text
+            TermTileGlyph(hasAvailableUpdate: updater.availability.hasAvailableUpdate)
         }
         .menuBarExtraStyle(.window)
     }

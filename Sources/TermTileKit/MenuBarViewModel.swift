@@ -214,12 +214,14 @@ public final class MenuBarViewModel {
         return reports
     }
 
-    /// The drag-reorder seam the controller's monitor calls (#26). Both hit the CURRENT `actor` (which
-    /// `setTarget` rebuilds) + current gap/frame, so a target-switch needs no teardown — the closures
-    /// always resolve against the live target.
-    /// Resolve the dragged window at mouse-DOWN (fresh enumerate, windows still on their grid slots).
-    public func resolveDraggedWindow(at point: CGPoint) async -> CGWindowID? {
-        await actor.windowID(atFresh: point)
+    /// Drag-reorder seams for the controller. Both hit the current actor, so target switches need no
+    /// teardown; mouse-down captures identity and mouse-up verifies the frame really moved.
+    public func resolveDraggedWindow(at point: CGPoint) async -> TrackedWindow? {
+        await actor.trackedWindow(atFresh: point)
+    }
+
+    public func draggedWindowFrame(id: CGWindowID) async -> CGRect? {
+        await actor.windowFrame(idFresh: id)
     }
 
     /// Reorder the dropped window at drag-END (fresh enumerate → nearest slot) using the user's chosen
@@ -394,6 +396,5 @@ public final class MenuBarViewModel {
     /// menu open (the user reaches System Settings via the fix-it row's `Link` instead).
     public static let liveTrustProbe: @Sendable () -> Bool = { AccessibilityTrust.isTrusted(prompting: false) }
 
-    /// The production prompt path used only after the user explicitly chooses the repair action.
     public static let liveTrustPrompt: @Sendable () -> Bool = { AccessibilityTrust.isTrusted(prompting: true) }
 }

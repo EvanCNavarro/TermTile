@@ -19,8 +19,36 @@ struct ReleaseReadinessTests {
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }
 
+    private static func data(_ path: String) -> Data {
+        let url = repoRoot().appending(path: path)
+        return (try? Data(contentsOf: url)) ?? Data()
+    }
+
     private static func normalizedWhitespace(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    private static func resolvedVersion(for identity: String) -> String? {
+        guard let root = try? JSONSerialization.jsonObject(with: Self.data("Package.resolved")) as? [String: Any],
+              let pins = root["pins"] as? [[String: Any]] else { return nil }
+        for pin in pins where pin["identity"] as? String == identity {
+            return (pin["state"] as? [String: Any])?["version"] as? String
+        }
+        return nil
+    }
+
+    private static func semver(_ version: String) -> [Int]? {
+        let parts = version.split(separator: ".").map(String.init)
+        guard parts.count == 3 else { return nil }
+        let numbers = parts.compactMap(Int.init)
+        return numbers.count == 3 ? numbers : nil
+    }
+
+    private static func semver(_ version: String, isAtLeast floor: String, below ceiling: String) -> Bool {
+        guard let version = semver(version),
+              let floor = semver(floor),
+              let ceiling = semver(ceiling) else { return false }
+        return version.lexicographicallyPrecedes(floor) == false && version.lexicographicallyPrecedes(ceiling)
     }
 
     private static func swiftFiles(under path: String) -> [(path: String, contents: String)] {
@@ -158,6 +186,60 @@ struct ReleaseReadinessTests {
         ] {
             #expect(notes.localizedCaseInsensitiveContains(required),
                     "release-notes/0.2.5.md must mention \(required)")
+        }
+    }
+
+    @Test("0.2.6 release notes explain update availability indicators")
+    func releaseNotes026CoverUpdateAvailabilityIndicators() {
+        let notes = Self.file("release-notes/0.2.6.md")
+        #expect(!notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                "release-notes/0.2.6.md must exist before tagging v0.2.6")
+
+        for required in [
+            "update available",
+            "menu bar",
+            "ellipsis",
+            "Check for Updates",
+            "passive",
+            "Sparkle",
+            "drag-reorder",
+            "text selection",
+            "screenshot"
+        ] {
+            #expect(notes.localizedCaseInsensitiveContains(required),
+                    "release-notes/0.2.6.md must mention \(required)")
+        }
+    }
+
+    @Test("0.2.6 local verification records drag QOL evidence")
+    func releaseVerification026RecordsDragQOLEvidence() {
+        let docs = Self.file("docs/verification/release-v0.2.6-local.md")
+        #expect(!docs.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                "docs/verification/release-v0.2.6-local.md must record local v0.2.6 candidate evidence")
+
+        for required in [
+            "iTerm content-drag",
+            "screenshot-region drag",
+            "before=0,38,1728,1030",
+            "after=0,38,1728,1030",
+            "PASS",
+            "local candidate only"
+        ] {
+            #expect(docs.localizedCaseInsensitiveContains(required),
+                    "docs/verification/release-v0.2.6-local.md must mention \(required)")
+        }
+    }
+
+    @Test("public docs describe passive update availability checks")
+    func publicDocsDescribePassiveUpdateAvailabilityChecks() {
+        for path in ["README.md", "SECURITY.md"] {
+            let docs = Self.normalizedWhitespace(Self.file(path))
+            #expect(docs.localizedCaseInsensitiveContains("passive update availability check"),
+                    "\(path) must describe the launch-time passive update availability check")
+            #expect(docs.localizedCaseInsensitiveContains("menu-bar indicator"),
+                    "\(path) must mention the update indicator behavior")
+            #expect(docs.localizedCaseInsensitiveContains("Check for Updates"),
+                    "\(path) must distinguish the user-initiated update command")
         }
     }
 
@@ -342,5 +424,43 @@ struct ReleaseReadinessTests {
                 "GitHub should remain present via a package-safe symbol link")
         #expect(menu.contains("IdentityLink.license(AppIdentity.licenseURL)"),
                 "License should remain present in the identity card")
+    }
+
+    @Test("Sparkle remains confined to the executable target")
+    func sparkleRemainsConfinedToExecutableTarget() {
+        for target in ["Sources/TermTileCore", "Sources/TermTileKit"] {
+            for source in Self.swiftFiles(under: target) {
+                #expect(!source.contents.contains("import Sparkle"),
+                        "\(source.path) must not import Sparkle; update checks belong in the TermTile executable shell")
+            }
+        }
+    }
+
+    @Test("Updater delegates update discovery to Sparkle")
+    func updaterDelegatesUpdateDiscoveryToSparkle() {
+        let source = Self.file("Sources/TermTile/Updater.swift")
+        for forbidden in [
+            "URLSession",
+            "URLRequest",
+            "Data(contentsOf:",
+            "XMLParser",
+            "NSXMLParser",
+            "github.com",
+            "appcast.xml"
+        ] {
+            #expect(!source.contains(forbidden),
+                    "Updater.swift must not implement its own update feed discovery with \(forbidden)")
+        }
+    }
+
+    @Test("MacFaceKit dependency includes the shared attention API")
+    func macFaceKitDependencyIncludesSharedAttentionAPI() {
+        let package = Self.file("Package.swift")
+        #expect(package.contains(".upToNextMinor(from: \"0.3.3\")"),
+                "fresh resolution must start at MacFaceKit v0.3.3 or newer for shared attention indicators")
+        let resolved = Self.resolvedVersion(for: "macfacekit")
+        #expect(resolved != nil, "Package.resolved must include MacFaceKit")
+        #expect(resolved.map { Self.semver($0, isAtLeast: "0.3.3", below: "0.4.0") } == true,
+                "TermTile must consume MacFaceKit >= 0.3.3 and < 0.4.0 for shared attention indicators")
     }
 }

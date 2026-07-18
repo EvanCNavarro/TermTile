@@ -16,8 +16,10 @@ gains). You'll get an acknowledgement and, once fixed, a released version.
 
 TermTile uses the macOS **Accessibility** API to move and resize a chosen app's windows. It reads
 window lists and frames and writes new positions — it does **not** read window contents, keystrokes,
-the clipboard, files, or the network. Its only outbound request is the signed update check (fetching
-the appcast from this repo's releases). There is no telemetry.
+the clipboard, or files. Its only outbound request is the signed update check: on launch, a passive
+update availability check fetches the appcast from this repo's releases so the menu-bar indicator can
+show when an update is available, and **Check for Updates…** uses the same Sparkle feed for the
+user-initiated update flow. There is no telemetry.
 
 ## Supply-chain integrity
 

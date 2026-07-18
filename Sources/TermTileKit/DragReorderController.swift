@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import TermTileCore
 
 /// The concrete drag-reorder controller (#26) — thin `@MainActor` glue over the proven `DragMonitor`
 /// (#14b). `start()` builds + installs the mouse tap wired to the injected drag-op closures (the VM's
@@ -8,13 +9,16 @@ import Foundation
 /// The live tap behaviour is proven by #14b + the end-to-end human drag test; this file is glue.
 @MainActor
 public final class DragReorderController: DragReorderControlling {
-    private let resolveWindow: @Sendable (CGPoint) async -> CGWindowID?
+    private let resolveWindow: @Sendable (CGPoint) async -> TrackedWindow?
+    private let currentFrame: @Sendable (CGWindowID) async -> CGRect?
     private let onDrop: @Sendable (CGWindowID) async -> Void
     private var monitor: DragMonitor?
 
-    public init(resolveWindow: @escaping @Sendable (CGPoint) async -> CGWindowID?,
+    public init(resolveWindow: @escaping @Sendable (CGPoint) async -> TrackedWindow?,
+                currentFrame: @escaping @Sendable (CGWindowID) async -> CGRect?,
                 onDrop: @escaping @Sendable (CGWindowID) async -> Void) {
         self.resolveWindow = resolveWindow
+        self.currentFrame = currentFrame
         self.onDrop = onDrop
     }
 
@@ -28,7 +32,11 @@ public final class DragReorderController: DragReorderControlling {
     @discardableResult
     public func start() -> Bool {
         guard monitor == nil else { return true }
-        let newMonitor = DragMonitor(resolveWindow: resolveWindow, onDragEnd: onDrop)
+        let newMonitor = DragMonitor(
+            resolveWindow: resolveWindow,
+            currentFrame: currentFrame,
+            onDragEnd: onDrop
+        )
         guard newMonitor.start() else { return false }
         monitor = newMonitor
         return true

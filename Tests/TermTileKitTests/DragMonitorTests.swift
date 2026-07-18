@@ -2,6 +2,7 @@ import CoreGraphics
 import Foundation
 import Testing
 @testable import TermTileKit
+import TermTileCore
 
 /// #14b — the drag-reorder decision logic of `DragMonitor`, exercised WITHOUT a real `CGEventTap`
 /// (the tap plumbing is a live-only surface proven by AXProbe `dragcheck`). `handleDown`/`handleUp`
@@ -15,9 +16,13 @@ struct DragMonitorTests {
     @Test("a real drag (travel > threshold) fires onDragEnd with the id resolved at DOWN")
     func realDragFiresWithDownID() async {
         let firedID = Locked<CGWindowID?>(nil)
+        let original = CGRect(x: 0, y: 0, width: 100, height: 100)
         let monitor = DragMonitor(
             travelThreshold: 6,
-            resolveWindow: { point in point.x < 100 ? 42 : nil },   // the DOWN window is id 42
+            resolveWindow: { point in
+                point.x < 100 ? TrackedWindow(id: 42, frame: original) : nil
+            },
+            currentFrame: { _ in CGRect(x: 400, y: 400, width: 100, height: 100) },
             onDragEnd: { id in firedID.set(id) })
 
         monitor.handleDown(at: CGPoint(x: 10, y: 10))               // inside window 42
@@ -34,7 +39,8 @@ struct DragMonitorTests {
         let firedID = Locked<CGWindowID?>(nil)
         let monitor = DragMonitor(
             travelThreshold: 6,
-            resolveWindow: { _ in 42 },
+            resolveWindow: { _ in TrackedWindow(id: 42, frame: CGRect(x: 0, y: 0, width: 100, height: 100)) },
+            currentFrame: { _ in nil },
             onDragEnd: { id in firedID.set(id) })
 
         monitor.handleDown(at: CGPoint(x: 10, y: 10))
@@ -51,6 +57,7 @@ struct DragMonitorTests {
         let monitor = DragMonitor(
             travelThreshold: 6,
             resolveWindow: { _ in nil },                            // down over a gap
+            currentFrame: { _ in nil },
             onDragEnd: { _ in fired.set(true) })
 
         monitor.handleDown(at: CGPoint(x: 999, y: 999))
@@ -58,6 +65,25 @@ struct DragMonitorTests {
 
         #expect(out == nil)
         #expect(fired.get() == false)
+    }
+
+    // The screenshot/text-selection case: pointer travelled, but the managed window itself did not
+    // move. This must NOT snap a maximized/focused terminal back to the grid.
+    @Test("a pointer drag over an unchanged window fires nothing")
+    func unchangedWindowDragFiresNothing() async {
+        let firedID = Locked<CGWindowID?>(nil)
+        let frame = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+        let monitor = DragMonitor(
+            travelThreshold: 6,
+            resolveWindow: { _ in TrackedWindow(id: 42, frame: frame) },
+            currentFrame: { _ in frame },
+            onDragEnd: { id in firedID.set(id) })
+
+        monitor.handleDown(at: CGPoint(x: 10, y: 10))
+        let fired = await monitor.handleUp(at: CGPoint(x: 500, y: 500))
+
+        #expect(fired == nil)
+        #expect(firedID.get() == nil)
     }
 }
 

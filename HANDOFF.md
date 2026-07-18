@@ -13,11 +13,11 @@ the three repos share the MacFaceKit design system.)_
 | Lint | Run `swiftlint --strict` before claiming health |
 | Git | Check `git status --short` before release |
 | Latest published release | **v0.2.5** (2026-07-18), build 134, Developer ID signed/notarized/stapled |
-| Release target | None active; next version TBD |
-| Latest unreleased work | None; Task #36 optional `Bring app forward` behavior shipped in v0.2.5 |
+| Release target | v0.2.6 candidate; not released until packaging/release pipeline publishes artifacts |
+| Latest unreleased work | Update-available indicators and drag/fullscreen QOL fix validated locally |
 | Public signing | Developer ID Application: Evan Navarro (`XG9SBNWNXT`) |
 | Notarization | Accepted; release CI notarizes, staples, and Gatekeeper-assesses before zipping |
-| Design-system dep | MacFaceKit `.upToNextMinor(from: "0.3.2")` (public git URL, auto-resolved) |
+| Design-system dep | MacFaceKit `.upToNextMinor(from: "0.3.3")` (public git URL, auto-resolved) |
 
 ## Start here (next session, in order)
 
@@ -28,9 +28,11 @@ the three repos share the MacFaceKit design system.)_
 2. **Verify notarized release artifacts after the next public release.** Use `docs/NOTARIZATION.md`:
    fresh-download the zip, verify checksum/provenance, then run `codesign`, `stapler validate`, and
    `spctl --assess` against the downloaded `TermTile.app`. This was completed for `v0.2.5`.
-3. **Pick up product work** from the backlog. TermTile does one thing (tile a chosen app's windows into
-   an even grid); the open arcs are polish + reach: onboarding/first-run guidance, more target apps,
-   smoother tiling. Check `.engine/BACKLOG.md` + `.engine/state/` (STOKE plans) for the tracked queue.
+3. **Before releasing v0.2.6, run the release pipeline.** The local implementation/validation plan in
+   `docs/decisions/0003-update-availability-indicators.md` is complete; public availability requires
+   the signed/notarized release job to publish the zip, release notes, and appcast.
+   Local candidate evidence, including live iTerm content-drag and screenshot-region checks, is in
+   `docs/verification/release-v0.2.6-local.md`.
 
 ## Where the project is
 
@@ -45,16 +47,18 @@ the three repos share the MacFaceKit design system.)_
   adjustable gap, configurable shortcut, drag-reorder controls, Uninstall, clearer Accessibility/Input
   Monitoring guidance, branded update dialog, and stricter release-readiness tests.
 - **The big recent UI arc:** adopted the shared **MacFaceKit** design system
-  (`github.com/400faces/MacFaceKit`, public, pinned `.upToNextMinor(from: "0.3.2")`). TermTile is now a
-  UI-twin of RememBar: same identity card, icon buttons, and **branded update dialog** (via
-  `TermTileUserDriver`, a thin Sparkle→`UpdateWindowController` adapter; the window/morph/model live once
-  in the kit). The Rearrange-now hero uses the shared `PrimaryButton` (left-aligned this session).
+  (`github.com/400faces/MacFaceKit`, public, pinned `.upToNextMinor(from: "0.3.3")`). TermTile is now a
+  UI-twin of RememBar: same identity card, icon buttons, shared attention indicator, and **branded update
+  dialog** (via `TermTileUserDriver`, a thin Sparkle→`UpdateWindowController` adapter; the
+  window/morph/model live once in the kit). The Rearrange-now hero uses the shared `PrimaryButton`.
 - **Architecture (ADR-0001, functional core / imperative shell):** `TermTileCore` = pure layout math +
   domain types (CoreGraphics only, no AppKit; enforced by `.engine/checks/core-purity.sh`). `TermTileKit`
   = the Accessibility/window-system port (`AXWindowSystem`, `TilingActor`). `TermTile` = the thin SwiftUI
   menu-bar shell (`MenuBarContent`, `MenuBarViewModel`, `Updater`, `TermTileApp` composition root).
-- **Update flow:** `Updater` (lazy-starts Sparkle on first check — NOT at launch, so no first-run
-  permission prompt steals focus on this `.accessory` app) → `TermTileUserDriver` → `MacFaceKit.UpdateWindowController`.
+- **Update flow:** `Updater` owns Sparkle in the executable target. On normal launch it starts one
+  passive `checkForUpdateInformation()` probe for update-available indicators; **Check for Updates…**
+  still opens the foreground Sparkle update flow through `TermTileUserDriver` and
+  `MacFaceKit.UpdateWindowController`.
 
 ## Known-good dev hooks / gotchas
 

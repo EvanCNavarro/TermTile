@@ -70,8 +70,24 @@ struct TilingActorTests {
         let f = targets(4)
         let fake = InMemoryWindowSystem(windows: (0..<4).map { win(CGWindowID($0 + 1), f[$0]) })
         let actor = TilingActor(system: fake, epsilon: eps)
+        #expect(await actor.trackedWindow(atFresh: CGPoint(x: f[2].midX, y: f[2].midY))
+            == TrackedWindow(id: 3, frame: f[2]))
         #expect(await actor.windowID(atFresh: CGPoint(x: f[2].midX, y: f[2].midY)) == 3)   // NOT first
         #expect(await actor.windowID(atFresh: CGPoint(x: -500, y: -500)) == nil)           // a gap
+    }
+
+    @Test("windowFrame(idFresh:) re-reads the current frame")
+    func windowFrameAtFreshResolves() async {
+        let f = targets(2)
+        let fake = InMemoryWindowSystem(windows: [win(1, f[0]), win(2, f[1])])
+        let actor = TilingActor(system: fake, epsilon: eps)
+        #expect(await actor.windowFrame(idFresh: 2) == f[1])
+
+        let moved = CGRect(x: 300, y: 300, width: 200, height: 200)
+        await fake.reseed([win(1, f[0]), win(2, moved)])
+
+        #expect(await actor.windowFrame(idFresh: 2) == moved)
+        #expect(await actor.windowFrame(idFresh: 99) == nil)
     }
 
     // #26 — ON-DEMAND reorder: at drag END, reorderDropFresh ENUMERATES FRESH (the dragged window at

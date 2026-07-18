@@ -60,4 +60,30 @@ struct AppKitAPITests {
         #expect(!source.contains("appName: \"TermTile\""),
                 "the MacFaceKit update adapter must not duplicate TermTile's app-name literal")
     }
+
+    @Test("app startup arms the passive update availability probe")
+    func appStartupArmsPassiveUpdateAvailabilityProbe() {
+        let root = Self.repoRoot()
+        let source = (try? String(contentsOf: root.appending(path: "Sources/TermTile/TermTileApp.swift"),
+                                  encoding: .utf8)) ?? ""
+
+        #expect(source.contains("armUpdateAvailabilityProbeIfAllowed(isSelftest: isSelftest, isGallery: isGallery)"),
+                "startup should arm the passive availability probe explicitly and skip test/gallery modes")
+        #expect(source.contains("up.refreshAvailability()"),
+                "the startup probe should use the passive Sparkle information check path")
+    }
+
+    @Test("updater publishes availability without observing Sparkle internals")
+    func updaterPublishesAvailabilityWithoutObservingSparkleInternals() {
+        let root = Self.repoRoot()
+        let source = (try? String(contentsOf: root.appending(path: "Sources/TermTile/Updater.swift"),
+                                  encoding: .utf8)) ?? ""
+
+        #expect(source.contains("@Observable"),
+                "Updater must be observable so menu-bar indicator views react to availability changes")
+        #expect(source.contains("@ObservationIgnored private let startSession"))
+        #expect(source.contains("@ObservationIgnored private let driver"))
+        #expect(source.contains("@ObservationIgnored private var updater"))
+        #expect(source.contains("private(set) var availability"))
+    }
 }

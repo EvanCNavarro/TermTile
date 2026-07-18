@@ -1,4 +1,5 @@
 import AppKit
+import MacFaceKit
 import SwiftUI
 
 /// The menu-bar logo glyph (replaces the "TermTile" text label). Mirrors RememBar's pattern: a
@@ -6,13 +7,26 @@ import SwiftUI
 /// monochrome to the menu bar, adapting to light/dark). Falls back to an SF Symbol if the resource
 /// can't load, so the menu-bar item is never blank.
 struct TermTileGlyph: View {
+    let hasAvailableUpdate: Bool
+
+    init(hasAvailableUpdate: Bool = false) {
+        self.hasAvailableUpdate = hasAvailableUpdate
+    }
+
     var body: some View {
-        TermTileImage.menuGlyph
-            .renderingMode(.template)
-            .resizable()
-            .scaledToFit()
-            .frame(width: 18, height: 18)
-            .accessibilityLabel("Open TermTile")
+        ZStack(alignment: .topTrailing) {
+            TermTileImage.menuGlyph
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 18, height: 18)
+
+            if hasAvailableUpdate {
+                AttentionDot()
+            }
+        }
+        .frame(width: 22, height: 18)
+        .accessibilityLabel(hasAvailableUpdate ? "Open TermTile, update available" : "Open TermTile")
     }
 }
 

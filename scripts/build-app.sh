@@ -66,6 +66,7 @@ cat > "$PLIST" <<PLIST_EOF
 	<key>NSHighResolutionCapable</key><true/>
 	<key>SUFeedURL</key><string>$SU_FEED_URL</string>
 	<key>SUPublicEDKey</key><string>$SU_PUBLIC_ED_KEY</string>
+	<key>SUEnableAutomaticChecks</key><false/>
 </dict>
 </plist>
 PLIST_EOF

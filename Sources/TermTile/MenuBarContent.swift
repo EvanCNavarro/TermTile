@@ -141,7 +141,8 @@ struct MenuBarContent: View {
     private var overflowActions: [MenuAction] {
         [
             MenuAction(title: "Check for Updates", systemImage: "arrow.triangle.2.circlepath",
-                       enabled: updater.canCheckForUpdates) { updater.checkForUpdates() },
+                       enabled: updater.canCheckForUpdates,
+                       attention: updater.availability.hasAvailableUpdate) { updater.checkForUpdates() },
             MenuAction(title: "Quit TermTile", systemImage: "power") { NSApplication.shared.terminate(nil) },
             MenuAction(title: "Uninstall TermTile…", systemImage: "trash", destructive: true) {
                 DispatchQueue.main.async { runUninstallFlow() }

@@ -65,4 +65,15 @@ struct MenuBarContentAccessibilityTests {
         #expect(rearrangeBlock.contains("Toggle(\"Bring app forward\""))
         #expect(rearrangeBlock.contains("LabeledContent(\"Shortcut\""))
     }
+
+    @Test("update availability is the single overflow attention source")
+    func updateAvailabilityIsSingleOverflowAttentionSource() {
+        let menuURL = Self.repoRoot().appending(path: "Sources/TermTile/MenuBarContent.swift")
+        let source = (try? String(contentsOf: menuURL, encoding: .utf8)) ?? ""
+
+        #expect(source.contains("attention: updater.availability.hasAvailableUpdate"),
+                "the update overflow action should derive attention from Updater availability")
+        #expect(!source.contains("attention: true"),
+                "overflow attention must not be hardcoded")
+    }
 }

@@ -22,6 +22,9 @@ PID=""
 BUILD_BUNDLE_BACKUP="$(mktemp -d)"
 BUILD_BUNDLE_LIST="$BUILD_BUNDLE_BACKUP/resource-bundles.list"
 GALLERY_LOG="$BUILD_BUNDLE_BACKUP/gallery.log"
+UPDATE_PROBE_LOG="$BUILD_BUNDLE_BACKUP/update-probe.log"
+SMOKE_HOME="$BUILD_BUNDLE_BACKUP/home"
+mkdir -p "$SMOKE_HOME"
 
 restore_build_bundles() {
 	local restore_status=0
@@ -47,16 +50,30 @@ restore_build_bundles() {
 cleanup() {
 	local status=$?
 	trap - EXIT
-	if [ -n "$PID" ]; then
-		kill "$PID" 2>/dev/null || true
-		wait "$PID" 2>/dev/null || true
-	fi
+	stop_launched_app
 	if ! restore_build_bundles && [ "$status" -eq 0 ]; then
 		status=1
 	fi
 	exit "$status"
 }
 trap cleanup EXIT
+
+stop_launched_app() {
+	if [ -n "$PID" ]; then
+		kill "$PID" 2>/dev/null || true
+		wait "$PID" 2>/dev/null || true
+		PID=""
+	fi
+}
+
+poll_liveness() {
+	alive=0
+	for _ in 1 2 3 4 5 6 7 8; do
+		if kill -0 "$PID" 2>/dev/null; then alive=$((alive+1)); else break; fi
+		sleep 0.5
+	done
+	[ "$alive" -ge 8 ] || fail "$1 died within ~4s (alive=$alive/8)"
+}
 
 # --- Structural invariants -------------------------------------------------------------------
 [ -d "$APP" ] || fail "bundle not found: $APP"
@@ -69,6 +86,10 @@ PLIST="$APP/Contents/Info.plist"
 [ "$(plutil -extract LSUIElement raw "$PLIST")" = "true" ] \
 	|| fail "LSUIElement must be true (menu-bar only)"
 plutil -extract CFBundleVersion raw "$PLIST" >/dev/null || fail "CFBundleVersion missing"
+[ "$(plutil -extract SUEnableAutomaticChecks raw "$PLIST")" = "false" ] \
+	|| fail "SUEnableAutomaticChecks must be false for passive startup probes"
+plutil -extract SUFeedURL raw "$PLIST" >/dev/null || fail "SUFeedURL missing"
+plutil -extract SUPublicEDKey raw "$PLIST" >/dev/null || fail "SUPublicEDKey missing"
 
 # Signature must verify strict. Local/dev smoke may still accept ad-hoc; release smoke sets
 # REQUIRE_STABLE_CODESIGN=1 so public artifacts cannot regress to TCC-breaking cdhash-only identity.
@@ -168,22 +189,39 @@ done < "$BUILD_BUNDLE_LIST"
 CRASH_DIR="$HOME/Library/Logs/DiagnosticReports"
 before="$(ls "$CRASH_DIR" 2>/dev/null | grep -c "^$APP_NAME" || true)"
 
-TERMTILE_GALLERY=1 "$BIN" >"$GALLERY_LOG" 2>&1 &
+env HOME="$SMOKE_HOME" CFFIXED_USER_HOME="$SMOKE_HOME" TERMTILE_SELFTEST=1 TERMTILE_GALLERY=1 \
+	"$BIN" >"$GALLERY_LOG" 2>&1 &
 PID=$!
 
 # Poll liveness ~4s (accessory menu-bar app runs indefinitely; a crash makes kill -0 fail).
-alive=0
-for _ in 1 2 3 4 5 6 7 8; do
-	if kill -0 "$PID" 2>/dev/null; then alive=$((alive+1)); else break; fi
-	sleep 0.5
-done
-[ "$alive" -ge 8 ] || fail "process died within ~4s (alive=$alive/8)"
+poll_liveness "gallery"
 if ! grep -q "GALLERY shown" "$GALLERY_LOG"; then
 	sed 's/^/gallery: /' "$GALLERY_LOG" >&2 || true
 	fail "gallery did not render (missing GALLERY shown marker)"
+fi
+stop_launched_app
+
+# Prove the packaged normal launch arms the passive update-availability probe without relying on
+# Sparkle automatic checks or opening the gallery window. The selftest suite isolates app prefs.
+env HOME="$SMOKE_HOME" CFFIXED_USER_HOME="$SMOKE_HOME" TERMTILE_SELFTEST=1 TERMTILE_UPDATE_PROBE_SMOKE=1 \
+	"$BIN" >"$UPDATE_PROBE_LOG" 2>&1 &
+PID=$!
+poll_liveness "update probe"
+if ! grep -q "UPDATE_PROBE_SMOKE armed" "$UPDATE_PROBE_LOG"; then
+	sed 's/^/update-probe: /' "$UPDATE_PROBE_LOG" >&2 || true
+	fail "packaged startup did not arm the passive update availability probe"
+fi
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+	grep -q "UPDATE_PROBE_SMOKE finished" "$UPDATE_PROBE_LOG" && break
+	kill -0 "$PID" 2>/dev/null || break
+	sleep 1
+done
+if ! grep -q "UPDATE_PROBE_SMOKE finished" "$UPDATE_PROBE_LOG"; then
+	sed 's/^/update-probe: /' "$UPDATE_PROBE_LOG" >&2 || true
+	fail "passive update availability probe did not finish"
 fi
 
 after="$(ls "$CRASH_DIR" 2>/dev/null | grep -c "^$APP_NAME" || true)"
 [ "$after" -le "$before" ] || fail "a new crash report appeared for $APP_NAME"
 
-echo "OK: $APP launched and stayed alive (pid=$PID, alive=$alive/8, crash-reports ${before}->${after})"
+echo "OK: $APP launched, rendered gallery, armed update probe, and stayed alive (pid=$PID, alive=$alive/8, crash-reports ${before}->${after})"

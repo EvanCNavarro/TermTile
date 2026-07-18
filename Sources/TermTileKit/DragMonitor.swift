@@ -1,6 +1,7 @@
 import ApplicationServices
 import CoreGraphics
 import Foundation
+import TermTileCore
 
 /// Production drag-reorder wiring (#14b) — the global left-button `CGEventTap` that turns a real
 /// window drag into a `TilingActor` reorder. It is the caller the spike-06 mouse-up recommendation
@@ -11,38 +12,48 @@ import Foundation
 ///    the windows are still on their grid slots (NON-overlapping), so the cursor unambiguously
 ///    picks one window. Resolving at mouse-UP is unsound: the dragged window overlaps its drop
 ///    target, and `state.windows` order is not z-order.
-///  - **Click ≠ drag (B2):** `onDragEnd` fires ONLY when the pointer travelled past `travelThreshold`
-///    between down and up. A plain click (zero travel) inside a managed window is ignored, so a
-///    click never triggers a reorder.
+///  - **Click/text selection ≠ window drag (B2):** `onDragEnd` fires ONLY when the pointer travelled
+///    past `travelThreshold` AND the down window's frame actually changed. A plain click, terminal
+///    text selection, or screenshot-region drag inside a managed window is ignored, so those gestures
+///    never snap a maximized/focused window back to the grid.
 ///
 /// The `CGEventTap` plumbing is a live-only surface (like `AXWindowSystem`) — it cannot run without
 /// Input Monitoring + a real event stream, so it is proven live by AXProbe `dragcheck` (a
 /// self-posted synthetic drag). The decision logic (`handleDown`/`handleUp`) is a testable seam,
 /// callable without a tap.
 public final class DragMonitor: @unchecked Sendable {
-    public typealias ResolveWindow = @Sendable (CGPoint) async -> CGWindowID?
+    public typealias ResolveWindow = @Sendable (CGPoint) async -> TrackedWindow?
+    public typealias CurrentFrame = @Sendable (CGWindowID) async -> CGRect?
     public typealias DragEnd = @Sendable (CGWindowID) async -> Void
 
     private let resolveWindow: ResolveWindow
+    private let currentFrame: CurrentFrame
     private let onDragEnd: DragEnd
     private let travelThreshold: CGFloat
+    private let frameChangeEpsilon: CGFloat
 
     private let lock = NSLock()
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var downPoint: CGPoint?
-    private var downResolve: Task<CGWindowID?, Never>?
+    private var downResolve: Task<TrackedWindow?, Never>?
 
     /// - Parameters:
     ///   - travelThreshold: minimum pointer travel (points) between down and up to count as a drag.
-    ///   - resolveWindow: maps the mouse-DOWN point to the dragged window id (the actor's
-    ///     `windowID(at:)` in production).
+    ///   - frameChangeEpsilon: frame-delta tolerance before the gesture counts as a window move.
+    ///   - resolveWindow: maps the mouse-DOWN point to the dragged window snapshot (the actor's
+    ///     `trackedWindow(atFresh:)` in production).
+    ///   - currentFrame: reads the candidate window's frame at mouse-UP.
     ///   - onDragEnd: the drag-end action (the actor's `handleDragEnd(_:)` in production).
     public init(travelThreshold: CGFloat = 6,
+                frameChangeEpsilon: CGFloat = 2,
                 resolveWindow: @escaping ResolveWindow,
+                currentFrame: @escaping CurrentFrame,
                 onDragEnd: @escaping DragEnd) {
         self.travelThreshold = travelThreshold
+        self.frameChangeEpsilon = frameChangeEpsilon
         self.resolveWindow = resolveWindow
+        self.currentFrame = currentFrame
         self.onDragEnd = onDragEnd
     }
 
@@ -94,11 +105,12 @@ public final class DragMonitor: @unchecked Sendable {
     }
 
     /// Mouse-UP: if the pointer travelled past the threshold since the matching down (B2), await the
-    /// id resolved at down and fire `onDragEnd`. Returns the fired id (`nil` = click, no matching
-    /// down, or the down was over no window). Consumes the pending down either way.
+    /// id resolved at down, verify that window's frame changed, and fire `onDragEnd`. Returns the
+    /// fired id (`nil` = click, no matching down, down over no window, vanished window, or pointer
+    /// drag inside an unchanged window). Consumes the pending down either way.
     @discardableResult
     func handleUp(at point: CGPoint) async -> CGWindowID? {
-        let pending: (point: CGPoint, resolve: Task<CGWindowID?, Never>)? = lock.withLock {
+        let pending: (point: CGPoint, resolve: Task<TrackedWindow?, Never>)? = lock.withLock {
             defer { downPoint = nil; downResolve = nil }
             guard let downPoint, let downResolve else { return nil }
             return (downPoint, downResolve)
@@ -107,9 +119,15 @@ public final class DragMonitor: @unchecked Sendable {
         guard hypot(point.x - pending.point.x, point.y - pending.point.y) > travelThreshold else {
             pending.resolve.cancel(); return nil                    // click → ignore (B2)
         }
-        guard let id = await pending.resolve.value else { return nil }   // down over no window
-        await onDragEnd(id)
-        return id
+        guard let window = await pending.resolve.value else { return nil }   // down over no window
+        guard let currentFrame = await currentFrame(window.id) else { return nil }
+        guard !FrameMath.approximatelyEqual(
+            window.frame,
+            currentFrame,
+            epsilon: frameChangeEpsilon
+        ) else { return nil }
+        await onDragEnd(window.id)
+        return window.id
     }
 
     /// Re-enable the tap after the system disables it (timeout / user input). Called from the callback.

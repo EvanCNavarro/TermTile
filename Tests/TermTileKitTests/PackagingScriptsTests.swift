@@ -154,6 +154,15 @@ struct PackagingScriptsTests {
         #expect(s.contains("plutil -lint"), "the generated Info.plist must be plutil -lint'ed")
     }
 
+    @Test("build-app.sh: disables Sparkle automatic-check prompting for passive startup probes")
+    func plistDisablesSparkleAutomaticCheckPrompting() {
+        let s = Self.script("build-app.sh")
+        #expect(s.contains("SUEnableAutomaticChecks"),
+                "the generated Info.plist must explicitly choose automatic update-check prompting behavior")
+        #expect(s.contains("<key>SUEnableAutomaticChecks</key>") && s.contains("<false/>"),
+                "startup availability probes should not reintroduce Sparkle's automatic-check permission prompt")
+    }
+
     // 4. Locate the built binary via --show-bin-path (RememBar crown-jewel), never a hardcoded
     //    .build/{debug,release} path (which rots across configs/toolchains).
     @Test("build-app.sh: locates binary via --show-bin-path, no hardcoded .build path")
@@ -224,12 +233,27 @@ struct PackagingScriptsTests {
                 "smoke must move local .build resource bundles aside before launching the package")
         #expect(s.contains("-name '*_*.bundle'"),
                 "smoke must locate SwiftPM resource bundles generically")
-        #expect(s.contains("TERMTILE_GALLERY=1 \"$BIN\""),
-                "smoke must render the real panel while local resource bundles are hidden")
+        #expect(s.contains("TERMTILE_SELFTEST=1 TERMTILE_GALLERY=1"),
+                "smoke must render the real panel with an isolated selftest settings suite")
         #expect(s.contains("GALLERY_LOG"),
                 "smoke must capture gallery output instead of discarding it")
         #expect(s.contains("grep -q \"GALLERY shown\" \"$GALLERY_LOG\""),
                 "smoke must prove the real panel rendered, not only that the process stayed alive")
+    }
+
+    @Test("test-packaged-app.sh: validates passive update probe startup")
+    func smokeValidatesPassiveUpdateProbeStartup() {
+        let s = Self.script("test-packaged-app.sh")
+        #expect(s.contains("SUEnableAutomaticChecks"),
+                "smoke must assert Sparkle automatic checks remain disabled in the bundle")
+        #expect(s.contains("TERMTILE_UPDATE_PROBE_SMOKE=1"),
+                "smoke must launch the packaged app through the passive update probe path")
+        #expect(s.contains("UPDATE_PROBE_SMOKE armed"),
+                "smoke must prove the packaged app actually armed the passive probe")
+        #expect(s.contains("UPDATE_PROBE_SMOKE finished"),
+                "smoke must prove the passive information-check delegate path finished")
+        #expect(s.contains("CFFIXED_USER_HOME=\"$SMOKE_HOME\""),
+                "smoke must isolate CFPreferences while launching packaged validation hooks")
     }
 
     // 8. The smoke mutates generated `.build` bundles to make the launch proof honest. Cleanup must

@@ -17,13 +17,24 @@ public actor TilingActor {
         self.epsilon = epsilon
     }
 
-    /// ON-DEMAND drag path (#26) — the dragged window's id, resolved by enumerating the target's
-    /// windows FRESH at mouse-DOWN. `first{contains}` is unambiguous when the windows are tiled
+    /// ON-DEMAND drag path (#26) — the dragged window, resolved by enumerating the target's windows
+    /// FRESH at mouse-DOWN. `first{contains}` is unambiguous when the windows are tiled
     /// (non-overlapping) — the normal case after a Rearrange; if the user enabled drag-reorder without
     /// tiling and windows overlap, it relies on AX enumerating topmost-first (skeptic S1 — acceptable
     /// for MVP; the reorder then re-tiles everything anyway).
+    public func trackedWindow(atFresh point: CGPoint) async -> TrackedWindow? {
+        await system.tileableWindows().first { $0.frame.contains(point) }
+    }
+
+    /// Legacy convenience for callers/tests that only need the id.
     public func windowID(atFresh point: CGPoint) async -> CGWindowID? {
-        await system.tileableWindows().first { $0.frame.contains(point) }?.id
+        await trackedWindow(atFresh: point)?.id
+    }
+
+    /// Fresh frame read for the drag classifier. If the window disappeared, became minimized, or
+    /// entered AX fullscreen, the AX adapter filters it out and the drag reorder is ignored.
+    public func windowFrame(idFresh id: CGWindowID) async -> CGRect? {
+        await system.tileableWindows().first { $0.id == id }?.frame
     }
 
     /// ON-DEMAND reorder at drag END (#26/#27) — enumerate FRESH (the dragged window now at its
