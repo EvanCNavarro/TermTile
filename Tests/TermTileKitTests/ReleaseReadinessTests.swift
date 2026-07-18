@@ -245,7 +245,11 @@ struct ReleaseReadinessTests {
             "EdDSA",
             "xcrun stapler validate",
             "spctl --assess",
-            "Notarized Developer ID"
+            "Notarized Developer ID",
+            "User-Facing Downgrade Indicator Smoke",
+            "real `v0.2.5` release cannot show the new indicator",
+            "CFBundleVersion`: `137`",
+            "UPDATE_PROBE_SMOKE available"
         ] {
             #expect(docs.localizedCaseInsensitiveContains(required),
                     "docs/verification/release-v0.2.6.md must mention \(required)")

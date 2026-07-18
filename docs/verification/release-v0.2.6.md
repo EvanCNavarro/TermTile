@@ -60,6 +60,35 @@ enclosure: https://github.com/EvanCNavarro/TermTile/releases/download/v0.2.6/Ter
 edSignature: present
 ```
 
+## User-Facing Downgrade Indicator Smoke
+
+On 2026-07-18, installed an indicator-capable downgrade-test build at `/Applications/TermTile.app`
+to let the menu-bar indicator see the public `v0.2.6` appcast as an available update.
+
+Important distinction: the real `v0.2.5` release cannot show the new indicator because the indicator
+code shipped in `v0.2.6`. This smoke used current indicator-capable code with only the installed bundle
+metadata lowered below the published appcast:
+
+- `CFBundleShortVersionString`: `0.2.5`
+- `CFBundleVersion`: `137`
+- Signing: local `TermTile Dev Signing`
+- Installed path: `/Applications/TermTile.app`
+
+Validation:
+
+- `codesign --verify --deep --strict --verbose=2 /Applications/TermTile.app` passed.
+- `scripts/test-packaged-app.sh /Applications/TermTile.app` passed.
+- `TERMTILE_UPDATE_PROBE_SMOKE=1 /Applications/TermTile.app/Contents/MacOS/TermTile` reported:
+
+```text
+UPDATE_PROBE_SMOKE armed
+UPDATE_PROBE_SMOKE available
+UPDATE_PROBE_SMOKE finished
+```
+
+The app was then launched normally from `/Applications/TermTile.app` for visual inspection of the
+menu-bar update indicator.
+
 ## Local Workflow Evidence
 
 Pre-release local candidate checks, including iTerm content-drag and screenshot-region drag QOL
