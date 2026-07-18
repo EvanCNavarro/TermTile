@@ -43,7 +43,7 @@ Full health gate after reviewer fixes:
 swift build && swift test && swiftlint --strict
 ```
 
-Result: build passed, **225 tests passed**, SwiftLint reported **0 violations**.
+Result: build passed, **226 tests passed**, SwiftLint reported **0 violations**.
 
 Additional packaged-app due diligence caught a hardened-runtime/Sparkle library-validation failure in
 the local self-signed app bundle. `scripts/build-app.sh` now uses one app-signing path, disables
