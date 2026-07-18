@@ -2,11 +2,12 @@
 
 ## Status
 
-Planned on 2026-07-18. Investigation complete; implementation not started. Initial code-review
+Planned on 2026-07-18. Investigation complete. MacFaceKit Phase 1/2 implementation is complete and
+published; TermTile app implementation has not started for this follow-up yet. Initial code-review
 findings against this plan have been addressed in the sequencing below.
 
-Current progress: Phase 0 complete, 20% total plan progress. No production code has changed for this
-follow-up yet.
+Current progress: Phases 0-2 complete, 40% total plan progress. MacFaceKit `v0.4.0`
+(`5e8eb0fc6c3644dc0bc665e18a1a8a449cfbd981`) is the consumer-ready shared indicator revision.
 
 At the end of every implementation turn for this plan, report:
 
@@ -46,12 +47,16 @@ Screenshot evidence from 2026-07-18:
 
 - `TermTileApp` passes `updater.availability.hasAvailableUpdate` into `TermTileGlyph`.
 - `MenuBarContent` passes the same availability source into the "Check for Updates" `MenuAction`.
-- `MacFaceKit.AttentionDot` is the shared primitive: default `size: 5`, `color: Tokens.warning`.
-- `MacFaceKit.IconButton` overlays attention with `ZStack(alignment: .topTrailing)`.
-- `MacFaceKit.OverflowMenu` derives button attention from `actions.contains { $0.attention }`.
-- `MacFaceKit.MenuRow` has no `attention` input or trailing indicator today.
-- `MacFaceKit.MenuAction` has only a generic `attention: Bool` today; it does not carry an
+- TermTile is still pinned to MacFaceKit `0.3.3` until Phase 4.
+- Baseline MacFaceKit `0.3.3` used `AttentionDot` as the shared primitive with default `size: 5`,
+  `color: Tokens.warning`.
+- Baseline MacFaceKit `0.3.3` overlaid `IconButton` attention with `ZStack(alignment: .topTrailing)`.
+- Baseline MacFaceKit `0.3.3` derived overflow button attention from `actions.contains { $0.attention }`.
+- Baseline MacFaceKit `0.3.3` had no `MenuRow` attention input or trailing indicator.
+- Baseline MacFaceKit `0.3.3` had only a generic `MenuAction.attention: Bool`; it did not carry an
   app-supplied accessibility semantic for why attention is requested.
+- MacFaceKit `v0.4.0` now adds `Tokens.attentionDot`, bottom-right `IconButton` attention,
+  row-level `MenuAction`/`MenuRow` attention, and caller-owned attention accessibility hints.
 
 Every premise must be re-verified from code during the relevant OBSERVE step before BUILD.
 
@@ -92,23 +97,27 @@ Every premise must be re-verified from code during the relevant OBSERVE step bef
 
 ## Do Now
 
-- Fix shared icon-button and dropdown-row indicator behavior in MacFaceKit first.
-- Prove whether the menu-bar label can render a colored dot, then choose the smallest TermTile-specific
-  rendering fix only if required.
-- Keep all app-surface indicators on `Tokens.warning` and one shared size constant unless evidence proves
-  host-specific sizing is needed.
-- Add a generic, optional attention accessibility semantic to MacFaceKit rows/actions so hosts can explain
-  the state without duplicating row UI.
+- Prove whether the TermTile menu-bar label can render a colored dot, then choose the smallest
+  TermTile-specific rendering fix only if required.
+- Keep all TermTile app-surface indicators on MacFaceKit `Tokens.warning`/`Tokens.attentionDot` unless
+  native menu-bar evidence proves host-specific sizing is needed.
+- After menu-bar proof, bump TermTile to MacFaceKit `v0.4.0` and wire the "Check for Updates" action to
+  the shared row/trigger attention accessibility hint without duplicating row UI.
+
+## Completed Upstream Work
+
+- MacFaceKit `v0.4.0` fixes shared icon-button and dropdown-row indicator behavior.
+- MacFaceKit `v0.4.0` adds a generic, optional attention accessibility semantic to rows/actions so hosts
+  can explain the state without hardcoding app-specific copy in the shared kit.
 
 ## Depends On Future State
 
 - The final menu-bar implementation depends on a live screenshot/pixel check after trying a colored
   SwiftUI overlay in the real `MenuBarExtra`.
-- The TermTile dependency update depends on MacFaceKit changes being available from a real tag or normal
-  local package-edit workflow during development.
-- The exact MacFaceKit minimum tag/revision cannot be specified until the MacFaceKit changes are committed
-  and versioned. Until then, any dependency assertion must target a concrete new API symbol rather than
-  the currently sufficient `>= 0.3.3` requirement.
+- The TermTile dependency update now has a real upstream target: MacFaceKit `v0.4.0`
+  (`5e8eb0fc6c3644dc0bc665e18a1a8a449cfbd981`).
+- The dependency assertion in Phase 4 must target `v0.4.0` or a concrete new API symbol from that release
+  rather than letting the currently sufficient `>= 0.3.3` check pass as proof.
 
 ## Execution Plan
 
@@ -128,6 +137,8 @@ Status: Complete.
 
 ### Phase 1: MacFaceKit Attention Primitive And IconButton Placement
 
+Status: Complete in MacFaceKit `v0.4.0` (`5e8eb0f`).
+
 1. OBSERVE: inspect current MacFaceKit token and button tests.
 2. RED: add a test requiring a single shared attention size/color authority.
 3. RED: add a source/render invariant requiring `IconButton` attention to anchor bottom-trailing, not
@@ -143,8 +154,12 @@ Status: Complete.
    - Look back: verify the dot no longer reads as part of the ellipsis glyph.
    - Look back: fix sizing, offset, clipping, contrast, or hover-state polish before continuing.
    - Look forward: reuse the same primitive for menu rows.
+   - Completed finding: `Tokens.attentionDot` is `7`, `AttentionDot` defaults to it, `IconButton`
+     overlays the dot at bottom-trailing, and render tests prove the attended button does not resize.
 
 ### Phase 2: MacFaceKit Dropdown Row Attention
+
+Status: Complete in MacFaceKit `v0.4.0` (`5e8eb0f`).
 
 1. OBSERVE: inspect `MenuAction`, `OverflowMenu`, and `MenuRow` API compatibility.
 2. RED: add a failing test for a generic app-supplied attention semantic on `MenuAction`, such as an
@@ -164,6 +179,9 @@ Status: Complete.
    - Look back: verify row dot aligns at the trailing edge and does not crowd labels.
    - Look back: fix accessibility, truncation, spacing, and disabled/destructive combinations now.
    - Look forward: prepare a MacFaceKit version TermTile can consume, and record the exact tag/revision.
+   - Completed finding: `MenuAction` and `MenuRow` carry defaulted attention state and caller-owned
+     accessibility hints; `OverflowMenu` forwards the first attended action hint to the closed trigger and
+     the row; render tests prove attended rows keep stable dimensions with trailing orange-family pixels.
 
 ### Phase 3: TermTile Menu-Bar Glyph Indicator Proof
 
@@ -188,6 +206,8 @@ Status: Complete.
 2. OBSERVE: identify the exact MacFaceKit tag/revision that contains bottom-trailing icon attention,
    dropdown-row attention, and the generic attention accessibility semantic. Assumption to verify: this
    will be newer than `0.3.3`.
+   - Verified before this phase starts: MacFaceKit `v0.4.0`
+     (`5e8eb0fc6c3644dc0bc665e18a1a8a449cfbd981`) is newer than `0.3.3` and contains the required API.
 3. RED: add or update a dependency/readiness test requiring that exact tag/revision or a concrete new API
    symbol from the MacFaceKit attention polish; do not let the existing `>= 0.3.3` check pass as proof.
 4. RED: add a TermTile menu test requiring the "Check for Updates" action to remain the single overflow
