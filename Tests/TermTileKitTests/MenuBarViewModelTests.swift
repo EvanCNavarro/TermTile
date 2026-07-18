@@ -207,6 +207,20 @@ struct MenuBarViewModelTests {
         #expect(vm.lastForegroundResult == nil)
     }
 
+    @Test("rearrangeNow skips app-focus silently when no foregrounder is wired")
+    func missingForegrounderSkipsFocusWarning() async {
+        let store = InMemorySettingsStore()
+        store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
+                               gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+        let (vm, _) = makeVM(windows: [off(1)], store: store, trusted: true)
+
+        await vm.rearrangeNow()
+
+        #expect(vm.lastForegroundResult == nil)
+        #expect(vm.foregroundWarningMessage == nil)
+    }
+
     @Test("rearrangeNow records foreground activation failures")
     func rearrangeNowRecordsForegroundFailure() async {
         let store = InMemorySettingsStore()

@@ -471,7 +471,7 @@ committed; findings notes are the durable output.
   deprecated app-owned activation cleanup, and the
   accessibility hint. Follow-up cleanup also guards the MacFaceKit update adapter against a duplicate
   app-name literal by routing through `AppIdentity.appName`. Native gallery screenshot + live
-  Calculator proof recorded in docs/verification/task36-bring-to-front.md. Full gate: 226 tests,
+  Calculator proof recorded in docs/verification/task36-bring-to-front.md. Full gate: 227 tests,
   build green, strict SwiftLint 0.)
 #25 · Global hotkey to trigger Rearrange now · DONE
   (2026-07-03: Carbon RegisterEventHotKey HotKeyMonitor [mirrors DragMonitor C-bridge] → default ⌃⌥⌘R

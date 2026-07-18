@@ -86,9 +86,9 @@ public final class MenuBarViewModel {
     @ObservationIgnored private let epsilon: CGFloat
     @ObservationIgnored private let makeActor: @Sendable (String) -> TilingActor
     @ObservationIgnored private var actor: TilingActor
-    /// Optional Rearrange-time app activation port (#36). Defaults to a no-op so tests/gallery do not
-    /// unexpectedly foreground user apps unless production composition injects the real adapter.
-    @ObservationIgnored private let foregrounder: any TargetAppForegrounding
+    /// Optional Rearrange-time app activation port (#36). Nil in tests/gallery/selftest contexts so
+    /// they do not foreground user apps or surface fake foreground warnings.
+    @ObservationIgnored private let foregrounder: (any TargetAppForegrounding)?
     /// Monotonic guard for async foreground requests. Target/setting changes or a newer Rearrange
     /// invalidate older completions so stale app-focus warnings cannot reappear.
     @ObservationIgnored private var foregroundRequestGeneration = 0
@@ -130,7 +130,7 @@ public final class MenuBarViewModel {
         self.epsilon = epsilon
         self.makeActor = makeActor
         self.uninstaller = uninstaller
-        self.foregrounder = foregrounder ?? NoOpTargetAppForegrounder()
+        self.foregrounder = foregrounder
         self.dragReorder = dragReorder
         self.permissionRepairer = permissionRepairer
         self.targetBundleID = loaded.targetBundleID
@@ -352,11 +352,13 @@ public final class MenuBarViewModel {
         clearForegroundResult()
         let targetBundleID = targetBundleID
         let actor = actor
+        let foregrounder = foregrounder
         let config = TileConfig(isEnabled: true, visibleFrame: visibleFrame, gap: gap)
         let shouldBringToFront = bringToFrontOnRearrange && isAccessibilityTrusted
         let requestGeneration = foregroundRequestGeneration
         await actor.activate(config: config)
         if shouldBringToFront,
+           let foregrounder,
            foregroundRequestIsCurrent(bundleID: targetBundleID, generation: requestGeneration) {
             let result = await foregrounder.bringToFront(bundleID: targetBundleID)
             if foregroundRequestIsCurrent(bundleID: targetBundleID, generation: requestGeneration) {

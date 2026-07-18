@@ -15,12 +15,3 @@ public enum TargetForegroundResult: Equatable, Sendable {
 public protocol TargetAppForegrounding {
     func bringToFront(bundleID: String) async -> TargetForegroundResult
 }
-
-/// Safe default for tests, selftest, and gallery contexts that do not want to activate real apps.
-public struct NoOpTargetAppForegrounder: TargetAppForegrounding {
-    public init() {}
-
-    public func bringToFront(bundleID: String) async -> TargetForegroundResult {
-        .notRunning
-    }
-}

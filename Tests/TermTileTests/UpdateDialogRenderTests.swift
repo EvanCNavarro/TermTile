@@ -4,6 +4,7 @@ import MacFaceKit
 import SwiftUI
 @testable import TermTile
 import Testing
+import TermTileCore
 
 /// Offscreen PNG renders of the shared update dialog with TermTile's branding (name + icon), proving
 /// TermTile shows the same `MacFaceKit.UpdateDialog` as RememBar — the point of Phase B. Gated on
@@ -19,13 +20,17 @@ struct UpdateDialogRenderTests {
 
     @Test("render the TermTile-branded update states")
     func renderStates() throws {
-        try render(UpdateDialog.permission(appName: "TermTile", onAllow: {}, onDecline: {}), "tt_permission.png")
-        try render(UpdateDialog.available(appName: "TermTile", version: "0.2.0", currentVersion: "0.1.0",
+        try render(UpdateDialog.permission(appName: AppIdentity.appName, onAllow: {}, onDecline: {}),
+                   "tt_permission.png")
+        try render(UpdateDialog.available(appName: AppIdentity.appName,
+                                          version: "0.2.0", currentVersion: "0.1.0",
                                           notes: Self.notes, notesExpanded: .constant(true),
                                           onInstall: {}, onRemindLater: {}), "tt_available.png")
-        try render(UpdateDialog.progress(appName: "TermTile", heading: "Downloading update…", version: "0.2.0",
+        try render(UpdateDialog.progress(appName: AppIdentity.appName,
+                                         heading: "Downloading update…", version: "0.2.0",
                                          fraction: 0.62, onCancel: {}), "tt_progress.png")
-        try render(UpdateDialog.upToDate(appName: "TermTile", version: "0.2.0", onOK: {}), "tt_uptodate.png")
+        try render(UpdateDialog.upToDate(appName: AppIdentity.appName, version: "0.2.0", onOK: {}),
+                   "tt_uptodate.png")
     }
 
     private func render(_ dialog: UpdateDialog, _ name: String) throws {
