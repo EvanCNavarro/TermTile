@@ -73,10 +73,10 @@ the three repos share the MacFaceKit design system.)_
 
 ## Open items / deferred
 
-- **Post-release artifact verification** - completed for `v0.2.5`: checksum, codesign, stapler,
-  Gatekeeper, bundle metadata, latest appcast, release workflow, and `gh attestation verify
-  TermTile-v0.2.5.zip --repo EvanCNavarro/TermTile`. Evidence:
-  `docs/verification/release-v0.2.5.md`.
+- **Post-release artifact verification** - recurring release task; latest completed for `v0.2.6`:
+  checksum, codesign, stapler, Gatekeeper, bundle metadata, latest appcast, release workflow, and
+  `gh attestation verify TermTile-v0.2.6.zip --repo EvanCNavarro/TermTile`. Evidence:
+  `docs/verification/release-v0.2.6.md`.
 - `[DEP:#33]` — RememBar's `ProcessRunner` 1s drainer-wait ceiling (shared-pattern note; RememBar's concern,
   low risk). Tracked in that repo.
 - Twin-drift with RememBar is intentional + documented: TermTile's `Updater` is a lazy instance gated by

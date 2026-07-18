@@ -252,6 +252,24 @@ struct ReleaseReadinessTests {
         }
     }
 
+    @Test("handoff points release operators at the latest public verification")
+    func handoffRecordsLatestPublicReleaseVerification() {
+        let docs = Self.file("HANDOFF.md")
+
+        for required in [
+            "Latest published release | **v0.2.6**",
+            "latest completed for `v0.2.6`",
+            "TermTile-v0.2.6.zip --repo EvanCNavarro/TermTile",
+            "docs/verification/release-v0.2.6.md"
+        ] {
+            #expect(docs.localizedCaseInsensitiveContains(required),
+                    "HANDOFF.md must mention \(required)")
+        }
+
+        #expect(!docs.localizedCaseInsensitiveContains("Post-release artifact verification** - completed for `v0.2.5`"),
+                "HANDOFF.md must not leave the post-release verification item pinned to v0.2.5")
+    }
+
     @Test("public docs describe passive update availability checks")
     func publicDocsDescribePassiveUpdateAvailabilityChecks() {
         for path in ["README.md", "SECURITY.md"] {

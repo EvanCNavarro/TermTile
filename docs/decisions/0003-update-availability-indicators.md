@@ -16,7 +16,7 @@ Final validated outcomes:
 - MacFaceKit owns the reusable attention dot and overflow attention API.
 - Drag-reorder now requires a real candidate-window frame change, so terminal text selection and
   screenshot-region drags inside an unchanged focused/maximized window do not trigger a grid snap.
-- `swift build && swift test && swiftlint --strict` passed with 257 tests and 0 lint violations.
+- `swift build && swift test && swiftlint --strict` passed with 258 tests and 0 lint violations.
 - `scripts/test-packaged-app.sh dist/TermTile.app` passed after rendering the gallery and arming the
   packaged passive update probe.
 - Live local `0.2.6` candidate checks confirmed iTerm content-drag and screenshot-region drags kept
