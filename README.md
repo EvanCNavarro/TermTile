@@ -16,6 +16,7 @@ nothing until you ask it to.
 - **One target app at a time** — iTerm2 by default; pick any running app from the menu.
 - **On-demand** — it only rearranges when you press the button (or a **global hotkey**, ⌘⌥T by
   default, which you can re-record in the menu). Your windows are yours the rest of the time.
+- **Optional focus** — when enabled, Rearrange asks macOS to bring the selected target app forward.
 - **Adjustable gap** — set the spacing between tiled windows from the menu.
 - **Auto-updates** — a built-in **Check for Updates…** keeps you current.
 - **Clean uninstall** — an **About** panel with a one-click uninstall that removes the app, its data,
@@ -78,12 +79,14 @@ release carries what you need to check the file before running it:
 
 ## Build from source
 
+Requires Xcode command line tools and SwiftLint (`brew install swiftlint` if needed).
+
 ```bash
 git clone https://github.com/EvanCNavarro/TermTile.git
 cd TermTile
 scripts/fetch-sparkle.sh          # vendor the Sparkle framework (once)
-swift build && swift test         # build + the full test suite
-scripts/install-app.sh            # build a signed .app and install to ~/Applications/TermTile
+swift build && swift test && swiftlint --strict
+scripts/install-app.sh            # build a signed .app and install to /Applications/TermTile.app
 ```
 
 Architecture is a functional core / imperative shell (see `docs/decisions/0001-*`): pure layout math

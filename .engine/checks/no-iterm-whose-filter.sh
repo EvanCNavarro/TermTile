@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # TRAP-6 gate: iTerm2's AppleScript dialect rejects `whose` filters on windows
-# (-1719 Invalid index) — windows must be addressed as `window id N`.
+# (-1719 Invalid index) - windows must be addressed as `window id N`.
 # Fails (exit 1) iff any committed source/script/doc-example uses a
 # `window whose id` style filter. Findings notes may MENTION the trap (they
 # describe the failure), so docs/research and .engine are excluded.

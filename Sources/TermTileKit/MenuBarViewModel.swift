@@ -45,6 +45,12 @@ public final class MenuBarViewModel {
     public private(set) var reorderOnDrag: Bool
     /// Which reorder strategy a drag uses (#27) — loaded from settings, tracked so the Picker updates.
     public private(set) var reorderStrategy: ReorderStrategy
+    /// Whether Rearrange should also ask macOS to bring the selected target app forward (#36).
+    /// Loaded from settings, tracked for the menu toggle. OFF by default to preserve current behavior.
+    public private(set) var bringToFrontOnRearrange: Bool
+    /// Result from the last attempted bring-to-front request (#36). Nil means no foreground request
+    /// was made for the last Rearrange (setting off, or Accessibility unavailable).
+    public private(set) var lastForegroundResult: TargetForegroundResult?
 
     /// The fix-it row's state (#23): trusted → no row; never granted → first-grant prompt; untrusted
     /// but previously granted → the honest grant-BROKEN message (moved/duplicate bundle). Computed
@@ -52,6 +58,22 @@ public final class MenuBarViewModel {
     public var accessibilityState: AccessibilityState {
         if isAccessibilityTrusted { return .trusted }
         return wasTrusted ? .grantBroken : .needsFirstGrant
+    }
+
+    /// User-visible status for failed best-effort app activation. Successful, skipped, or disabled
+    /// focus requests stay quiet; only actionable failures surface in the Rearrange group.
+    public var foregroundWarningMessage: String? {
+        guard bringToFrontOnRearrange else { return nil }
+        switch lastForegroundResult {
+        case .frontmost, .none:
+            return nil
+        case .requestAcceptedButUnverified:
+            return "macOS accepted the focus request, but TermTile could not verify the app came forward."
+        case .notRunning:
+            return "The selected app is not running."
+        case .activationRejected:
+            return "macOS rejected the focus request."
+        }
     }
 
     // Injected seams (untracked — not observable UI state). `settings` is internal so the
@@ -64,6 +86,12 @@ public final class MenuBarViewModel {
     @ObservationIgnored private let epsilon: CGFloat
     @ObservationIgnored private let makeActor: @Sendable (String) -> TilingActor
     @ObservationIgnored private var actor: TilingActor
+    /// Optional Rearrange-time app activation port (#36). Defaults to a no-op so tests/gallery do not
+    /// unexpectedly foreground user apps unless production composition injects the real adapter.
+    @ObservationIgnored private let foregrounder: any TargetAppForegrounding
+    /// Monotonic guard for async foreground requests. Target/setting changes or a newer Rearrange
+    /// invalidate older completions so stale app-focus warnings cannot reappear.
+    @ObservationIgnored private var foregroundRequestGeneration = 0
     /// The Uninstaller — injected by the composition root (which supplies the real library +
     /// bundle URL), so the VM never touches `FileManager`/`Bundle.main` and stays test-injected.
     /// Optional: unbundled/test contexts leave it nil (uninstall is a no-op there).
@@ -89,6 +117,7 @@ public final class MenuBarViewModel {
         epsilon: CGFloat,
         makeActor: @escaping @Sendable (String) -> TilingActor,
         uninstaller: Uninstaller? = nil,
+        foregrounder: (any TargetAppForegrounding)? = nil,
         dragReorder: (any DragReorderControlling)? = nil,
         permissionRepairer: (any PermissionRepairing)? = nil
     ) {
@@ -101,6 +130,7 @@ public final class MenuBarViewModel {
         self.epsilon = epsilon
         self.makeActor = makeActor
         self.uninstaller = uninstaller
+        self.foregrounder = foregrounder ?? NoOpTargetAppForegrounder()
         self.dragReorder = dragReorder
         self.permissionRepairer = permissionRepairer
         self.targetBundleID = loaded.targetBundleID
@@ -113,6 +143,8 @@ public final class MenuBarViewModel {
         self.hotKey = loaded.hotKey           // #25b — user-state, loaded like targetBundleID
         self.reorderOnDrag = loaded.reorderOnDrag   // #26 — opt-in, off by default
         self.reorderStrategy = loaded.reorderStrategy   // #27 — user-selectable reorder behavior
+        self.bringToFrontOnRearrange = loaded.bringToFrontOnRearrange
+        self.lastForegroundResult = nil
         self.launchAtLogin = loginItem.status == .enabled
         self.actor = makeActor(loaded.targetBundleID)
         syncTrust()   // probe + latch at init — catches the trusted-at-launch / migrating case (#23 B2)
@@ -226,6 +258,7 @@ public final class MenuBarViewModel {
     /// then presses "Rearrange now" when they want the grid.
     public func setTarget(_ bundleID: String) async {
         targetBundleID = bundleID
+        clearForegroundResult()
         persist()
         actor = makeActor(bundleID)
     }
@@ -285,6 +318,14 @@ public final class MenuBarViewModel {
         persist()
     }
 
+    /// Toggle whether a manual Rearrange should also bring the selected target app forward (#36).
+    /// This is user-state only: no tiling or activation happens until the next Rearrange command.
+    public func setBringToFrontOnRearrange(_ on: Bool) {
+        bringToFrontOnRearrange = on
+        clearForegroundResult()
+        persist()
+    }
+
     /// Register / unregister as a login item, then refresh `launchAtLogin` from the authoritative
     /// `LoginItem.status`. Errors are swallowed and reflected as the real post-call status (the
     /// unsigned-binary throw path is observed live in #13, not surfaced as UI here).
@@ -308,7 +349,32 @@ public final class MenuBarViewModel {
     /// the panel's view stayed alive was rendering as still-required).
     public func rearrangeNow() async {
         refreshTrust()
-        await actor.activate(config: TileConfig(isEnabled: true, visibleFrame: visibleFrame, gap: gap))
+        clearForegroundResult()
+        let targetBundleID = targetBundleID
+        let actor = actor
+        let config = TileConfig(isEnabled: true, visibleFrame: visibleFrame, gap: gap)
+        let shouldBringToFront = bringToFrontOnRearrange && isAccessibilityTrusted
+        let requestGeneration = foregroundRequestGeneration
+        await actor.activate(config: config)
+        if shouldBringToFront,
+           foregroundRequestIsCurrent(bundleID: targetBundleID, generation: requestGeneration) {
+            let result = await foregrounder.bringToFront(bundleID: targetBundleID)
+            if foregroundRequestIsCurrent(bundleID: targetBundleID, generation: requestGeneration) {
+                lastForegroundResult = result
+            }
+        }
+    }
+
+    private func foregroundRequestIsCurrent(bundleID: String, generation: Int) -> Bool {
+        generation == foregroundRequestGeneration
+            && bundleID == targetBundleID
+            && bringToFrontOnRearrange
+            && isAccessibilityTrusted
+    }
+
+    private func clearForegroundResult() {
+        foregroundRequestGeneration += 1
+        lastForegroundResult = nil
     }
 
     /// One persist for ALL writes — carries the live `wasTrusted` so an unrelated save (e.g. a
@@ -316,19 +382,16 @@ public final class MenuBarViewModel {
     private func persist() {
         settings.save(AppSettings(targetBundleID: targetBundleID, wasTrusted: wasTrusted,
                                   gap: Double(gap), hotKey: hotKey, reorderOnDrag: reorderOnDrag,
-                                  reorderStrategy: reorderStrategy))
+                                  reorderStrategy: reorderStrategy,
+                                  bringToFrontOnRearrange: bringToFrontOnRearrange))
     }
 
     /// The PRODUCTION Accessibility-trust probe for the composition root to inject. Defined in Kit
     /// so it can close over the Kit-internal `AccessibilityTrust` (the executable never sees that
     /// type). `prompting: false` — a read-only status check that never pops the grant dialog on a
     /// menu open (the user reaches System Settings via the fix-it row's `Link` instead).
-    public static let liveTrustProbe: @Sendable () -> Bool = {
-        AccessibilityTrust.isTrusted(prompting: false)
-    }
+    public static let liveTrustProbe: @Sendable () -> Bool = { AccessibilityTrust.isTrusted(prompting: false) }
 
     /// The production prompt path used only after the user explicitly chooses the repair action.
-    public static let liveTrustPrompt: @Sendable () -> Bool = {
-        AccessibilityTrust.isTrusted(prompting: true)
-    }
+    public static let liveTrustPrompt: @Sendable () -> Bool = { AccessibilityTrust.isTrusted(prompting: true) }
 }

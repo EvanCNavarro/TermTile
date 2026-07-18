@@ -26,23 +26,27 @@ public struct AppSettings: Equatable, Sendable {
     /// clean single-permission manual model stays the default. Absent → false.
     public var reorderOnDrag: Bool
     /// How a drag-reorder reshuffles the other windows (#27) — user-selectable. Persisted as its
-    /// rawValue; absent → .swap.
+    /// rawValue; absent → .adaptive.
     public var reorderStrategy: ReorderStrategy
+    /// Opt-in: after a manual Rearrange command, ask macOS to bring the selected target app to the
+    /// front. OFF by default so upgrades preserve the current no-focus behavior. Absent → false.
+    public var bringToFrontOnRearrange: Bool
 
     public init(targetBundleID: String, wasTrusted: Bool, gap: Double, hotKey: HotKeyConfig,
-                reorderOnDrag: Bool, reorderStrategy: ReorderStrategy) {
+                reorderOnDrag: Bool, reorderStrategy: ReorderStrategy, bringToFrontOnRearrange: Bool) {
         self.targetBundleID = targetBundleID
         self.wasTrusted = wasTrusted
         self.gap = gap
         self.hotKey = hotKey
         self.reorderOnDrag = reorderOnDrag
         self.reorderStrategy = reorderStrategy
+        self.bringToFrontOnRearrange = bringToFrontOnRearrange
     }
 
     /// The launch defaults: target iTerm2 (spec-draft:18; bundle id verified `com.googlecode.iterm2`
-    /// via `mdls`), never granted, 8-pt gap, ⌘⌥T hotkey, drag-reorder off, swap reorder. `load()`
-    /// falls back per-key.
+    /// via `mdls`), never granted, 8-pt gap, ⌘⌥T hotkey, drag-reorder off, adaptive reorder, no
+    /// bring-to-front. `load()` falls back per-key.
     public static let defaults = AppSettings(
         targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8, hotKey: .rearrange,
-        reorderOnDrag: false, reorderStrategy: .adaptive)
+        reorderOnDrag: false, reorderStrategy: .adaptive, bringToFrontOnRearrange: false)
 }

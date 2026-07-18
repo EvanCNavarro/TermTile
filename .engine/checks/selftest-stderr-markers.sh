@@ -7,11 +7,11 @@ set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 3
 FILE="Sources/TermTile/TermTileApp.swift"
 
-# Absent file → nothing to guard (the selftest may be refactored away); pass.
+# Absent file -> nothing to guard (the selftest may be refactored away); pass.
 [ -f "$FILE" ] || exit 0
 
 if grep -nE 'print\(.*SELFTEST' "$FILE" >/dev/null 2>&1; then
-  echo "TRAP-17: SELFTEST marker uses buffered print()/stdout in $FILE — use FileHandle.standardError" >&2
+  echo "TRAP-17: SELFTEST marker uses buffered print()/stdout in $FILE - use FileHandle.standardError" >&2
   grep -nE 'print\(.*SELFTEST' "$FILE" >&2
   exit 1
 fi

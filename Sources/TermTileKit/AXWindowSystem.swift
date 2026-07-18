@@ -26,8 +26,17 @@ public actor AXWindowSystem: WindowSystem {
 
     /// The target app's AX element, or `nil` if it is not currently running.
     private func appElement() -> AXUIElement? {
-        guard let app = NSRunningApplication
-            .runningApplications(withBundleIdentifier: bundleID).first else { return nil }
+        let apps = NSRunningApplication
+            .runningApplications(withBundleIdentifier: bundleID)
+            .map(AXRunningApplication.init)
+        guard let app = TargetRunningApplicationResolver.preferred(
+            bundleID: bundleID,
+            in: apps,
+            bundleIdentifier: \.bundleIdentifier,
+            isRegular: \.isRegular
+        ) else {
+            return nil
+        }
         return AXUIElementCreateApplication(app.processIdentifier)
     }
 
@@ -80,6 +89,14 @@ public actor AXWindowSystem: WindowSystem {
         let windows = (copyAttr(appEl, kAXWindowsAttribute) as? [AXUIElement]) ?? []
         return windows.first { windowID(of: $0) == id }
     }
+}
+
+private struct AXRunningApplication {
+    let app: NSRunningApplication
+
+    var bundleIdentifier: String? { app.bundleIdentifier }
+    var isRegular: Bool { app.activationPolicy == .regular }
+    var processIdentifier: pid_t { app.processIdentifier }
 }
 
 /// The one private call the architecture allows itself (ADR / research :27-28,
