@@ -252,6 +252,28 @@ struct ReleaseReadinessTests {
         }
     }
 
+    @Test("Decision 0003 documents the full plan and progress-reporting contract")
+    func decision003DocumentsFullPlanAndProgressContract() {
+        let docs = Self.file("docs/decisions/0003-update-availability-indicators.md")
+
+        for required in [
+            "Current progress: Phase 11 complete",
+            "### Phase 11: Public release and post-release documentation",
+            "/order",
+            "/chug-02-continue",
+            "At the end of every implementation turn, report:",
+            "Current phase and substep.",
+            "Approximate total progress percentage.",
+            "Validation run in that turn.",
+            "Whether local nits, polish, flakes, or cleanup remain.",
+            "Next steps, including whether more work is required.",
+            "superpowers:code-reviewer"
+        ] {
+            #expect(docs.localizedCaseInsensitiveContains(required),
+                    "docs/decisions/0003-update-availability-indicators.md must mention \(required)")
+        }
+    }
+
     @Test("handoff points release operators at the latest public verification")
     func handoffRecordsLatestPublicReleaseVerification() {
         let docs = Self.file("HANDOFF.md")

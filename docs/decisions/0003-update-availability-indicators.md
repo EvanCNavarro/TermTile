@@ -4,9 +4,10 @@
 
 Implemented locally in focused phases on 2026-07-18 and released publicly as TermTile v0.2.6.
 
-Current progress: Phase 10 complete, 100% local implementation complete, and public release complete.
+Current progress: Phase 11 complete, 100% implementation/release/documentation complete.
 The v0.2.6 release pipeline published the signed/notarized zip, checksum, provenance attestation,
-release notes, and Sparkle appcast.
+release notes, and Sparkle appcast, and the post-release verification docs are committed on
+`origin/master`.
 
 Final validated outcomes:
 
@@ -16,7 +17,7 @@ Final validated outcomes:
 - MacFaceKit owns the reusable attention dot and overflow attention API.
 - Drag-reorder now requires a real candidate-window frame change, so terminal text selection and
   screenshot-region drags inside an unchanged focused/maximized window do not trigger a grid snap.
-- `swift build && swift test && swiftlint --strict` passed with 258 tests and 0 lint violations.
+- `swift build && swift test && swiftlint --strict` passed with 259 tests and 0 lint violations.
 - `scripts/test-packaged-app.sh dist/TermTile.app` passed after rendering the gallery and arming the
   packaged passive update probe.
 - Live local `0.2.6` candidate checks confirmed iTerm content-drag and screenshot-region drags kept
@@ -31,6 +32,10 @@ At the end of every implementation turn, report:
 - Validation run in that turn.
 - Whether local nits, polish, flakes, or cleanup remain.
 - Next steps, including whether more work is required.
+
+Continuation rule: when this work is resumed with `/order` and `/chug-02-continue`, re-run OBSERVE
+against the real repo before BUILD, re-audit the remaining plan, and keep this progress/next-steps
+closeout contract in the final response for that turn.
 
 ## Context
 
@@ -267,3 +272,30 @@ Status: Complete locally.
 Outcome: completed locally. The focused unit tests cover the root classifier, and live local candidate
 checks against iTerm2 content-drag and `screencapture -ic` screenshot-region drag are recorded in
 `docs/verification/release-v0.2.6-local.md`.
+
+### Phase 11: Public release and post-release documentation
+
+Status: Complete publicly.
+
+1. OBSERVE: inspect `git status`, release notes, package metadata, release workflow, and local
+   verification evidence before tagging.
+2. RED: before tagging, add or confirm release-readiness tests for the v0.2.6 release notes and
+   local verification evidence.
+3. BUILD: commit the release candidate, tag `v0.2.6`, and push `master` plus the tag.
+4. VERIFY: wait for the tag-triggered Release workflow, then verify the downloaded public zip,
+   checksum, provenance attestation, bundle metadata, appcast, codesign, stapler, and Gatekeeper
+   assessment.
+5. RED: after public release verification exists, add or confirm release-readiness tests for the
+   published artifact evidence, HANDOFF latest-release pointers, and this plan/progress contract.
+6. REVIEW: run `superpowers:code-reviewer` on the release verification docs and fix all actionable
+   findings before finalizing. The review found stale HANDOFF v0.2.5 verification text; it was fixed
+   and guarded by `handoffRecordsLatestPublicReleaseVerification()`.
+7. PITSTOP:
+   - Look back: inspect the actual GitHub release, local test output, docs, and `git status`; verify
+     `v0.2.6` is latest and the repository is clean.
+   - Look back: fix stale documentation, test-count drift, or release-evidence gaps immediately.
+   - Look forward: no remaining implementation or release work is required for this plan; the next
+     future task starts with a fresh OBSERVE/audit sequence.
+
+Outcome: completed publicly. Evidence is recorded in `docs/verification/release-v0.2.6.md`, and the
+latest release state is summarized in `HANDOFF.md`.
