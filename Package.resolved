@@ -1,13 +1,13 @@
 {
-  "originHash" : "35d97df85b0639f85364462c21c3d48290f7432412b704284d1aa39c0f49b268",
+  "originHash" : "131e8f849b83c9edd4e6312721a2b16f935014da297c4445c7bfc0d17b02347a",
   "pins" : [
     {
       "identity" : "macfacekit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/400faces/MacFaceKit.git",
       "state" : {
-        "revision" : "5e8eb0fc6c3644dc0bc665e18a1a8a449cfbd981",
-        "version" : "0.4.0"
+        "revision" : "c430176469758fa465d2d3d9399859c9467bfd6e",
+        "version" : "0.4.2"
       }
     }
   ],

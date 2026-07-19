@@ -105,9 +105,10 @@ public final class DragMonitor: @unchecked Sendable {
     }
 
     /// Mouse-UP: if the pointer travelled past the threshold since the matching down (B2), await the
-    /// id resolved at down, verify that window's frame changed, and fire `onDragEnd`. Returns the
-    /// fired id (`nil` = click, no matching down, down over no window, vanished window, or pointer
-    /// drag inside an unchanged window). Consumes the pending down either way.
+    /// id resolved at down, verify that the window moved without materially resizing, and fire
+    /// `onDragEnd`. Returns the fired id (`nil` = click, no matching down, down over no window,
+    /// vanished window, resized/zoomed window, or pointer drag inside an unchanged window). Consumes the
+    /// pending down either way.
     @discardableResult
     func handleUp(at point: CGPoint) async -> CGWindowID? {
         let pending: (point: CGPoint, resolve: Task<TrackedWindow?, Never>)? = lock.withLock {
@@ -121,6 +122,9 @@ public final class DragMonitor: @unchecked Sendable {
         }
         guard let window = await pending.resolve.value else { return nil }   // down over no window
         guard let currentFrame = await currentFrame(window.id) else { return nil }
+        guard sizeApproximatelyEqual(window.frame.size, currentFrame.size, epsilon: frameChangeEpsilon) else {
+            return nil
+        }
         guard !FrameMath.approximatelyEqual(
             window.frame,
             currentFrame,
@@ -133,6 +137,10 @@ public final class DragMonitor: @unchecked Sendable {
     /// Re-enable the tap after the system disables it (timeout / user input). Called from the callback.
     fileprivate func reEnable() {
         lock.withLock { if let tap { CGEvent.tapEnable(tap: tap, enable: true) } }
+    }
+
+    private func sizeApproximatelyEqual(_ a: CGSize, _ b: CGSize, epsilon: CGFloat) -> Bool {
+        abs(a.width - b.width) <= epsilon && abs(a.height - b.height) <= epsilon
     }
 }
 

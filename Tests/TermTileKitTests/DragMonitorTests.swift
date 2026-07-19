@@ -85,6 +85,27 @@ struct DragMonitorTests {
         #expect(fired == nil)
         #expect(firedID.get() == nil)
     }
+
+    // A title-bar double-click zoom/restore can change the window's frame without being a window
+    // drag. Even with small pointer jitter beyond the travel threshold, drag-reorder must not treat
+    // a resize/zoom as a drop and snap the window into a new grid slot.
+    @Test("a zoom or resize gesture does not fire drag reorder")
+    func zoomOrResizeGestureFiresNothing() async {
+        let firedID = Locked<CGWindowID?>(nil)
+        let original = CGRect(x: 120, y: 100, width: 420, height: 300)
+        let zoomed = CGRect(x: 40, y: 20, width: 1200, height: 800)
+        let monitor = DragMonitor(
+            travelThreshold: 6,
+            resolveWindow: { _ in TrackedWindow(id: 42, frame: original) },
+            currentFrame: { _ in zoomed },
+            onDragEnd: { id in firedID.set(id) })
+
+        monitor.handleDown(at: CGPoint(x: 200, y: 120))
+        let fired = await monitor.handleUp(at: CGPoint(x: 208, y: 127))
+
+        #expect(fired == nil)
+        #expect(firedID.get() == nil)
+    }
 }
 
 /// Tiny lock-guarded box so the @Sendable closures can record across the actor hop without a data race.

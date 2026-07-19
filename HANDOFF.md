@@ -1,6 +1,6 @@
 # TermTile - Handoff
 
-_Last updated: 2026-07-18. This is the single spot to pick TermTile back up. Read it top-to-bottom,
+_Last updated: 2026-07-19. This is the single spot to pick TermTile back up. Read it top-to-bottom,
 then jump to **Start here**. (Companion handoffs: `RememBar/HANDOFF.md`, `MacFaceKit/README.md` -
 the three repos share the MacFaceKit design system.)_
 
@@ -14,10 +14,10 @@ the three repos share the MacFaceKit design system.)_
 | Git | Check `git status --short` before release |
 | Latest published release | **v0.2.6** (2026-07-18), build 138, Developer ID signed/notarized/stapled |
 | Release target | None active; v0.2.6 is published |
-| Latest unreleased work | Update-indicator visibility polish after v0.2.6; see below. |
+| Latest unreleased work | Live-app polish after v0.2.6: top-right update indicators, stale-permission recovery, and zoom-safe drag-reorder. |
 | Public signing | Developer ID Application: Evan Navarro (`XG9SBNWNXT`) |
 | Notarization | Accepted; release CI notarizes, staples, and Gatekeeper-assesses before zipping |
-| Design-system dep | MacFaceKit `.upToNextMinor(from: "0.4.0")` (public git URL, auto-resolved) |
+| Design-system dep | MacFaceKit `.upToNextMinor(from: "0.4.2")` (public git URL, auto-resolved) |
 
 ## Start here (next session, in order)
 
@@ -43,13 +43,15 @@ the three repos share the MacFaceKit design system.)_
   and published with a signed Sparkle appcast. It keeps the v0.2.4 uninstall privacy cleanup and stale
   permission repair flows. `v0.2.1` was the transitional signed but unstapled build used to stabilize
   macOS TCC grants across updates.
-- **Unreleased indicator polish:** larger shared attention dots, a menu-bar host fix for the colored dot,
-  row-level **Check for Updates** attention, and MacFaceKit v0.4.0 consumption.
+- **Unreleased live-app polish:** top-right update dots on the menu-bar glyph and overflow ellipsis,
+  row-level **Check for Updates** attention, a **Reset & Open Settings** stale-Accessibility recovery
+  action, button-like permission notice actions, and drag-reorder ignoring title-bar zoom/resize gestures.
+  MacFaceKit v0.4.2 is consumed for the shared UI pieces.
 - **Released in v0.2.0:** the richer identity card, GitHub/License links,
   adjustable gap, configurable shortcut, drag-reorder controls, Uninstall, clearer Accessibility/Input
   Monitoring guidance, branded update dialog, and stricter release-readiness tests.
 - **The big recent UI arc:** adopted the shared **MacFaceKit** design system
-  (`github.com/400faces/MacFaceKit`, public, pinned `.upToNextMinor(from: "0.4.0")`). TermTile is now a
+  (`github.com/400faces/MacFaceKit`, public, pinned `.upToNextMinor(from: "0.4.2")`). TermTile is now a
   UI-twin of RememBar: same identity card, icon buttons, shared attention indicator, and **branded update
   dialog** (via `TermTileUserDriver`, a thin Sparkle→`UpdateWindowController` adapter; the
   window/morph/model live once in the kit). The Rearrange-now hero uses the shared `PrimaryButton`.
@@ -65,6 +67,8 @@ the three repos share the MacFaceKit design system.)_
 ## Known-good dev hooks / gotchas
 
 - `TERMTILE_GALLERY=1` — opens the real `MenuBarContent` panel in a window (visual review).
+- `TERMTILE_GALLERY_UPDATE_AVAILABLE=1` with `TERMTILE_GALLERY=1` — marks the single `Updater`
+  availability source as available for native indicator screenshots without downgrading the app.
 - `TERMTILE_AUTOCHECK=1` — fires an update check on launch (drives the branded dialog end-to-end without
   the menu). `TERMTILE_STOCK_UPDATER=1` — rollback to Sparkle's stock UI.
 - `TERMTILE_TILE_ONCE=1` — one-shot tile against the persisted target (demo/E2E).

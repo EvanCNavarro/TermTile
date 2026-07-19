@@ -36,7 +36,6 @@ struct MenuBarViewModelTests {
         login: any LoginItem = InMemoryLoginItem(),
         apps: [TargetApp] = [TargetApp(bundleID: "com.googlecode.iterm2", name: "iTerm2")],
         trusted: Bool = false,
-        requestAccessibilityTrust: @escaping @Sendable () -> Bool = { false },
         uninstaller: Uninstaller? = nil,
         foregrounder: (any TargetAppForegrounding)? = nil,
         permissionRepairer: (any PermissionRepairing)? = nil
@@ -47,7 +46,6 @@ struct MenuBarViewModelTests {
             loginItem: login,
             appsProvider: InMemoryTargetAppsProvider(seed: apps),
             isTrustedProbe: { trusted },
-            requestAccessibilityTrust: requestAccessibilityTrust,
             visibleFrame: visible,
             epsilon: eps,
             makeActor: { _ in TilingActor(system: fake, epsilon: self.eps) },
@@ -716,34 +714,22 @@ struct MenuBarViewModelTests {
         #expect(makeVM().0.inputMonitoringSettingsURL.absoluteString.contains("Privacy_ListenEvent"))
     }
 
-    @Test("repairAccessibilityPermission resets only the Accessibility TCC grant")
-    func repairAccessibilityPermissionResetsOnlyAccessibility() {
+    @Test("repairAccessibilityPermission resets only the Accessibility TCC grant without spawning the prompt")
+    func repairAccessibilityPermissionResetsOnlyAccessibilityWithoutPrompt() {
         let repairer = SpyPermissionRepairer()
-        final class Box: @unchecked Sendable { var promptCount = 0 }
-        let box = Box()
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
                                hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
-        let (vm, _) = makeVM(store: store, trusted: false, requestAccessibilityTrust: {
-            box.promptCount += 1
-            return false
-        }, permissionRepairer: repairer)
+        let (vm, _) = makeVM(store: store, trusted: false, permissionRepairer: repairer)
         vm.repairAccessibilityPermission()
         #expect(repairer.resetScopes == [[.accessibility]])
-        #expect(box.promptCount == 1)
         #expect(vm.accessibilityState == .grantBroken)
     }
 
     @Test("repairAccessibilityPermission is inert when no repairer is injected")
     func repairAccessibilityPermissionNoopsWithoutRepairer() {
-        final class Box: @unchecked Sendable { var promptCount = 0 }
-        let box = Box()
-        let (vm, _) = makeVM(trusted: false, requestAccessibilityTrust: {
-            box.promptCount += 1
-            return false
-        })
+        let (vm, _) = makeVM(trusted: false)
         #expect(vm.repairAccessibilityPermission().isEmpty)
-        #expect(box.promptCount == 0)
     }
 
     @Test("repairInputMonitoringPermission resets ListenEvent and re-requests the grant")

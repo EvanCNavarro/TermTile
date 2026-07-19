@@ -299,7 +299,7 @@ struct ReleaseReadinessTests {
     @Test("handoff records the current MacFaceKit dependency line")
     func handoffRecordsCurrentMacFaceKitDependencyLine() {
         let docs = Self.file("HANDOFF.md")
-        #expect(docs.contains("MacFaceKit `.upToNextMinor(from: \"0.4.0\")`"),
+        #expect(docs.contains("MacFaceKit `.upToNextMinor(from: \"0.4.2\")`"),
                 "HANDOFF.md should match the current shared design-system dependency line")
         #expect(!docs.contains("pinned `.upToNextMinor(from: \"0.3.3\")`"),
                 "HANDOFF.md must not leave the recent UI arc pinned to the old MacFaceKit line")
@@ -406,15 +406,15 @@ struct ReleaseReadinessTests {
         }
     }
 
-    @Test("public docs explain in-app stale permission repair")
-    func publicDocsExplainPermissionRepair() {
+    @Test("public docs explain the permission settings flow")
+    func publicDocsExplainPermissionSettingsFlow() {
         let readme = Self.file("README.md")
         let normalizedReadme = Self.normalizedWhitespace(readme)
         for required in [
-            "Repair Accessibility",
-            "Repair Input Monitoring",
-            "stale macOS TCC row",
-            "approve the current signed app again"
+            "Allow Accessibility",
+            "Allow Input Monitoring",
+            "open the correct Settings pane",
+            "enable the current signed app"
         ] {
             #expect(normalizedReadme.localizedCaseInsensitiveContains(required),
                     "README.md must mention \(required)")
@@ -455,21 +455,54 @@ struct ReleaseReadinessTests {
                 "uninstall message must explain privacy reset failures")
     }
 
-    @Test("accessibility repair is offered before and after the local trust latch")
-    func accessibilityRepairAvailableForBothUntrustedStates() {
+    @Test("accessibility settings action is offered before and after the local trust latch")
+    func accessibilitySettingsActionAvailableForBothUntrustedStates() {
         let menu = Self.file("Sources/TermTile/MenuBarContent.swift")
         guard let firstGrant = menu.range(of: "case .needsFirstGrant:"),
               let grantBroken = menu.range(of: "case .grantBroken:"),
-              let repairButtonDeclaration = menu.range(of: "private var repairAccessibilityButton") else {
+              let noticeEnd = menu.range(of: "private func runUninstallFlow") else {
             Issue.record("MenuBarContent.swift must render both untrusted Accessibility states")
             return
         }
         let needsFirstGrantBlock = String(menu[firstGrant.upperBound..<grantBroken.lowerBound])
-        let grantBrokenBlock = String(menu[grantBroken.upperBound..<repairButtonDeclaration.lowerBound])
-        #expect(needsFirstGrantBlock.contains("repairAccessibilityButton"),
-                "first-grant-looking state must still offer repair for older users without wasTrusted")
-        #expect(grantBrokenBlock.contains("repairAccessibilityButton"),
-                "grant-broken state must offer repair")
+        let grantBrokenBlock = String(menu[grantBroken.upperBound..<noticeEnd.lowerBound])
+        #expect(needsFirstGrantBlock.contains("linkLabel: \"Allow Accessibility\""),
+                "first-grant-looking state must offer a direct settings action")
+        #expect(grantBrokenBlock.contains("actionLabel: \"Reset & Open Settings\""),
+                "grant-broken state must expose the stale-entry reset action")
+        #expect(grantBrokenBlock.contains("viewModel.repairAccessibilityPermission()"),
+                "grant-broken action must clear TermTile's stale TCC row before opening Settings")
+        #expect(!grantBrokenBlock.contains("requestAccessibilityTrust"),
+                "settings action must not spawn the extra macOS permission prompt dialog")
+    }
+
+    @Test("input monitoring settings action clears stale rows and registers the current app")
+    func inputMonitoringSettingsActionClearsStaleRowsAndRegistersCurrentApp() {
+        let menu = Self.file("Sources/TermTile/MenuBarContent.swift")
+        guard let dragStart = menu.range(of: "SectionCard(\"Drag\""),
+              let generalStart = menu.range(of: "SectionCard(\"General\"") else {
+            Issue.record("MenuBarContent.swift must keep Drag before General")
+            return
+        }
+        let dragBlock = String(menu[dragStart.lowerBound..<generalStart.lowerBound])
+        #expect(dragBlock.contains("actionLabel: \"Allow Input Monitoring\""),
+                "Input Monitoring notice should keep one visible button-like action")
+        #expect(dragBlock.contains("viewModel.repairInputMonitoringPermission()"),
+                "Input Monitoring action should clear stale rows and re-register TermTile before Settings")
+        #expect(!dragBlock.contains("resetInputMonitoringPermissionForSettings"),
+                "Input Monitoring must not use a reset-only path that can remove the Settings row")
+    }
+
+    @Test("Accessibility settings flow has no prompt-backed ViewModel seam")
+    func accessibilitySettingsFlowHasNoPromptBackedViewModelSeam() {
+        let viewModel = Self.file("Sources/TermTileKit/MenuBarViewModel.swift")
+        let app = Self.file("Sources/TermTile/TermTileApp.swift")
+        #expect(!viewModel.contains("requestAccessibilityTrust"),
+                "Settings-based grant flow should not keep a dormant prompt callback")
+        #expect(!viewModel.contains("liveTrustPrompt"),
+                "Settings-based grant flow should not expose a prompt-backed live seam")
+        #expect(!app.contains("liveTrustPrompt"),
+                "The composition root should inject only the non-prompting trust probe")
     }
 
     @Test("TCC repair process has a bounded wait")
@@ -528,15 +561,15 @@ struct ReleaseReadinessTests {
         }
     }
 
-    @Test("MacFaceKit dependency includes the shared attention API")
-    func macFaceKitDependencyIncludesSharedAttentionAPI() {
+    @Test("MacFaceKit dependency includes the shared attention and notice-action APIs")
+    func macFaceKitDependencyIncludesSharedAttentionAndNoticeActionAPIs() {
         let package = Self.file("Package.swift")
-        #expect(package.contains(".upToNextMinor(from: \"0.4.0\")"),
-                "fresh resolution must start at MacFaceKit v0.4.0 for shared attention indicator polish")
+        #expect(package.contains(".upToNextMinor(from: \"0.4.2\")"),
+                "fresh resolution must start at MacFaceKit v0.4.2 for top-right attention and notice actions")
         let resolved = Self.resolvedVersion(for: "macfacekit")
         #expect(resolved != nil, "Package.resolved must include MacFaceKit")
-        #expect(resolved.map { Self.semver($0, isAtLeast: "0.4.0", below: "0.5.0") } == true,
-                "TermTile must consume MacFaceKit >= 0.4.0 and < 0.5.0 for shared attention polish")
+        #expect(resolved.map { Self.semver($0, isAtLeast: "0.4.2", below: "0.5.0") } == true,
+                "TermTile must consume MacFaceKit >= 0.4.2 and < 0.5.0 for shared attention/notice actions")
     }
 
     @Test("verification commands document the real Swift package gate")

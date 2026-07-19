@@ -95,4 +95,32 @@ struct MenuBarContentAccessibilityTests {
         #expect(updateAction.contains("attentionAccessibilityHint: \"Update available\""),
                 "TermTile should supply update-specific semantics through MacFaceKit's generic hook")
     }
+
+    @Test("permission notices expose one settings action without duplicate repair buttons")
+    func permissionNoticesExposeOneSettingsAction() {
+        let menuURL = Self.repoRoot().appending(path: "Sources/TermTile/MenuBarContent.swift")
+        let source = (try? String(contentsOf: menuURL, encoding: .utf8)) ?? ""
+        guard let dragStart = source.range(of: "SectionCard(\"Drag\""),
+              let generalStart = source.range(of: "SectionCard(\"General\""),
+              let accessibilityStart = source.range(of: "private var accessibilityNotice"),
+              let uninstallStart = source.range(of: "private func runUninstallFlow") else {
+            Issue.record("MenuBarContent.swift must keep Drag, General, accessibilityNotice, and uninstall flow")
+            return
+        }
+
+        let dragBlock = String(source[dragStart.lowerBound..<generalStart.lowerBound])
+        let accessibilityBlock = String(source[accessibilityStart.lowerBound..<uninstallStart.lowerBound])
+
+        #expect(dragBlock.contains("actionLabel: \"Allow Input Monitoring\""))
+        #expect(dragBlock.contains("viewModel.repairInputMonitoringPermission()"))
+        #expect(accessibilityBlock.contains("linkLabel: \"Allow Accessibility\""))
+        #expect(accessibilityBlock.contains("actionLabel: \"Reset & Open Settings\""))
+        #expect(accessibilityBlock.contains("viewModel.repairAccessibilityPermission()"))
+        #expect(!dragBlock.contains("Repair Input Monitoring"))
+        #expect(!accessibilityBlock.contains("Repair Accessibility"))
+        #expect(!dragBlock.contains("Open Input Monitoring Settings"))
+        #expect(!accessibilityBlock.contains("Open Accessibility Settings"))
+        #expect(!source.contains("private var repairAccessibilityButton"))
+        #expect(!source.contains("private func repairButton"))
+    }
 }

@@ -49,7 +49,6 @@ struct TermTileApp: App {
             loginItem: loginItem,
             appsProvider: WorkspaceTargetAppsProvider(),
             isTrustedProbe: MenuBarViewModel.liveTrustProbe,
-            requestAccessibilityTrust: MenuBarViewModel.liveTrustPrompt,
             visibleFrame: visibleFrame,
             epsilon: eps,
             makeActor: { bundleID in
@@ -91,6 +90,7 @@ struct TermTileApp: App {
 
         armUpdateAvailabilityProbeIfAllowed(isSelftest: isSelftest, isGallery: isGallery)
         armAutoUpdateCheckIfRequested()
+        armGalleryUpdateAttentionIfRequested(isGallery: isGallery)
 
         if isGallery {
             let vm = ProcessInfo.processInfo.environment["TERMTILE_GALLERY_BROKEN"] != nil
@@ -123,6 +123,12 @@ struct TermTileApp: App {
         Task { @MainActor in
             up.refreshAvailability()
         }
+    }
+
+    @MainActor
+    private func armGalleryUpdateAttentionIfRequested(isGallery: Bool) {
+        guard isGallery, ProcessInfo.processInfo.environment["TERMTILE_GALLERY_UPDATE_AVAILABLE"] != nil else { return }
+        updater.recordAvailableUpdate(version: "Gallery")
     }
 
     /// Build the global-hotkey monitor from the VM's persisted combo, wire it to rearrangeNow, and

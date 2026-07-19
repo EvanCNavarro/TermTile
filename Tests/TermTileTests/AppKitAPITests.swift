@@ -86,4 +86,20 @@ struct AppKitAPITests {
         #expect(source.contains("@ObservationIgnored private var updater"))
         #expect(source.contains("private(set) var availability"))
     }
+
+    @Test("gallery can force update attention without changing production startup")
+    func galleryCanForceUpdateAttentionWithoutChangingProductionStartup() {
+        let root = Self.repoRoot()
+        let source = (try? String(contentsOf: root.appending(path: "Sources/TermTile/TermTileApp.swift"),
+                                  encoding: .utf8)) ?? ""
+
+        #expect(source.contains("TERMTILE_GALLERY_UPDATE_AVAILABLE"),
+                "native visual proof should be able to exercise update attention without downgrading the app")
+        #expect(source.contains("armGalleryUpdateAttentionIfRequested(isGallery: isGallery)"),
+                "startup should delegate gallery-only update attention to a named helper")
+        #expect(source.contains("guard isGallery, ProcessInfo.processInfo.environment[\"TERMTILE_GALLERY_UPDATE_AVAILABLE\"] != nil"),
+                "forced update attention must be gallery-only, not production startup behavior")
+        #expect(source.contains("updater.recordAvailableUpdate(version: \"Gallery\")"),
+                "the hook should still write through the single Updater availability source")
+    }
 }

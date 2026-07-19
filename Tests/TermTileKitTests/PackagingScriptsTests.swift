@@ -213,6 +213,21 @@ struct PackagingScriptsTests {
         #expect(!codeLines.contains { $0.contains("killall") }, "smoke must never invoke killall")
     }
 
+    @Test("install-app.sh waits for the old app and retries LaunchServices relaunch")
+    func installWaitsForOldAppAndRetriesRelaunch() {
+        let s = Self.script("install-app.sh")
+        #expect(s.contains("wait_for_app_exit"),
+                "install should not race relaunch against the previous app's shutdown")
+        #expect(s.contains("rm -rf \"$HOME/Applications/$APP_NAME.app\""),
+                "install should remove the old user-Applications bundle, not just an extensionless path")
+        #expect(s.contains("rm -rf \"$HOME/Applications/$APP_NAME\""),
+                "install should keep cleaning the legacy extensionless migration path")
+        #expect(s.contains("open \"$INSTALLED_APP\""),
+                "install should try the normal LaunchServices relaunch path first")
+        #expect(s.contains("open -n \"$INSTALLED_APP\""),
+                "install should retry with a fresh instance when LaunchServices returns a transient error")
+    }
+
     @Test("test-packaged-app.sh: can require stable non-ad-hoc code signing")
     func smokeCanRejectAdHocSigning() {
         let s = Self.script("test-packaged-app.sh")

@@ -94,7 +94,8 @@ enum TermTileImage {
 
     private static func drawAttentionDot() {
         let size = Tokens.attentionDot
-        let rect = NSRect(x: canvasSize.width - size, y: 0, width: size, height: size)
+        let rect = NSRect(x: canvasSize.width - size, y: canvasSize.height - size,
+                          width: size, height: size)
         let path = NSBezierPath(ovalIn: rect)
         NSColor(Tokens.warning).setFill()
         path.fill()

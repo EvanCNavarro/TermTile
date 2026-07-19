@@ -32,15 +32,14 @@ nothing until you ask it to.
    notarized, and stapled, so Gatekeeper can verify the app before launch. v0.2.1 was the
    transitional Developer ID signed but unstapled release.
 3. **Grant Accessibility** so it can arrange windows: **System Settings → Privacy & Security →
-   Accessibility → enable TermTile.** TermTile shows a one-click button to this screen when it detects
-   access is missing.
+   Accessibility → enable TermTile.** TermTile shows an **Allow Accessibility** action that opens this
+   Settings pane when it detects access is missing.
 4. Click the **TermTile** menu-bar item → pick your terminal in **Target app** → press **Rearrange now**.
 
-If macOS shows TermTile as already enabled but the app still says permission is missing, use
-TermTile's **Repair Accessibility** button. For drag-reorder, use **Repair Input Monitoring** if that
-permission looks enabled but TermTile still cannot start drag detection. These repair buttons clear
-only TermTile's stale macOS TCC row and open the correct Settings pane so you can approve the
-current signed app again.
+If macOS shows TermTile as already enabled but the app still says permission is missing, use TermTile's
+**Reset & Open Settings** action. It clears TermTile's stale Accessibility entry so you can open the correct
+Settings pane, and then enable the current signed app again. For drag-reorder, TermTile shows
+**Allow Input Monitoring** when that permission is needed.
 
 Requires **macOS 14 (Sonoma) or later**, on **Apple Silicon**.
 

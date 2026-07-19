@@ -3,20 +3,10 @@ import Foundation
 import Observation
 import TermTileCore
 
-/// The menu-bar shell's presentation/composition logic (ADR-0001 imperative shell). It binds the
-/// ports #12a/#12b/#19 built — `SettingsStore`, `LoginItem`, `TargetAppsProviding`, an injected
-/// Accessibility-trust probe, and a `makeActor` factory — into the observable state the SwiftUI
-/// `MenuBarExtra` renders and the actions its controls invoke. `@Observable` (the standalone
-/// `Observation` module, macOS 14 — NOT SwiftUI, so Kit stays UI-free and unit-testable) drives
-/// the view's reactivity; `@MainActor` because it is the UI's owner.
-///
-/// Deliberately does NOT start `TilingActor.run()`/live-event observation — that leak-prone path
-/// (the module-global AXObserver bridge can't host two live adapters across a target-switch) is
-/// #14's fresh-boot E2E surface. #12c drives only `activate()`: toggle-on tiles, toggle-off is
-/// inert (`TileEngine.retileCommands`'s `isEnabled` guard), target-switch rebuilds the actor over
-/// a fresh adapter for the NEXT activate. `visibleFrame` is INJECTED (never read from a live
-/// `NSScreen` here) so the logic is deterministic under test; the composition root supplies the
-/// real origin-screen AX frame.
+/// Menu-bar presentation/composition logic (ADR-0001 imperative shell). It binds injected ports into
+/// observable state for SwiftUI while keeping Kit UI-free and unit-testable.
+/// This shell drives `activate()` only; live observation is a separate surface. `visibleFrame` is
+/// injected so layout behavior stays deterministic under test.
 @MainActor
 @Observable
 public final class MenuBarViewModel {
@@ -26,9 +16,7 @@ public final class MenuBarViewModel {
     public private(set) var availableApps: [TargetApp]
     /// Whether Accessibility (TCC) trust is granted — gates the "Rearrange now" button.
     public private(set) var isAccessibilityTrusted: Bool
-    /// Whether the user has EVER granted Accessibility — a tracked mirror of the persisted flag,
-    /// loaded once at init and latched by `syncTrust()`. Drives `accessibilityState`; read from here
-    /// (not `settings.load()`) so Observation tracks it and the view recomputes on change (#23 S1).
+    /// Whether the user has EVER granted Accessibility; latched by `syncTrust()` for `grantBroken`.
     public private(set) var wasTrusted: Bool
     /// Whether the app is registered to launch at login (source of truth = `LoginItem.status`).
     public private(set) var launchAtLogin: Bool
@@ -81,7 +69,6 @@ public final class MenuBarViewModel {
     let settings: any SettingsStore
     @ObservationIgnored private let loginItem: any LoginItem
     @ObservationIgnored private let isTrustedProbe: @Sendable () -> Bool
-    @ObservationIgnored private let requestAccessibilityTrust: @Sendable () -> Bool
     @ObservationIgnored private let visibleFrame: CGRect
     @ObservationIgnored private let epsilon: CGFloat
     @ObservationIgnored private let makeActor: @Sendable (String) -> TilingActor
@@ -112,7 +99,6 @@ public final class MenuBarViewModel {
         loginItem: any LoginItem,
         appsProvider: any TargetAppsProviding,
         isTrustedProbe: @escaping @Sendable () -> Bool,
-        requestAccessibilityTrust: @escaping @Sendable () -> Bool = { false },
         visibleFrame: CGRect,
         epsilon: CGFloat,
         makeActor: @escaping @Sendable (String) -> TilingActor,
@@ -125,7 +111,6 @@ public final class MenuBarViewModel {
         self.settings = settings
         self.loginItem = loginItem
         self.isTrustedProbe = isTrustedProbe
-        self.requestAccessibilityTrust = requestAccessibilityTrust
         self.visibleFrame = visibleFrame
         self.epsilon = epsilon
         self.makeActor = makeActor
@@ -151,20 +136,15 @@ public final class MenuBarViewModel {
         syncReorderMonitor()   // #26 — start the drag monitor iff opted-in + trusted + granted
     }
 
-    /// Start/stop the opt-in drag-reorder monitor to match state (#26). Runs ONLY when the user opted
-    /// in AND Accessibility is trusted (the reorder writes need it) AND Input Monitoring is granted
-    /// (the tap needs it) — so nothing watches the mouse until all three hold. Idempotent; called on
-    /// every state change (init, toggle, trust). A missing grant → stopped (never a half-run, #26 S3).
+    /// Start/stop drag-reorder to match state. Nothing watches the mouse until opt-in, AX trust, and
+    /// Input Monitoring all hold.
     private func syncReorderMonitor() {
         guard let dragReorder else { return }
         if reorderOnDrag, isAccessibilityTrusted, dragReorder.inputMonitoringGranted {
             dragReorder.start()
         } else {
-            // Opted in but Input Monitoring is missing → PROMPT for it (#26 S3b). This shows the system
-            // prompt AND registers TermTile in the Privacy > Input Monitoring pane. Fires here (not just
-            // in setReorderOnDrag) so LAUNCH covers an already-on setting, and DELIBERATELY independent of
-            // Accessibility — the two grants are separate, and gating the IM request on AX meant the app
-            // never appeared in the IM pane until AX was granted first. Idempotent: macOS prompts once.
+            // Missing Input Monitoring: request once so TermTile appears in the Settings pane. This is
+            // intentionally independent of AX because the grants are separate.
             if reorderOnDrag, !dragReorder.inputMonitoringGranted {
                 dragReorder.requestInputMonitoring()
             }
@@ -179,9 +159,7 @@ public final class MenuBarViewModel {
         syncReorderMonitor()
     }
 
-    /// True when the user opted into drag-reorder + Accessibility is granted, but Input Monitoring
-    /// (the mouse tap's permission) is NOT — so the menu shows a fix-it row instead of silently doing
-    /// nothing (#26 S3). `?? true` → no controller (tests/unbundled) never shows the row.
+    /// Shows the Input Monitoring fix-it row only when drag-reorder is on, AX is trusted, and IM is not.
     public var reorderNeedsInputMonitoring: Bool {
         reorderOnDrag && isAccessibilityTrusted && !(dragReorder?.inputMonitoringGranted ?? true)
     }
@@ -193,13 +171,13 @@ public final class MenuBarViewModel {
     }
 
     /// Repair path for users who granted an older/ad-hoc TermTile build and now have a stale TCC row:
-    /// clear only TermTile's Accessibility grant, then re-probe so the Settings pane can show the
-    /// current app for the user to approve. This never grants permission silently.
+    /// clear only TermTile's Accessibility grant, then re-probe. The caller opens Settings; this path
+    /// deliberately does not request the AX prompt because that can leave both a Settings pane and a
+    /// stale modal dialog on screen.
     @discardableResult
     public func repairAccessibilityPermission() -> [PermissionRepairReport] {
         guard let permissionRepairer else { return [] }
         let reports = permissionRepairer.reset([.accessibility])
-        _ = requestAccessibilityTrust()
         refreshTrust()
         return reports
     }
@@ -395,6 +373,4 @@ public final class MenuBarViewModel {
     /// type). `prompting: false` — a read-only status check that never pops the grant dialog on a
     /// menu open (the user reaches System Settings via the fix-it row's `Link` instead).
     public static let liveTrustProbe: @Sendable () -> Bool = { AccessibilityTrust.isTrusted(prompting: false) }
-
-    public static let liveTrustPrompt: @Sendable () -> Bool = { AccessibilityTrust.isTrusted(prompting: true) }
 }

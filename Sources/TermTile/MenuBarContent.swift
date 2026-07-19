@@ -88,11 +88,9 @@ struct MenuBarContent: View {
                 if viewModel.reorderNeedsInputMonitoring {
                     NoticeCard(title: "Input Monitoring required",
                                message: "Reorder-on-drag needs Input Monitoring to detect when you drag a window. "
-                               + "If it already looks enabled, repair the stale entry and approve TermTile again.",
-                               linkLabel: "Open Input Monitoring Settings…",
-                               url: viewModel.inputMonitoringSettingsURL)
-                    repairButton("Repair Input Monitoring", systemImage: "arrow.clockwise") {
-                        viewModel.repairInputMonitoringPermission()
+                               + "Open Settings and allow TermTile.",
+                               actionLabel: "Allow Input Monitoring") {
+                        _ = viewModel.repairInputMonitoringPermission()
                         NSWorkspace.shared.open(viewModel.inputMonitoringSettingsURL)
                     }
                 }
@@ -161,31 +159,17 @@ struct MenuBarContent: View {
         case .needsFirstGrant:
             NoticeCard(title: "Accessibility access required",
                        message: "TermTile needs Accessibility permission to arrange windows. "
-                       + "If it already looks enabled, repair the stale entry and approve TermTile again.",
-                       linkLabel: "Open Accessibility Settings…", url: viewModel.accessibilitySettingsURL)
-            repairAccessibilityButton
+                       + "Open Settings and allow TermTile.",
+                       linkLabel: "Allow Accessibility", url: viewModel.accessibilitySettingsURL)
         case .grantBroken:
-            NoticeCard(title: "Accessibility access is off",
-                       message: "If it already looks enabled, macOS is holding a stale grant from an older copy. "
-                       + "Repair it, then approve TermTile again.",
-                       linkLabel: "Open Accessibility Settings…", url: viewModel.accessibilitySettingsURL)
-            repairAccessibilityButton
+            NoticeCard(title: "Accessibility access needs reset",
+                       message: "Settings may show TermTile enabled for an older build. "
+                       + "Reset the saved entry, then allow this copy.",
+                       actionLabel: "Reset & Open Settings", actionSystemImage: "arrow.clockwise") {
+                _ = viewModel.repairAccessibilityPermission()
+                NSWorkspace.shared.open(viewModel.accessibilitySettingsURL)
+            }
         }
-    }
-
-    private var repairAccessibilityButton: some View {
-        repairButton("Repair Accessibility", systemImage: "arrow.clockwise") {
-            viewModel.repairAccessibilityPermission()
-            NSWorkspace.shared.open(viewModel.accessibilitySettingsURL)
-        }
-    }
-
-    private func repairButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
     }
 
     /// The uninstall confirm + outcome flow, run as imperative `NSAlert`s in their OWN windows — NOT

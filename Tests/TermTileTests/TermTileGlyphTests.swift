@@ -20,16 +20,16 @@ struct TermTileGlyphTests {
         #expect(plainImage.size == badgedImage.size)
     }
 
-    @Test("update badge renders orange-family pixels in the lower-right quadrant")
-    func updateBadgeRendersOrangePixelsInLowerRightQuadrant() throws {
+    @Test("update badge renders orange-family pixels in the upper-right quadrant")
+    func updateBadgeRendersOrangePixelsInUpperRightQuadrant() throws {
         let bitmap = try renderedBitmap(for: TermTileGlyph(hasAvailableUpdate: true))
-        let lowerRightOrange = orangeFamilyPixels(in: bitmap, xRange: bitmap.pixelsWide / 2..<bitmap.pixelsWide,
-                                                  yRange: bitmap.pixelsHigh / 2..<bitmap.pixelsHigh)
         let upperRightOrange = orangeFamilyPixels(in: bitmap, xRange: bitmap.pixelsWide / 2..<bitmap.pixelsWide,
                                                   yRange: 0..<bitmap.pixelsHigh / 2)
+        let lowerRightOrange = orangeFamilyPixels(in: bitmap, xRange: bitmap.pixelsWide / 2..<bitmap.pixelsWide,
+                                                  yRange: bitmap.pixelsHigh / 2..<bitmap.pixelsHigh)
 
-        #expect(lowerRightOrange > 0)
-        #expect(lowerRightOrange > upperRightOrange)
+        #expect(upperRightOrange > 0)
+        #expect(upperRightOrange > lowerRightOrange)
     }
 
     @Test("glyph source keeps accessibility label and conditional badge")
