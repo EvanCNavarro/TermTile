@@ -27,6 +27,10 @@ struct TermTileGlyph: View {
 enum TermTileImage {
     static let canvasSize = NSSize(width: 22, height: 18)
     private static let glyphSize = NSSize(width: 18, height: 18)
+    private static var glyphOrigin: NSPoint {
+        NSPoint(x: (canvasSize.width - glyphSize.width) / 2,
+                y: (canvasSize.height - glyphSize.height) / 2)
+    }
 
     static func menuGlyph(hasAvailableUpdate: Bool, colorScheme: ColorScheme) -> Image {
         Image(nsImage: compositedMenuGlyph(hasAvailableUpdate: hasAvailableUpdate,
@@ -84,8 +88,7 @@ enum TermTileImage {
     }()
 
     private static func drawGlyph(_ glyph: NSImage, color: NSColor) {
-        let origin = NSPoint(x: 0, y: 0)
-        let rect = NSRect(origin: origin, size: glyphSize)
+        let rect = NSRect(origin: glyphOrigin, size: glyphSize)
         glyph.draw(in: rect, from: NSRect(origin: .zero, size: glyph.size),
                    operation: .sourceOver, fraction: 1)
         color.setFill()

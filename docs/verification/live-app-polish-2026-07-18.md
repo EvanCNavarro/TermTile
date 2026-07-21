@@ -125,3 +125,36 @@ status-item-b-update-2026-07-18.png: orange=0
 
 `chromwebdevtools` was not applicable here because TermTile is a native SwiftUI/AppKit menu-bar app with
 no browser surface. Native WindowServer screenshots are the relevant UI proof.
+
+## Follow-up Glyph Centering Check - 2026-07-20
+
+Scope: local-only menu-bar glyph centering fix after the reserved badge canvas made the no-update glyph
+read left-biased in the live menu bar. This check did not create a public release tag, appcast entry, or
+marketing-version bump; the local app remained `0.2.7 (146)`.
+
+Installed local candidate:
+
+```sh
+SHORT_VERSION=0.2.7 scripts/install-app.sh
+```
+
+Validation:
+
+- `scripts/fetch-sparkle.sh && swift build && swift test && swiftlint --strict` - pass, 276 tests,
+  0 lint violations.
+- `swift test --filter TermTileGlyphTests` - pass, 7 focused glyph tests.
+- Code-review subagent final pass - clean.
+
+Live status item proof:
+
+- System Events reported the live TermTile status item at `x=1064,y=6,size=40x24`.
+- Screenshot artifact:
+  `docs/verification/live-app-polish/status-item-centered-2026-07-20.png`
+- Pixel check on that real captured status item:
+
+```text
+status-item-centered-2026-07-20.png: size=80x48 whitePixels=248 bbox=x27...52,y14...35 contentMid=39.5 cropMid=39.5 delta=0.0
+```
+
+Observed result: the no-update glyph is centered in the actual menu-bar status item while the existing
+badge tests still pin the update indicator to the top-right canvas edge.
