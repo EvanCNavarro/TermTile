@@ -487,3 +487,74 @@ committed; findings notes are the durable output.
   → gh release) with `secrets.VIRUSTOTAL_API_KEY` configured. Also run actionlint/yamllint for GH-Actions
   schema validation (absent locally in the loop). Needs #13c's signing identity for a shippable release.
   [DEP: external — requires GitHub runners + a push + configured repo secrets, none available in a no-network/no-push loop beat] → #20
+
+## Phase F — session-state tinting (ADR 0006)
+
+Authority: `docs/decisions/0006-session-state-tinting.md`. Every finding cited below was
+measured on 2026-08-28 against live iTerm2 windows; do not re-derive from reading. Tier 1
+only — Apple Events is #38 and is NOT in scope for #37*.
+
+#37 · Session-state tinting, Tier 1 (AX read + OSC write) — SPLIT into #37a–#37f · S1
+  Replaces the out-of-tree `~/.local/bin/claude-window-state` + its launchd job + the
+  `~/.claude/hooks/window-state-flag.sh` Claude Code hook with an in-app, permissionless
+  feature. Tint each target-app session by agent state: ready `#143C22`, blocked `#4A320F`,
+  working `#111417`. PROVE surface per .engine/MEMORY.md = real iTerm2 windows +
+  screencapture, NOT tests alone.
+#37a · Core: pure SessionJoin + AgentState classifiers · S0
+  blocked-by nothing. Foundational — the whole design is proven here before a window is
+  touched. `SessionJoin`: (badge?, cwd, pane geometry, ITERM_SESSION_ID) -> JoinResult with
+  an explicit `.ambiguous` case. `AgentState`: scrollback tail -> .ready | .working |
+  .blocked. Pure, in TermTileCore, no AppKit/ApplicationServices (core-purity.sh enforces).
+  Red-first fixtures captured from the 2026-08-28 probes MUST include the adversarial cases:
+  two sessions sharing a cwd with no badge (-> .ambiguous), >9 windows where badge is nil,
+  and a background-tab session absent from the AX side. Assert `.ambiguous` NEVER resolves
+  to a concrete session — a wrong tint is a silent lie (ADR 0006, Tenet 8).
+#37b · Kit: AXSessionReader — text areas, badges, AXDocument, geometry · S0
+  blocked-by #37a. Reads per-window: `AXStaticText` badge child (`⌥⌘N`), and per active-tab
+  pane: `AXTextArea` AXValue tail, `AXDocument`, position/size. Protocol-backed with an
+  in-memory double per ADR 0001 rule 2. KNOWN, do not rediscover: AX window ORDER is z-order
+  and shuffles between polls — key on the badge, never on index. Background tabs are
+  invisible to AX by design (ADR 0006 finding 6); the reader reports what it can see and
+  does not pretend otherwise.
+#37c · Kit: TTYProbe — ITERM_SESSION_ID extraction, environment-scoped · S0
+  blocked-by #37a. tty -> agent pid -> `ITERM_SESSION_ID` (`w<W>t<T>p<P>:UUID`). SECURITY-
+  CRITICAL, see ADR 0006 "Privacy surface": a process environment block also contains
+  secrets — an ANTHROPIC_API_KEY and a SESSION_SECRET were exposed by one unguarded
+  environment read while probing this design. Return type MUST be incapable of carrying any
+  other variable. Red-first test asserting no other env var can escape the parser lands
+  BEFORE the parser does. Nothing from the environment is logged, persisted, or returned.
+#37d · Kit: OSCColorWriter — OSC 1337 SetColors to tty · S0
+  blocked-by #37a. Writes `\033]1337;SetColors=bg=RRGGBB\a` to /dev/ttysNNN. Protocol-backed;
+  no-op double in tests so the suite never writes to a real terminal. Proven safe under load
+  (200 rapid writes mid-render, scrollback byte-identical) — but that run rules out buffer
+  corruption ONLY, not visual flicker; PROVE must include a human/screencapture check for
+  flicker against a live agent session.
+#37e · Shell: TintingCoordinator + menu toggle + colour settings · S0
+  blocked-by #37b, #37c, #37d. Timer-driven pass (replaces the 5s launchd tick), menu toggle,
+  colour pickers seeded with the three defaults + the subtle/louder/loudest presets carried
+  over from the tool being replaced. MUST reset every touched session to normal on disable
+  and on app quit — a tinted window outliving the feature is orphaned state.
+  SHIPS WITH the README privacy rewrite (ADR 0006): the current "never reads window contents"
+  promise becomes false the moment this lands and must be corrected in the SAME change.
+#37f · Degradation diagnostics: show what joined and what did not · S0
+  blocked-by #37e. A menu surface listing each session's join outcome and confidence, so an
+  ambiguous/failed join is visible rather than mysterious. Closes the failure mode where a
+  window silently stays normal and the user cannot tell whether that is the state or a bug.
+#37g · Retire the out-of-tree toolchain · S0
+  blocked-by #37e. Only after #37e is live-proven: unload+remove
+  `com.evancnavarro.claude-window-state.plist`, remove `~/.local/bin/claude-window-state`,
+  and unwire `window-state-flag.sh` from `~/.claude/settings.json`. Machine-local cleanup
+  outside this repo — sequence it so the replacement is proven BEFORE the original is
+  removed, and keep the script recoverable until then. [Tenet 9: cleanup is part of shipping]
+#38 · Tier 2: Apple Events precision mode (opt-in) · S0 · DEFERRED
+  blocked-by #37e. Removes every Tier 1 ceiling at once: background tabs, >9 windows, exact
+  session mapping, and a future tab-bar indicator. `text of session` also supplies state
+  hook-free. Cost: `com.apple.security.automation.apple-events` + NSAppleEventsUsageDescription
+  + a third TCC prompt, and iTerm2-only permanently. DEFERRED, not rejected — current real
+  workload is 6 single-pane single-tab windows, which Tier 1 covers entirely; building this
+  now would be a speculative feature. Requires an amendment to ADR 0006 (it changes the
+  permission surface), not a silent add.
+#39 · Verify OSC 1337 SetColors against WezTerm · S0
+  blocked-by #37d. ADR 0006 claims the OSC write path has a ROUTE to WezTerm (already a
+  TermTile target) that AppleScript never had. This is UNVERIFIED. Run it against real
+  WezTerm before any README or ADR text claims multi-terminal support.
