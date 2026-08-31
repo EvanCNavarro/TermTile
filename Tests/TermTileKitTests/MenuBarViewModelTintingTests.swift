@@ -43,10 +43,13 @@ struct MenuBarViewModelTintingTests {
         let (vm, _, fake) = Self.make()
         #expect(vm.tintingEnabled == false)
         vm.startTintingIfEnabled()
-        // A negative still needs a real window to be meaningful, but it cannot be polled for —
-        // so give the scheduler a generous slice and then assert nothing happened.
         try await Task.sleep(for: .milliseconds(200))
         #expect(await fake.starts == 0, "tinting started without the user enabling it")
+        // NON-VACUOUS: prove the fake and the wiring are live in this same test, so the zero
+        // above means "did not start" rather than "nothing was ever connected".
+        vm.setTintingEnabled(true)
+        #expect(await Self.eventually { await fake.starts == 1 },
+                "the controller never started even when enabled — the zero above proved nothing")
     }
 
     @Test("enabling persists and starts the loop")
