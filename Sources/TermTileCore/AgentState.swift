@@ -148,3 +148,18 @@ public enum WorkingSignal {
         return interruptMarkers.contains(where: wider.contains)
     }
 }
+
+extension AgentState {
+    /// What the diagnostics row shows. Mirrors `ReorderStrategy.displayName`.
+    ///
+    /// `.unknown` reads "not yet" rather than "unknown": from the user's side it is a pending
+    /// answer, not a failure, and the row's reason line says which kind of pending it is.
+    public var displayName: String {
+        switch self {
+        case .ready: return "Idle"
+        case .working: return "Working"
+        case .blocked: return "Waiting on you"
+        case .unknown: return "Not yet"
+        }
+    }
+}

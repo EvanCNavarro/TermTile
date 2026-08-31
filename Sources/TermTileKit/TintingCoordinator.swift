@@ -10,14 +10,52 @@ public struct TintDecision: Equatable, Sendable {
     public let wrote: Bool
     /// Present only when the pane could not be joined to a session.
     public let ambiguity: AmbiguityReason?
+    /// Whether a previous character count existed for this session on this pass.
+    ///
+    /// Splits the two very different things `.unknown` means. Without it the diagnostics cannot
+    /// tell the user "seen for the first time, deciding on the next pass" apart from "running, but
+    /// its state is not recognised" — and those call for opposite reactions: wait, or report a
+    /// missing marker (EvanCNavarro/TermTile#6).
+    public let hadBaseline: Bool
 
     public init(cwd: String, tty: String?, state: AgentState, wrote: Bool,
-                ambiguity: AmbiguityReason? = nil) {
+                ambiguity: AmbiguityReason? = nil, hadBaseline: Bool = false) {
         self.cwd = cwd
         self.tty = tty
         self.state = state
         self.wrote = wrote
         self.ambiguity = ambiguity
+        self.hadBaseline = hadBaseline
+    }
+
+    /// Why this session was left untinted, in the user's terms — or `nil` if it was painted.
+    ///
+    /// Ordered by what actually stopped the paint. An unresolved JOIN outranks the state: the
+    /// state may well be knowable, but there was no window to put it on, and telling the user
+    /// about the state would point them at the wrong problem.
+    public var untintedReason: String? {
+        guard !wrote else { return nil }
+
+        if let ambiguity {
+            switch ambiguity {
+            case .cwdNotUnique:
+                return "Several terminals share this folder, so TermTile can't tell which window this is."
+            case .noCandidate:
+                return "No matching terminal session — the window may have just closed."
+            case .multipleCandidates:
+                return "This window holds several sessions in the same folder, which can't be told apart."
+            }
+        }
+
+        if state == .unknown {
+            // The two meanings of `.unknown`, which call for opposite reactions.
+            return hadBaseline
+                ? "Running, but TermTile doesn't recognise what it's doing."
+                : "Just noticed — TermTile decides on the next check."
+        }
+
+        // A known state, a resolved window, and still no paint: the write itself failed.
+        return "Couldn't write to this terminal."
     }
 }
 
@@ -94,7 +132,8 @@ public actor TintingCoordinator {
                     wrote = await writer.setBackground(colour, onTTY: tty)
                 }
                 decisions.append(TintDecision(cwd: pane.snapshot.cwd, tty: tty,
-                                              state: state, wrote: wrote))
+                                              state: state, wrote: wrote,
+                                              hadBaseline: delta != nil))
             }
         }
 

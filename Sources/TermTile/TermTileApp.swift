@@ -49,6 +49,7 @@ struct TermTileApp: App {
             launch: LaunchEnvironment(isSelftest: isSelftest, isGallery: isGallery,
                                       visibleFrame: visibleFrame, epsilon: eps))
         Self.applyLaunchPolicy(viewModel: viewModel)
+        Self.armGalleryTintDiagnosticsIfRequested(vm: viewModel, isGallery: isGallery)
 
         // Global hotkey → the same rearrangeNow() the menu button invokes (#25). Active on the normal
         // path only (not selftest/gallery, where a global hotkey would interfere).
@@ -117,6 +118,31 @@ struct TermTileApp: App {
     private func armGalleryUpdateAttentionIfRequested(isGallery: Bool) {
         guard isGallery, ProcessInfo.processInfo.environment["TERMTILE_GALLERY_UPDATE_AVAILABLE"] != nil else { return }
         updater.recordAvailableUpdate(version: "Gallery")
+    }
+
+    /// Seed representative tint diagnostics so the #37f panel can be render-verified (FL-9).
+    ///
+    /// The gallery injects no tinting controller — it has no business writing escape sequences
+    /// into someone's live terminals — so `refreshTintDiagnostics()` finds nothing and the panel
+    /// stays empty. This seeds one row of each shape the user can actually meet: painted, waiting
+    /// on a first look, running-but-unrecognised, and unjoinable.
+    @MainActor
+    private static func armGalleryTintDiagnosticsIfRequested(vm: MenuBarViewModel, isGallery: Bool) {
+        guard isGallery,
+              ProcessInfo.processInfo.environment["TERMTILE_GALLERY_TINT_DIAGNOSTICS"] != nil
+        else { return }
+        vm.seedTintDiagnosticsForGallery([
+            TintDecision(cwd: "termtile", tty: "/dev/ttys005", state: .ready, wrote: true,
+                         hadBaseline: true),
+            TintDecision(cwd: "invela-marketing-suite", tty: "/dev/ttys003", state: .blocked,
+                         wrote: true, hadBaseline: true),
+            TintDecision(cwd: "portfolio", tty: "/dev/ttys004", state: .unknown, wrote: false,
+                         hadBaseline: false),
+            TintDecision(cwd: "pushtext", tty: "/dev/ttys002", state: .unknown, wrote: false,
+                         hadBaseline: true),
+            TintDecision(cwd: "shared-folder", tty: nil, state: .unknown, wrote: false,
+                         ambiguity: .cwdNotUnique)
+        ])
     }
 
     /// Build the global-hotkey monitor from the VM's persisted combo, wire it to rearrangeNow, and

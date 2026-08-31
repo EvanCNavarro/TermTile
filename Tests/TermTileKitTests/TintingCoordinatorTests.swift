@@ -142,3 +142,36 @@ struct TintingCoordinatorTests {
         #expect(await tinter.writtenHexes == [TintPalette.readyLoudest.hex])
     }
 }
+
+@Suite("Tinting coordinator — diagnostics fields")
+struct TintingCoordinatorDiagnosticsTests {
+    /// The first pass has no previous count; the second does. If `hadBaseline` did not track that,
+    /// the diagnostics could not separate "just noticed" from "state not recognised".
+    @Test("hadBaseline is false on first sighting and true once a baseline exists")
+    func baselineTracksAcrossPasses() async {
+        let (coord, reader, _, _) = TintingCoordinatorTests.rig(
+            panes: [TintingCoordinatorTests.pane(count: 1000)])
+        let first = await coord.pass()
+        #expect(first.count == 1)
+        #expect(first.first?.hadBaseline == false, "a first sighting claimed a baseline")
+
+        await reader.reseed([TintingCoordinatorTests.pane(count: 1000)])
+        let second = await coord.pass()
+        #expect(second.first?.hadBaseline == true, "a second pass reported no baseline")
+    }
+
+    /// An unresolved pane never had a baseline looked up, and must not claim one.
+    @Test("an ambiguous pane does not claim a baseline")
+    func ambiguousHasNoBaseline() async {
+        let shared = [
+            TTYSessionSnapshot(tty: "/dev/ttys010", windowIndex: 9, tabIndex: 0, paneIndex: 0, cwd: "same"),
+            TTYSessionSnapshot(tty: "/dev/ttys011", windowIndex: 10, tabIndex: 0, paneIndex: 0, cwd: "same")
+        ]
+        let (coord, _, _, _) = TintingCoordinatorTests.rig(
+            panes: [TintingCoordinatorTests.pane(cwd: "same", badge: nil, count: 500)],
+            sessions: shared)
+        let out = await coord.pass()
+        #expect(out.first?.hadBaseline == false)
+        #expect(out.first?.untintedReason != nil, "an unpainted pane gave no reason")
+    }
+}

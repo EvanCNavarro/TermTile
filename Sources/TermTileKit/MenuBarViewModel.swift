@@ -39,6 +39,8 @@ public final class MenuBarViewModel {
     public internal(set) var tintingEnabled: Bool
     /// How loud the READY tint is.
     public internal(set) var readyIntensity: ReadyIntensity
+    /// What the last tinting pass decided, refreshed when the menu opens (#37f).
+    public internal(set) var tintDiagnostics: [TintDecision] = []
     /// Which reorder strategy a drag uses (#27) — loaded from settings, tracked so the Picker updates.
     public private(set) var reorderStrategy: ReorderStrategy
     /// Whether Rearrange should also ask macOS to bring the selected target app forward (#36).

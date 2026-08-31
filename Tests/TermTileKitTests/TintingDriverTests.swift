@@ -169,3 +169,40 @@ struct TintingDriverTests {
                 "stop() did not reset the session to normal")
     }
 }
+
+@Suite("Tinting driver — diagnostics retention")
+struct TintingDriverDiagnosticsTests {
+    static func rig() -> (TintingDriver, RecordingTinter) {
+        let pane = ObservedPane(snapshot: AXPaneSnapshot(windowBadge: 6, cwd: "termtile"),
+                                scrollbackTail: "⧉  waiting-on-a-person", characterCount: 100)
+        let session = TTYSessionSnapshot(tty: "/dev/ttys005", windowIndex: 5, tabIndex: 0,
+                                         paneIndex: 0, cwd: "termtile")
+        let tinter = RecordingTinter()
+        return (TintingDriver(coordinator: TintingCoordinator(
+            reader: InMemorySessionReader(panes: [pane]),
+            probe: InMemoryTTYProbe(sessions: [session]),
+            writer: tinter), interval: .milliseconds(20)), tinter)
+    }
+
+    @Test("a pass records its decisions")
+    func passRecords() async {
+        let (driver, _) = Self.rig()
+        #expect(await driver.lastDecisions().isEmpty, "decisions existed before any pass")
+        await driver.start()
+        #expect(await TintingDriverTests.eventually { await !driver.lastDecisions().isEmpty })
+        let decisions = await driver.lastDecisions()
+        #expect(decisions.count == 1)
+        #expect(decisions.first?.state == .blocked)
+        await driver.stop()
+    }
+
+    /// Stale diagnostics after a disable would describe a world the feature is no longer watching.
+    @Test("stopping clears the decisions")
+    func stopClears() async {
+        let (driver, _) = Self.rig()
+        await driver.start()
+        #expect(await TintingDriverTests.eventually { await !driver.lastDecisions().isEmpty })
+        await driver.stop()
+        #expect(await driver.lastDecisions().isEmpty, "diagnostics survived a stop")
+    }
+}

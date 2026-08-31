@@ -670,7 +670,18 @@ only — Apple Events is backlog `#38` / EvanCNavarro/TermTile#12, and is NOT in
   and on app quit — a tinted window outliving the feature is orphaned state.
   SHIPS WITH the README privacy rewrite (ADR 0006): the current "never reads window contents"
   promise becomes false the moment this lands and must be corrected in the SAME change.
-#37f · Degradation diagnostics: show what joined and what did not · S0
+#37f · Degradation diagnostics: show what joined and what did not · DONE
+  (2026-08-31: TintDecision.untintedReason + hadBaseline; TintingControlling.lastDecisions() PULLED
+  when the menu opens rather than pushed; driver retains the last pass and CLEARS on stop; VM
+  refreshTintDiagnostics; menu rows under the Session tint card.
+  hadBaseline exists because `.unknown` meant two things a user reacts to differently -- "just
+  noticed, deciding next check" vs "running, state not recognised". Without it the panel would be
+  decoration. BATTLE-TESTED: always-claim-a-baseline -> caught; collapsing the two .unknown messages
+  into one -> caught by the distinctness test.
+  RENDERED (FL-9): docs/verification/screenshots/session-tint-diagnostics-2026-08-31.png via
+  TERMTILE_GALLERY_TINT_DIAGNOSTICS=1 -- all five row shapes, painted rows carry no reason line,
+  captions wrap without overflow.
+  Gate: core-purity PASS, 397 tests / 63 suites, swiftlint 0 violations in 56 files.)
   blocked-by #37e. A menu surface listing each session's join outcome and confidence, so an
   ambiguous/failed join is visible rather than mysterious. Closes the failure mode where a
   window silently stays normal and the user cannot tell whether that is the state or a bug.

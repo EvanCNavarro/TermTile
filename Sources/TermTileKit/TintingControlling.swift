@@ -9,6 +9,12 @@ public protocol TintingControlling: Sendable {
     func stop() async
     /// Applied on the next pass; the driver holds no colour of its own.
     func setReadyIntensity(_ intensity: ReadyIntensity) async
+    /// What the most recent pass decided, for the diagnostics surface (#37f).
+    ///
+    /// PULLED, not pushed. The menu is built when it opens, so it can ask then; a push would mean
+    /// the driver holding a reference to the view model and waking it every few seconds to update
+    /// a panel nobody has open.
+    func lastDecisions() async -> [TintDecision]
 }
 
 extension TintingDriver: TintingControlling {}

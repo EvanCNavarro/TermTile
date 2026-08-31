@@ -16,6 +16,8 @@ public actor TintingDriver {
     /// deterministically: counting passes over a wall-clock window measures machine speed as much
     /// as it measures the guard, and a flaky gate is worse than none.
     private(set) public var loopsStarted = 0
+    /// The most recent pass's decisions, for the diagnostics surface.
+    private var recentDecisions: [TintDecision] = []
 
     public func setReadyIntensity(_ intensity: ReadyIntensity) async {
         await coordinator.setReadyIntensity(intensity)
@@ -35,14 +37,19 @@ public actor TintingDriver {
         loopsStarted += 1
         loop = Task { [coordinator, interval] in
             while !Task.isCancelled {
-                await coordinator.pass()
-                await self.countPass()
+                let decisions = await coordinator.pass()
+                await self.record(decisions)
                 do { try await Task.sleep(for: interval) } catch { return }
             }
         }
     }
 
-    private func countPass() { completedPasses += 1 }
+    private func record(_ decisions: [TintDecision]) {
+        completedPasses += 1
+        recentDecisions = decisions
+    }
+
+    public func lastDecisions() -> [TintDecision] { recentDecisions }
 
     /// Stop polling AND put every touched session back to normal.
     ///
@@ -66,5 +73,8 @@ public actor TintingDriver {
         // disable or quit feel slow.
         await finishing?.value
         await coordinator.resetAll()
+        // Nothing is being decided any more, so nothing should be reported. Stale diagnostics
+        // after a disable would describe a world the feature is no longer watching.
+        recentDecisions = []
     }
 }

@@ -89,3 +89,37 @@ struct MenuBarViewModelTintingTests {
         #expect(await Self.eventually { await fake.intensities == [.subtle] })
     }
 }
+
+@Suite("View model — tinting diagnostics")
+@MainActor
+struct MenuBarViewModelDiagnosticsTests {
+    @Test("refresh pulls the driver's last decisions")
+    func refreshPulls() async {
+        let (vm, _, fake) = MenuBarViewModelTintingTests.make(enabled: true)
+        await fake.seed([
+            TintDecision(cwd: "termtile", tty: "/dev/ttys005", state: .ready, wrote: true,
+                         hadBaseline: true),
+            TintDecision(cwd: "shared", tty: nil, state: .unknown, wrote: false,
+                         ambiguity: .cwdNotUnique)
+        ])
+        #expect(vm.tintDiagnostics.isEmpty, "diagnostics were populated before any refresh")
+        await vm.refreshTintDiagnostics()
+        #expect(vm.tintDiagnostics.count == 2)
+        #expect(vm.tintDiagnostics.first?.untintedReason == nil, "a painted session gave a reason")
+        #expect(vm.tintDiagnostics.last?.untintedReason != nil, "an unpainted session gave none")
+    }
+
+    /// With no controller injected there is nothing to ask, and the panel must stay empty rather
+    /// than showing whatever it held last.
+    @Test("refresh with no controller leaves diagnostics empty")
+    func refreshWithoutController() async {
+        let store = InMemorySettingsStore()
+        let vm = MenuBarViewModel(
+            settings: store, loginItem: InMemoryLoginItem(),
+            appsProvider: InMemoryTargetAppsProvider(seed: []), isTrustedProbe: { true },
+            visibleFrame: CGRect(x: 0, y: 0, width: 1000, height: 800), epsilon: 2,
+            makeActor: { _ in TilingActor(system: InMemoryWindowSystem()) })
+        await vm.refreshTintDiagnostics()
+        #expect(vm.tintDiagnostics.isEmpty)
+    }
+}

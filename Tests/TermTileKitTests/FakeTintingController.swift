@@ -10,4 +10,9 @@ actor FakeTintingController: TintingControlling {
     func start() { starts += 1 }
     func stop() { stops += 1 }
     func setReadyIntensity(_ intensity: ReadyIntensity) { intensities.append(intensity) }
+
+    /// Seedable so the view model's refresh can be asserted against a known set.
+    var decisions: [TintDecision] = []
+    func lastDecisions() -> [TintDecision] { decisions }
+    func seed(_ decisions: [TintDecision]) { self.decisions = decisions }
 }
