@@ -31,6 +31,14 @@ public final class MenuBarViewModel {
     /// Opt-in drag-reorder (#26) — loaded from settings, tracked so the toggle live-updates. OFF by
     /// default; the live watchers (#26 later steps) only run when this is true.
     public private(set) var reorderOnDrag: Bool
+    /// Opt-in session tinting (#37e2, ADR-0006). OFF by default — it reads window CONTENTS and
+    /// other processes' environment blocks, which nothing else in the app does.
+    /// Module-internal, not private: the tinting lifecycle lives in
+    /// `MenuBarViewModel+Tinting.swift` and a cross-file extension cannot see `private`.
+    let tinting: (any TintingControlling)?
+    public internal(set) var tintingEnabled: Bool
+    /// How loud the READY tint is.
+    public internal(set) var readyIntensity: ReadyIntensity
     /// Which reorder strategy a drag uses (#27) — loaded from settings, tracked so the Picker updates.
     public private(set) var reorderStrategy: ReorderStrategy
     /// Whether Rearrange should also ask macOS to bring the selected target app forward (#36).
@@ -105,10 +113,12 @@ public final class MenuBarViewModel {
         uninstaller: Uninstaller? = nil,
         foregrounder: (any TargetAppForegrounding)? = nil,
         dragReorder: (any DragReorderControlling)? = nil,
-        permissionRepairer: (any PermissionRepairing)? = nil
+        permissionRepairer: (any PermissionRepairing)? = nil,
+        tinting: (any TintingControlling)? = nil
     ) {
         let loaded = settings.load()
         self.settings = settings
+        self.tinting = tinting
         self.loginItem = loginItem
         self.isTrustedProbe = isTrustedProbe
         self.visibleFrame = visibleFrame
@@ -127,6 +137,8 @@ public final class MenuBarViewModel {
         self.gap = Self.clampedGap(CGFloat(loaded.gap))
         self.hotKey = loaded.hotKey           // #25b — user-state, loaded like targetBundleID
         self.reorderOnDrag = loaded.reorderOnDrag   // #26 — opt-in, off by default
+        self.tintingEnabled = loaded.tintingEnabled // #37e2 — opt-in, off by default
+        self.readyIntensity = loaded.readyIntensity
         self.reorderStrategy = loaded.reorderStrategy   // #27 — user-selectable reorder behavior
         self.bringToFrontOnRearrange = loaded.bringToFrontOnRearrange
         self.lastForegroundResult = nil
@@ -361,11 +373,13 @@ public final class MenuBarViewModel {
 
     /// One persist for ALL writes — carries the live `wasTrusted` so an unrelated save (e.g. a
     /// target-app change) never clobbers the latch back to false (#23 B1).
-    private func persist() {
+    func persist() {
         settings.save(AppSettings(targetBundleID: targetBundleID, wasTrusted: wasTrusted,
                                   gap: Double(gap), hotKey: hotKey, reorderOnDrag: reorderOnDrag,
                                   reorderStrategy: reorderStrategy,
-                                  bringToFrontOnRearrange: bringToFrontOnRearrange))
+                                  bringToFrontOnRearrange: bringToFrontOnRearrange,
+                                  tintingEnabled: tintingEnabled,
+                                  readyIntensity: readyIntensity))
     }
 
     /// The PRODUCTION Accessibility-trust probe for the composition root to inject. Defined in Kit

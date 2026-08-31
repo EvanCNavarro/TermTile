@@ -31,9 +31,17 @@ public struct AppSettings: Equatable, Sendable {
     /// Opt-in: after a manual Rearrange command, ask macOS to bring the selected target app to the
     /// front. OFF by default so upgrades preserve the current no-focus behavior. Absent → false.
     public var bringToFrontOnRearrange: Bool
+    /// Opt-in: tint each target session's background by what its agent is doing (ADR-0006).
+    /// OFF by default. It reads window CONTENTS and other processes' environment blocks, which
+    /// the rest of the app does not — so it is never on unless the user asks for it. Absent → false.
+    public var tintingEnabled: Bool
+    /// How loud the READY tint is (#37e2). Persisted as its rawValue; absent → .standard, the
+    /// shade the out-of-tree tool used, so an existing user's green does not change on adoption.
+    public var readyIntensity: ReadyIntensity
 
     public init(targetBundleID: String, wasTrusted: Bool, gap: Double, hotKey: HotKeyConfig,
-                reorderOnDrag: Bool, reorderStrategy: ReorderStrategy, bringToFrontOnRearrange: Bool) {
+                reorderOnDrag: Bool, reorderStrategy: ReorderStrategy, bringToFrontOnRearrange: Bool,
+                tintingEnabled: Bool, readyIntensity: ReadyIntensity) {
         self.targetBundleID = targetBundleID
         self.wasTrusted = wasTrusted
         self.gap = gap
@@ -41,6 +49,8 @@ public struct AppSettings: Equatable, Sendable {
         self.reorderOnDrag = reorderOnDrag
         self.reorderStrategy = reorderStrategy
         self.bringToFrontOnRearrange = bringToFrontOnRearrange
+        self.tintingEnabled = tintingEnabled
+        self.readyIntensity = readyIntensity
     }
 
     /// The launch defaults: target iTerm2 (spec-draft:18; bundle id verified `com.googlecode.iterm2`
@@ -48,5 +58,6 @@ public struct AppSettings: Equatable, Sendable {
     /// bring-to-front. `load()` falls back per-key.
     public static let defaults = AppSettings(
         targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8, hotKey: .rearrange,
-        reorderOnDrag: false, reorderStrategy: .adaptive, bringToFrontOnRearrange: false)
+        reorderOnDrag: false, reorderStrategy: .adaptive, bringToFrontOnRearrange: false,
+        tintingEnabled: false, readyIntensity: .standard)
 }

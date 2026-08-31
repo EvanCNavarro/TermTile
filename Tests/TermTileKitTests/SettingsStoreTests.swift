@@ -1,6 +1,7 @@
 import Carbon.HIToolbox
 import Foundation
 @testable import TermTileKit
+import TermTileCore
 import Testing
 
 /// #12a — the settings-persistence port. Two live-UserDefaults tests use DISTINCT suite names
@@ -21,7 +22,7 @@ struct SettingsStoreTests {
     @Test("in-memory fake round-trips a saved value")
     func fakeRoundTrip() {
         let store = InMemorySettingsStore()
-        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false)
+        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false, tintingEnabled: true, readyIntensity: .loudest)
         store.save(saved)
         #expect(store.load() == saved)
     }
@@ -32,7 +33,7 @@ struct SettingsStoreTests {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
 
-        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false)
+        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false, tintingEnabled: true, readyIntensity: .loudest)
         UserDefaultsSettingsStore(suiteName: suite).save(saved)
 
         let loaded = UserDefaultsSettingsStore(suiteName: suite).load()   // a NEW instance
@@ -58,7 +59,8 @@ struct SettingsStoreTests {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         let store = UserDefaultsSettingsStore(suiteName: suite)
-        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         #expect(store.load().targetBundleID == "com.example.other")
 
         store.purge()
@@ -70,7 +72,8 @@ struct SettingsStoreTests {
     @Test("in-memory fake purge resets to defaults")
     func inMemoryPurge() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         store.purge()
         #expect(store.load() == .defaults)
     }
@@ -88,7 +91,8 @@ struct SettingsStoreTests {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().wasTrusted == false)   // absent → false
-        UserDefaultsSettingsStore(suiteName: suite).save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+        UserDefaultsSettingsStore(suiteName: suite).save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().wasTrusted == true)     // new instance
     }
 
@@ -105,7 +109,8 @@ struct SettingsStoreTests {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().gap == 8)   // absent → 8
-        UserDefaultsSettingsStore(suiteName: suite).save(AppSettings(targetBundleID: "com.x", wasTrusted: false, gap: 16, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+        UserDefaultsSettingsStore(suiteName: suite).save(AppSettings(targetBundleID: "com.x", wasTrusted: false, gap: 16, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().gap == 16)  // new instance
     }
 
@@ -119,7 +124,8 @@ struct SettingsStoreTests {
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().reorderStrategy == .adaptive)   // absent
         UserDefaultsSettingsStore(suiteName: suite).save(AppSettings(
             targetBundleID: "com.x", wasTrusted: false, gap: 8, hotKey: .rearrange,
-            reorderOnDrag: false, reorderStrategy: .rowShift, bringToFrontOnRearrange: false))
+            reorderOnDrag: false, reorderStrategy: .rowShift, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().reorderStrategy == .rowShift)
     }
 
@@ -144,7 +150,8 @@ struct SettingsStoreTests {
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().reorderOnDrag == false)   // absent → false
         UserDefaultsSettingsStore(suiteName: suite).save(
-            AppSettings(targetBundleID: "com.x", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+            AppSettings(targetBundleID: "com.x", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().reorderOnDrag == true)     // new instance
     }
 
@@ -159,7 +166,8 @@ struct SettingsStoreTests {
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().bringToFrontOnRearrange == false)
         UserDefaultsSettingsStore(suiteName: suite).save(
             AppSettings(targetBundleID: "com.x", wasTrusted: false, gap: 8, hotKey: .rearrange,
-                        reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: true))
+                        reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         #expect(UserDefaultsSettingsStore(suiteName: suite).load().bringToFrontOnRearrange == true)
     }
 
@@ -173,9 +181,57 @@ struct SettingsStoreTests {
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         #expect(store().load().hotKey == .rearrange)                                    // absent → ⌘⌥T
         let custom = HotKeyConfig(keyCode: 15, modifiers: UInt32(controlKey | optionKey))
-        store().save(AppSettings(targetBundleID: "com.x", wasTrusted: false, gap: 8, hotKey: custom, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+        store().save(AppSettings(targetBundleID: "com.x", wasTrusted: false, gap: 8, hotKey: custom, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         #expect(store().load().hotKey == custom)                                        // round-trip
         UserDefaults(suiteName: suite)?.set(-1, forKey: "hotKeyCode")                    // tamper
         #expect(store().load().hotKey.keyCode == HotKeyConfig.rearrange.keyCode)         // safe fallback
+    }
+}
+
+@Suite("Tinting settings — persistence and defaults")
+struct TintingSettingsPersistenceTests {
+    /// Tinting reads window CONTENTS and other processes' environments. It must be OFF unless the
+    /// user asked, so a first run — and any user upgrading into this version — starts untinted.
+    @Test("tinting is off by default and ready intensity is standard")
+    func offByDefault() {
+        #expect(AppSettings.defaults.tintingEnabled == false)
+        #expect(AppSettings.defaults.readyIntensity == .standard)
+    }
+
+    /// An ABSENT key must fall back per-key, not drag the whole record to defaults.
+    @Test("absent tinting keys fall back without clobbering neighbours")
+    func absentKeysFallBackPerKey() {
+        let suite = "dev.ecn.apps.termtile.tests.tintfallback"
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+
+        // Write a NEIGHBOUR key only, leaving the tinting keys absent.
+        UserDefaults(suiteName: suite)?.set("com.mitchellh.ghostty", forKey: "targetBundleID")
+        let loaded = UserDefaultsSettingsStore(suiteName: suite).load()
+        #expect(loaded.targetBundleID == "com.mitchellh.ghostty", "the written key was lost")
+        #expect(loaded.tintingEnabled == false)
+        #expect(loaded.readyIntensity == .standard)
+    }
+
+    /// A rawValue that no longer maps to a case must not crash or silently become something odd.
+    @Test("an unrecognised stored intensity falls back to standard")
+    func unknownIntensityFallsBack() {
+        let suite = "dev.ecn.apps.termtile.tests.tintbadenum"
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+
+        UserDefaults(suiteName: suite)?.set("neon", forKey: "readyIntensity")
+        #expect(UserDefaultsSettingsStore(suiteName: suite).load().readyIntensity == .standard)
+    }
+
+    @Test("every intensity round-trips through its rawValue")
+    func everyIntensityRoundTrips() {
+        for intensity in ReadyIntensity.allCases {
+            #expect(ReadyIntensity(rawValue: intensity.rawValue) == intensity)
+        }
+        #expect(ReadyIntensity.allCases.count == 4)
+        // Each maps to a DISTINCT colour — two steps that paint the same shade is a broken picker.
+        #expect(Set(ReadyIntensity.allCases.map(\.color.hex)).count == 4)
     }
 }

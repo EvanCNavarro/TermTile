@@ -68,6 +68,31 @@ struct MenuBarContent: View {
                 }
             }
 
+            SectionCard("Session tint") {
+                Toggle("Tint sessions by agent state", isOn: Binding(
+                    get: { viewModel.tintingEnabled },
+                    set: { viewModel.setTintingEnabled($0) }))
+                // Only offer the shade once tinting is on — an intensity picker above a disabled
+                // feature invites the user to tune something that is not running.
+                if viewModel.tintingEnabled {
+                    LabeledContent("Ready shade") {
+                        Picker("", selection: Binding(
+                            get: { viewModel.readyIntensity },
+                            set: { viewModel.setReadyIntensity($0) })) {
+                            ForEach(ReadyIntensity.allCases, id: \.self) { intensity in
+                                Text(intensity.title).tag(intensity)
+                            }
+                        }
+                        .labelsHidden()
+                    }
+                    Text("Reads each session's visible text and its process environment to tell "
+                         + "idle from working. Nothing leaves your Mac.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             SectionCard("Drag") {
                 Toggle("Reorder windows on drag", isOn: Binding(
                     get: { viewModel.reorderOnDrag },

@@ -60,7 +60,10 @@ public struct UserDefaultsSettingsStore: SettingsStore {
             reorderStrategy: (d.string(forKey: Key.reorderStrategy)).flatMap(ReorderStrategy.init(rawValue:))
                 ?? dflt.reorderStrategy,
             bringToFrontOnRearrange: d.object(forKey: Key.bringToFrontOnRearrange) as? Bool
-                ?? dflt.bringToFrontOnRearrange)
+                ?? dflt.bringToFrontOnRearrange,
+            tintingEnabled: d.object(forKey: Key.tintingEnabled) as? Bool ?? dflt.tintingEnabled,
+            readyIntensity: d.string(forKey: Key.readyIntensity)
+                .flatMap(ReadyIntensity.init(rawValue:)) ?? dflt.readyIntensity)
     }
 
     public func save(_ settings: AppSettings) {
@@ -71,6 +74,8 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         d.set(Int(settings.hotKey.keyCode), forKey: Key.hotKeyCode)
         d.set(Int(settings.hotKey.modifiers), forKey: Key.hotKeyModifiers)
         d.set(settings.reorderOnDrag, forKey: Key.reorderOnDrag)
+        d.set(settings.tintingEnabled, forKey: Key.tintingEnabled)
+        d.set(settings.readyIntensity.rawValue, forKey: Key.readyIntensity)
         d.set(settings.reorderStrategy.rawValue, forKey: Key.reorderStrategy)
         d.set(settings.bringToFrontOnRearrange, forKey: Key.bringToFrontOnRearrange)
     }
@@ -90,6 +95,8 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         static let hotKeyCode = "hotKeyCode"
         static let hotKeyModifiers = "hotKeyModifiers"
         static let reorderOnDrag = "reorderOnDrag"
+        static let tintingEnabled = "tintingEnabled"
+        static let readyIntensity = "readyIntensity"
         static let reorderStrategy = "reorderStrategy"
         static let bringToFrontOnRearrange = "bringToFrontOnRearrange"
     }

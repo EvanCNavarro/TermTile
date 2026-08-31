@@ -70,3 +70,33 @@ public enum OSCSequence {
         return suffix.allSatisfy { $0.isASCII && $0.isNumber }
     }
 }
+
+/// User-selectable intensity for the READY tint, persisted by `rawValue`.
+///
+/// The four steps are the presets the out-of-tree tool shipped, kept identical so a user who
+/// already picked one does not have to re-find it here.
+public enum ReadyIntensity: String, Equatable, Sendable, CaseIterable {
+    case subtle
+    case standard
+    case louder
+    case loudest
+
+    public var color: TintColor {
+        switch self {
+        case .subtle: return TintPalette.readySubtle
+        case .standard: return TintPalette.ready
+        case .louder: return TintPalette.readyLouder
+        case .loudest: return TintPalette.readyLoudest
+        }
+    }
+
+    /// What the menu shows.
+    public var title: String {
+        switch self {
+        case .subtle: return "Subtle"
+        case .standard: return "Standard"
+        case .louder: return "Louder"
+        case .loudest: return "Loudest"
+        }
+    }
+}

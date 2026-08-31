@@ -18,6 +18,9 @@ nothing until you ask it to.
   default, which you can re-record in the menu). Your windows are yours the rest of the time.
 - **Optional focus** — when enabled, Rearrange asks macOS to bring the selected target app forward.
 - **Adjustable gap** — set the spacing between tiled windows from the menu.
+- **Session tint (optional, off by default)** — colours each terminal session by what its agent is
+  doing: green when idle, amber when it is blocked waiting on you, normal while it works. Needs no
+  extra permission, but it does read on-screen text — see **Privacy & permissions**.
 - **Auto-updates** — a passive update availability check can mark the menu-bar indicator and ellipsis
   when an update is available; **Check for Updates…** opens the signed Sparkle update flow.
 - **Clean uninstall** — an **About** panel with a one-click uninstall that removes the app, its data,
@@ -47,10 +50,22 @@ Requires **macOS 14 (Sonoma) or later**, on **Apple Silicon**.
 
 TermTile is local and quiet:
 
-- **It only moves windows.** It reads the target app's window list and frames through the
-  Accessibility API and writes new positions back. It never reads window *contents*, your keystrokes,
-  or anything you type.
-- **No telemetry.** No analytics, no tracking.
+- **By default, it only moves windows.** It reads the target app's window list and frames through
+  the Accessibility API and writes new positions back. With **Session tint** off — which is how it
+  ships — it never reads window *contents*, your keystrokes, or anything you type.
+- **Session tint reads more, and only when you turn it on.** This optional feature colours each
+  terminal session by what its agent is doing: green when idle, amber when it is waiting on you,
+  normal while it works. To tell those apart it reads two things nothing else in TermTile touches:
+  - **The visible text of each session** — the last ~2,000 characters, through the Accessibility
+    API. Not your whole scrollback, not your keystrokes; the tail of what is already on screen.
+  - **One environment variable of the terminal's own processes** (`ITERM_SESSION_ID`), to work out
+    which on-screen pane belongs to which session. TermTile extracts that variable and discards the
+    rest of the environment without reading it — the code that does this can only return three
+    numbers, so it is structurally incapable of carrying anything else.
+
+  None of it is stored, written to disk, or sent anywhere. Turn the feature off and TermTile stops
+  reading both, and repaints every session it touched back to normal.
+- **No telemetry.** No analytics, no tracking. This is true whether or not Session tint is on.
 - **The only network request** is the update check: on launch, TermTile runs a passive update
   availability check against the signed appcast from this repository's GitHub releases so the
   menu-bar indicator can show when a newer version exists. **Check for Updates…** uses the same signed
@@ -58,6 +73,8 @@ TermTile is local and quiet:
 
 **Permissions it asks for:** Accessibility to move and resize windows. If you enable
 **Reorder windows on drag**, TermTile also asks for Input Monitoring so it can detect the drag gesture.
+**Session tint needs no additional permission** — it works through the Accessibility grant tiling
+already uses, which is why it exists in this form rather than as an Apple Events integration.
 
 ## Verify this download
 
