@@ -78,6 +78,20 @@ public enum AgentStateClassifier {
         return out
     }
 
+    /// Full classification from one poll's evidence. Precedence is blocked > working > ready.
+    ///
+    /// READY IS RETURNED ONLY ON POSITIVE EVIDENCE OF STILLNESS — a delta that was actually
+    /// measured. With no previous sample the result is `.unknown`, because "we have not looked
+    /// twice yet" and "this session is idle" are different claims and only one of them is safe
+    /// to paint green (ADR-0006 finding 8).
+    public static func classify(_ evidence: StateEvidence) -> AgentState {
+        let tail = normalize(String(evidence.tail.suffix(tailWindow)))
+        if blockedMarkers.contains(where: tail.contains) { return .blocked }
+        if WorkingSignal.isWorking(evidence) { return .working }
+        guard evidence.charCountDelta != nil else { return .unknown }
+        return .ready
+    }
+
     /// - Parameter scrollback: the session's full visible text, oldest first.
     public static func classify(scrollback: String) -> AgentState {
         let tail = normalize(String(scrollback.suffix(tailWindow)))
@@ -85,5 +99,52 @@ public enum AgentStateClassifier {
         if workingMarkers.contains(where: tail.contains) { return .working }
         if readyMarkers.contains(where: tail.contains) { return .ready }
         return .unknown
+    }
+}
+
+/// Everything one poll knows about a pane's state.
+///
+/// `charCountDelta` is `nil` on the FIRST poll of a session, when there is no previous sample to
+/// compare against. That case classifies `.unknown` rather than `.ready`: with no delta the
+/// evidence cannot separate idle from working, and guessing idle would paint a freshly-seen
+/// working window green (ADR-0006 finding 8).
+public struct StateEvidence: Equatable, Sendable {
+    /// The short tail the markers are matched against.
+    public let tail: String
+    /// A wider window (~2000 chars) that reaches above the input box to the interrupt affordance.
+    public let widerTail: String
+    /// Change in the pane's character count since the previous poll; `nil` if there wasn't one.
+    public let charCountDelta: Int?
+
+    public init(tail: String, widerTail: String, charCountDelta: Int?) {
+        self.tail = tail
+        self.widerTail = widerTail
+        self.charCountDelta = charCountDelta
+    }
+}
+
+/// Decides whether a pane is actively working.
+///
+/// MEASURED 2026-08-31, 4 samples across 6 live sessions (24 observations), against ground truth
+/// from the session-name glyph the out-of-tree poller uses (`✳` idle, spinner working):
+///
+///   signal                      working sessions caught   idle sessions misfired
+///   character count moved       2 of 4 samples            0 of 16
+///   wider tail has interrupt    7 of 8 samples            0 of 16
+///   EITHER (this implementation) 8 of 8 samples           0 of 16
+///
+/// Neither alone suffices — a Claude session redrawing in place can hold its character count
+/// steady while a Codex session's interrupt affordance sits outside the short tail. Together they
+/// caught every working session and misfired on none.
+public enum WorkingSignal {
+    /// The affordance a terminal agent shows only while it is interruptible, i.e. while running.
+    static let interruptMarkers = ["esc to interrupt"]
+
+    public static func isWorking(_ evidence: StateEvidence) -> Bool {
+        // ABSOLUTE value: the count DROPS when scrollback re-renders — an observed sample moved
+        // -18. A `> 0` test would have scored that session idle and painted it green mid-run.
+        if let delta = evidence.charCountDelta, delta != 0 { return true }
+        let wider = AgentStateClassifier.normalize(evidence.widerTail)
+        return interruptMarkers.contains(where: wider.contains)
     }
 }

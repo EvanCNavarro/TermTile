@@ -128,6 +128,38 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
    AX-readable as `AXTitle`, but is suppressed on windows with a manual title override, which is
    most of the real ones. Tracked as EvanCNavarro/TermTile#6.
 
+9. **Ready detection, solved by MEASUREMENT rather than a marker.** Finding 8 removed the false
+   green and left no ready signal. Three candidates were then measured against ground truth from
+   the session-name glyph (`✳` idle, spinner working) — 4 samples across 6 live sessions,
+   24 observations:
+
+   | candidate | caught working | misfired on idle |
+   |---|---|---|
+   | `AXTitle` glyph | 1 of 6 windows only | — |
+   | character-count moved | 2 of 8 | 0 of 16 |
+   | wider (~2k) tail has interrupt affordance | 7 of 8 | 0 of 16 |
+   | **EITHER of the last two** | **8 of 8** | **0 of 16** |
+
+   The `AXTitle` glyph is out: it carries the state only on windows WITHOUT a manual title
+   override, and 5 of the 6 real windows have one. That is worth stating plainly — the signal the
+   old poller relies on is present in the session NAME, and only Apple Events reads that when the
+   window title is overridden. It is the strongest argument yet for Tier 2 (#38).
+
+   The two surviving signals are complementary, not redundant: a Claude session redrawing in place
+   holds its character count steady while a Codex session's interrupt affordance sits outside the
+   short tail. Each alone missed a different working session; together they missed none.
+
+   **The count delta can be NEGATIVE** (an observed sample moved -18 as scrollback re-rendered), so
+   the test is `!= 0`. A `> 0` test scores that session idle and paints a working window green.
+
+   **READY requires a MEASURED delta.** On the first poll of a session there is no previous sample,
+   so stillness has not been observed, only assumed — that classifies `.unknown`. "We have not
+   looked twice yet" and "this session is idle" are different claims and only one is safe to paint.
+
+   **Consequence:** the reader becomes STATEFUL. The coordinator (#37e) must hold the previous
+   character count per session between polls. That is the one architectural requirement this
+   finding adds.
+
 ## Decision
 
 ### Tier 1 — the default, and the only tier built here
