@@ -194,6 +194,35 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
    The ordering guard in `TintingDriverTests` is weakened by the same retraction and is named for
    what it now proves; restoring it depends on that marker too.
 
+11. **A real blocked marker, produced deliberately: `Esc to cancel`.**
+   Finding 10 left blocked-detection absent. Rather than wait to stumble on a blocked session, one
+   was CREATED: a scratch Claude session driven into an `AskUserQuestion`, which blocks on a human
+   regardless of permission mode. Its tail was read through the same ranged AX read the production
+   adapter uses — not a separate dump, since tails move between reads.
+
+   A/B at the window the blocked matcher actually uses (400 chars), 1 blocked vs 6 non-blocked:
+
+   | session | `Esc to cancel` |
+   |---|---|
+   | the blocked scratch session | **YES** |
+   | the other six | no, all six |
+
+   Measured at 2000 chars, one non-blocked session DID match — because the probe's own output was
+   sitting in its scrollback. The 400-char window scopes the match to the live UI footer and
+   excluded it. **That is mitigation, not immunity**: a session DISPLAYING the string still matches,
+   which is inherent to text markers and is recorded in the code.
+
+   `Esc to cancel` was chosen over `Enter to select` as the footer's common half. The
+   trust-this-folder prompt renders `Enter to confirm · Esc to cancel` — READ from a screenshot,
+   NOT captured live, so that second shape is expected-not-verified.
+
+   **The earned version of a claim finding 10 retracted.** Live, the blocked session's
+   session-name glyph reads `✳` — IDLE — while it is definitively waiting on a human. TermTile
+   reads it as blocked and is right, verifiably, because the block was created on purpose. Full
+   pass, 7 of 7 correct against ground truth. That IS the `✳` ambiguity the out-of-tree hook exists
+   to resolve, and reading the screen now resolves it — which the earlier false positive only
+   appeared to do.
+
 ## Decision
 
 ### Tier 1 — the default, and the only tier built here

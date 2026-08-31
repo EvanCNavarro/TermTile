@@ -25,24 +25,30 @@ public enum AgentState: String, Equatable, Sendable {
 public enum AgentStateClassifier {
     /// Blocked beats everything: "finished" and "waiting on you" are otherwise indistinguishable,
     /// which is the exact ambiguity the out-of-tree hook existed to work around (ADR-0006 Context).
-    /// EMPTY since 2026-08-31, and the reason is a defect that shipped.
+    /// CAPTURED, not guessed — and the history is worth carrying.
     ///
-    /// `waiting-on-a-person` was the sole blocked marker, taken from a live session's tail on
-    /// 2026-08-28. It is not a state — it is the text of Claude Code's per-session TASK LABEL,
-    /// rendered in a `⧉ <text>` slot. Measured across five live sessions: three carried that slot
-    /// with three DIFFERENT values (`waiting-on-a-person`, `icon-marks`, `portfolio-roster`), all
-    /// three were IDLE by the session-name glyph, and two sessions had no slot at all. If the
-    /// first meant "blocked on a human", the other two would mean the same thing in other words.
+    /// This was `waiting-on-a-person` until 2026-08-31, taken from a live tail and shipped. That
+    /// string is Claude Code's per-session TASK LABEL, rendered in a `⧉ <text>` slot: three live
+    /// sessions carried three different values there, all IDLE, and two had no slot at all. It
+    /// reported one session blocked for HOURS while it sat idle. A false amber is worse than a
+    /// missing one — it calls the user to a window where nothing is wrong.
     ///
-    /// The marker reported one session as blocked in every pass for hours while it sat idle. A
-    /// false AMBER is worse than a missing one: it calls the user over to a window where nothing
-    /// is wrong, and a signal that cries wolf stops being read.
+    /// The replacement was produced deliberately rather than found: a scratch Claude session was
+    /// driven into an AskUserQuestion — which blocks on a human regardless of permission mode —
+    /// and its tail read through the same ranged AX read the production adapter uses.
     ///
-    /// No replacement is guessed at. Blocked-detection is therefore ABSENT — those sessions
-    /// classify `.unknown` and stay untinted. Finding a real marker needs a captured sample of a
-    /// genuinely blocked session (a permission prompt, an AskUserQuestion), which is rare under
-    /// `--dangerously-skip-permissions`. Tracked as EvanCNavarro/TermTile#6.
-    static let blockedMarkers: [String] = []
+    /// A/B at the window this matcher actually uses (400 chars), 1 blocked vs 6 non-blocked:
+    /// present on the blocked session, ABSENT on all six others.
+    ///
+    /// `Esc to cancel` rather than `Enter to select`, because it is the footer's common half.
+    /// The trust-this-folder prompt renders `Enter to confirm · Esc to cancel` — READ from a
+    /// screenshot, NOT captured live, so treat that second shape as expected-not-verified.
+    ///
+    /// KNOWN LIMIT, inherent to text markers: a session that DISPLAYS this string — reading this
+    /// file, grepping for it — matches. The 400-char window keeps it scoped to the live UI footer,
+    /// which is why a session whose scrollback held the string further back did NOT match during
+    /// the A/B. That is mitigation, not immunity.
+    static let blockedMarkers = ["Esc to cancel"]
     static let workingMarkers = ["esc to interrupt"]
     /// EMPTY, DELIBERATELY — see ADR-0006 finding 8. `shift+tab to cycle` was used here until
     /// 2026-08-31, when it was measured on a window that was ACTIVELY RUNNING a command and found
