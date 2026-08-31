@@ -16,14 +16,31 @@ struct TintingDriverTests {
         return (TintingDriver(coordinator: coordinator, interval: .milliseconds(20)), tinter)
     }
 
+
+    /// Waits for a condition rather than assuming a fixed delay is enough.
+    ///
+    /// A fixed sleep encodes a guess about machine speed. That guess FAILED on CI: `starting
+    /// drives passes` slept 120ms and asserted >= 2 passes, and the runner managed 1
+    /// (EvanCNavarro/TermTile#18). Polling encodes the condition instead, and still fails rather
+    /// than hangs if it never holds.
+    static func eventually(_ condition: @Sendable () async -> Bool,
+                           within: Duration = .seconds(3)) async -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: within)
+        while ContinuousClock.now < deadline {
+            if await condition() { return true }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        return await condition()
+    }
+
     @Test("starting drives passes")
-    func startsPassing() async throws {
+    func startsPassing() async {
         let (driver, tinter) = Self.rig()
         await driver.start()
         #expect(await driver.isRunning)
-        try await Task.sleep(for: .milliseconds(120))
-        let passes = await driver.completedPasses
-        #expect(passes >= 2, "the loop ran \(passes) times")
+        let reachedTwo = await Self.eventually { await driver.completedPasses >= 2 }
+        let observed = await driver.completedPasses
+        #expect(reachedTwo, "the loop completed \(observed) passes")
         #expect(!(await tinter.writes.isEmpty))
         await driver.stop()
     }
@@ -54,25 +71,30 @@ struct TintingDriverTests {
         await driver.stop()
     }
 
+    /// A NEGATIVE cannot be polled for, so it is made non-vacuous instead: the loop is first
+    /// PROVEN to be running, so "the count stopped moving" cannot be confused with "nothing ever
+    /// started". `isRunning` is asserted too, because that half is deterministic.
     @Test("stopping halts the loop")
     func stopHalts() async throws {
         let (driver, _) = Self.rig()
         await driver.start()
-        try await Task.sleep(for: .milliseconds(60))
+        #expect(await Self.eventually { await driver.completedPasses >= 1 },
+                "the loop never ran, so halting it proves nothing")
         await driver.stop()
         #expect(!(await driver.isRunning))
         let after = await driver.completedPasses
-        try await Task.sleep(for: .milliseconds(80))
+        // Several intervals' worth at the rig's 20ms tick.
+        try await Task.sleep(for: .milliseconds(150))
         #expect(await driver.completedPasses == after, "the loop kept running after stop()")
     }
 
     /// THE ORPHAN GUARD. Disabling the feature must leave no window wearing a colour TermTile is
     /// no longer maintaining.
     @Test("stopping repaints touched sessions back to normal")
-    func stopResets() async throws {
+    func stopResets() async {
         let (driver, tinter) = Self.rig()
         await driver.start()
-        try await Task.sleep(for: .milliseconds(60))
+        #expect(await Self.eventually { await driver.completedPasses >= 1 })
         await tinter.clear()
         await driver.stop()
         #expect(await tinter.writtenHexes == [TintPalette.normal.hex],
