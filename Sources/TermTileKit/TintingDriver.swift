@@ -50,7 +50,21 @@ public actor TintingDriver {
     /// the user cannot explain the colour and TermTile is no longer maintaining it.
     public func stop() async {
         loop?.cancel()
+        let finishing = loop
         loop = nil
+        // AWAIT THE LOOP, do not merely cancel it (EvanCNavarro/TermTile#20). Cancellation does not
+        // interrupt an in-flight `pass()`: that pass runs to completion and then `countPass()`
+        // queues on THIS actor. Without the await it lands after `stop()` has returned, so the
+        // driver reports itself stopped while its counter is still moving.
+        //
+        // The await also makes the un-tint ORDERING explicit instead of incidental. It was already
+        // correct — `resetAll()` serialises on the coordinator actor behind the in-flight pass — but
+        // that depended on reading two actors' isolation to see, which is not a property worth
+        // leaving implicit in the one path whose whole job is "leave no session tinted".
+        //
+        // Bounded by one pass (~40-80ms of AX IPC, measured 2026-08-31), so this does not make
+        // disable or quit feel slow.
+        await finishing?.value
         await coordinator.resetAll()
     }
 }
