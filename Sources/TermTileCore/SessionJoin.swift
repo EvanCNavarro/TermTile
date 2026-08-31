@@ -9,14 +9,10 @@ import Foundation
 public struct AXPaneSnapshot: Equatable, Sendable {
     public let windowBadge: Int?
     public let cwd: String
-    /// Position of this pane within its window's ACTIVE tab, ordered left-to-right then
-    /// top-to-bottom. ADR-0006 finding 6: only the active tab is visible to AX at all.
-    public let paneOrdinal: Int
 
-    public init(windowBadge: Int?, cwd: String, paneOrdinal: Int) {
+    public init(windowBadge: Int?, cwd: String) {
         self.windowBadge = windowBadge
         self.cwd = cwd
-        self.paneOrdinal = paneOrdinal
     }
 }
 
@@ -85,16 +81,15 @@ public enum SessionJoin {
         let inWindow = sessions.filter { $0.windowIndex == badge - 1 }
         if inWindow.isEmpty { return .ambiguous(.noCandidate) }
 
-        let byPane = inWindow.filter { $0.paneIndex == pane.paneOrdinal }
-        guard let onlyPane = byPane.first else { return .ambiguous(.noCandidate) }
-        if byPane.count == 1 { return .resolved(tty: onlyPane.tty) }
+        if inWindow.count == 1, let only = inWindow.first { return .resolved(tty: only.tty) }
 
-        // More than one session occupies that pane slot, which means the window has multiple
-        // TABS: AX exposes only the active one (finding 6) and nothing on the tty side says
-        // which that is. cwd can still separate them, because the AX pane carries the ACTIVE
-        // session's own cwd. If it cannot, the honest answer is ambiguous — not the lowest
-        // tab index, which would be a guess wearing a resolution's clothes.
-        let byCwd = byPane.filter { $0.cwd == pane.cwd }
+        // More than one session in that window means SPLITS, TABS, or both. Neither is
+        // resolvable positionally: AX shows only the active tab (ADR-0006 finding 6), and the
+        // `p` index is a CREATION COUNTER, not a position (finding 6b, measured 2026-08-31) —
+        // so pane geometry cannot recover it. cwd is the only remaining evidence, and it is
+        // real evidence because the AX pane carries its OWN session's cwd. If cwd cannot
+        // separate them, the honest answer is ambiguous.
+        let byCwd = inWindow.filter { $0.cwd == pane.cwd }
         guard byCwd.count == 1, let only = byCwd.first else {
             return .ambiguous(.multipleCandidates)
         }

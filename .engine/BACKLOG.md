@@ -521,7 +521,17 @@ only — Apple Events is #38 and is NOT in scope for #37*.
   two sessions sharing a cwd with no badge (-> .ambiguous), >9 windows where badge is nil,
   and a background-tab session absent from the AX side. Assert `.ambiguous` NEVER resolves
   to a concrete session — a wrong tint is a silent lie (ADR 0006, Tenet 8).
-#37b · Kit: AXSessionReader — text areas, badges, AXDocument, geometry · S0
+#37b · Kit: AXSessionReader — text areas, badges, AXDocument · S1
+  (2026-08-31 IN PROGRESS: Core prerequisites landed — ITermBadge.parse (strict) + ObservedPane.
+  MEASUREMENT CHANGED THE DESIGN: pane geometry was believed to recover the iTerm pane index;
+  a 2x2 grid built right-before-left disproved it (ADR-0006 finding 6b) — `p` is a CREATION
+  counter. PaneOrdering deleted before it shipped; AXPaneSnapshot.paneOrdinal removed from the
+  #37a join. Remaining: the AX adapter itself + SessionReading port + in-memory double + an
+  opt-in live test (TT_LIVE_AX=1) so CI stays hermetic.)
+  Reads per window: AXStaticText badge, and per active-tab pane: AXTextArea ranged tail,
+  AXDocument. Use AXStringForRange for the tail, NOT full AXValue: measured 2026-08-31, full
+  reads pulled 253,773 chars vs 2,390 ranged across six sessions. The speed gain is minor
+  (~65ms vs ~41ms, AX cost is IPC-bound) — the reason is PRIVACY, per ADR-0006.
   blocked-by #37a. Reads per-window: `AXStaticText` badge child (`⌥⌘N`), and per active-tab
   pane: `AXTextArea` AXValue tail, `AXDocument`, position/size. Protocol-backed with an
   in-memory double per ADR 0001 rule 2. KNOWN, do not rediscover: AX window ORDER is z-order
