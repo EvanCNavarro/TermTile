@@ -97,3 +97,31 @@ was idle; TermTile was reading a task name. The claim is withdrawn.
 Blocked-detection is now absent (ADR 0006 finding 10). Everything else in this document stands:
 the join, the ready/working classification, the write path, and the rendered UI were all measured
 independently of the retracted marker.
+
+
+## Blocked detection, restored and earned (same day)
+
+The retraction above left blocked-detection absent. A blocked session was then CREATED rather than
+waited for: a scratch Claude session driven into an `AskUserQuestion`, which blocks on a human
+regardless of permission mode, read through the same ranged AX read the production adapter uses.
+
+Marker adopted: **`Esc to cancel`**. A/B at the 400-char window the blocked matcher actually uses —
+present on the blocked session, absent on all six others. At 2000 chars one non-blocked session DID
+match, because the probe's own output was in its scrollback; the narrower window excluded it. That
+is mitigation, not immunity — a session displaying the string still matches.
+
+Full live pass, **7 of 7 correct** against the session-name glyph as ground truth:
+
+```
+LIVE-PASS2  tmp                    -> /dev/ttys007  blocked   (glyph ✳ "idle")
+LIVE-PASS2  invela-marketing-suite -> /dev/ttys003  ready     (glyph ✳)
+LIVE-PASS2  termtile               -> /dev/ttys005  working   (glyph ◑)
+LIVE-PASS2  evancnavarro           -> /dev/ttys001  working   (glyph ⠸)
+LIVE-PASS2  ChangeFabric           -> /dev/ttys000  ready     (glyph ✳)
+LIVE-PASS2  pushtext               -> /dev/ttys002  ready     (glyph ✳)
+LIVE-PASS2  portfolio              -> /dev/ttys004  ready     (glyph ✳)
+```
+
+`ttys007` is the case the retraction was about: the glyph says idle, TermTile says blocked. This
+time TermTile is right, **verifiably** — the block was created on purpose. That is the `✳` ambiguity
+the out-of-tree hook exists to resolve, now actually resolved rather than apparently resolved.

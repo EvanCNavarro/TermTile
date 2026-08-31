@@ -188,3 +188,67 @@ struct AgentStateTaskLabelTests {
                 == AgentStateClassifier.classify(scrollback: withoutSlot))
     }
 }
+
+/// The blocked marker, CAPTURED rather than guessed (EvanCNavarro/TermTile#6).
+///
+/// The previous marker was a task label and reported a session blocked for hours while it was
+/// idle. This one was produced deliberately: a scratch Claude session was driven into an
+/// AskUserQuestion, which blocks on a human regardless of permission mode, and its tail was read
+/// through the same ranged AX read the production adapter uses.
+///
+/// A/B at the window the blocked matcher actually uses (400 chars), one blocked session against
+/// six non-blocked ones: present on the blocked session, absent on ALL six others.
+@Suite("Agent state — the captured blocked marker")
+struct AgentStateBlockedCaptureTests {
+    /// Verbatim from the live blocked session.
+    static let askUserQuestionTail = """
+        ────────────────────────────────────────────────────────────────────
+         ☐ Color
+
+        Do you prefer red or blue?
+
+        ❯ 1. Red
+             You prefer red.
+          2. Blue
+             You prefer blue.
+          3. Type something.
+        ────────────────────────────────────────────────────────────────────
+          4. Chat about this
+
+        Enter to select · ↑/↓ to navigate · Esc to cancel
+        """
+
+    @Test("a real AskUserQuestion tail classifies blocked")
+    func capturedTailIsBlocked() {
+        #expect(AgentStateClassifier.classify(scrollback: Self.askUserQuestionTail) == .blocked)
+    }
+
+    /// The ground truth that makes this worth having: the session-name glyph reads `✳` — IDLE —
+    /// while the session is definitively waiting on a human. That is exactly the ambiguity the
+    /// out-of-tree hook exists to resolve, and reading the screen resolves it here.
+    @Test("the glyph cannot distinguish this, which is the point")
+    func glyphAmbiguityIsReal() {
+        // An idle session's tail carries no selection footer at all.
+        let idleTail = """
+              ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent
+                                                                         /rc
+            """
+        #expect(AgentStateClassifier.classify(scrollback: Self.askUserQuestionTail) == .blocked)
+        #expect(AgentStateClassifier.classify(scrollback: idleTail) != .blocked)
+    }
+
+    /// The WORKING affordance is `esc to interrupt` — lowercase, different words. If the blocked
+    /// marker ever matched it, every working session would turn amber.
+    @Test("the working affordance is not mistaken for the blocked one")
+    func workingIsNotBlocked() {
+        #expect(AgentStateClassifier.classify(scrollback: "• Working (15s · esc to interrupt)")
+                == .working)
+    }
+
+    /// Blocked outranks working when a session shows both.
+    @Test("blocked outranks working on the captured marker")
+    func blockedOutranksWorking() {
+        let both = "• Working (3s · esc to interrupt)\nEnter to select · Esc to cancel"
+        #expect(AgentStateClassifier.classify(scrollback: both) == .blocked)
+    }
+}
