@@ -107,12 +107,6 @@ private func _AXUIElementGetWindow(_ el: AXUIElement, _ id: UnsafeMutablePointer
 
 private let kAXEnhancedUserInterface = "AXEnhancedUserInterface"
 
-private func copyAttr(_ el: AXUIElement, _ attr: String) -> CFTypeRef? {
-    var value: CFTypeRef?
-    guard AXUIElementCopyAttributeValue(el, attr as CFString, &value) == .success else { return nil }
-    return value
-}
-
 private func setBool(_ el: AXUIElement, _ attr: String, _ value: Bool) {
     AXUIElementSetAttributeValue(el, attr as CFString, value ? kCFBooleanTrue : kCFBooleanFalse)
 }

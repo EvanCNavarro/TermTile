@@ -40,3 +40,21 @@ public struct ObservedPane: Equatable, Sendable {
         self.scrollbackTail = scrollbackTail
     }
 }
+
+/// Extracts the directory NAME from an iTerm session's `AXDocument`.
+///
+/// The attribute arrives as a file URL carrying a host, e.g.
+/// `file://evancnavarro@MacBookPro.lan/Users/evancnavarro/Developer/invela-marketing-suite`
+/// (observed 2026-08-28). The join compares this against the basename of the tty-side
+/// process cwd, so only the last component matters — and it MUST be percent-decoded, because
+/// a directory with a space arrives as `%20` and would never match its tty-side twin.
+public enum SessionDocument {
+    public static func cwdName(fromAXDocument raw: String?) -> String? {
+        guard let raw, !raw.isEmpty, let url = URL(string: raw) else { return nil }
+        // `lastPathComponent` percent-DECODES and tolerates a trailing slash; the root yields
+        // "/", which is not a directory name the join can use.
+        let name = url.standardizedFileURL.lastPathComponent
+        guard !name.isEmpty, name != "/" else { return nil }
+        return name
+    }
+}
