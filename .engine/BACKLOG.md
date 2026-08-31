@@ -500,7 +500,19 @@ only — Apple Events is #38 and is NOT in scope for #37*.
   feature. Tint each target-app session by agent state: ready `#143C22`, blocked `#4A320F`,
   working `#111417`. PROVE surface per .engine/MEMORY.md = real iTerm2 windows +
   screencapture, NOT tests alone.
-#37a · Core: pure SessionJoin + AgentState classifiers · S0
+#37a · Core: pure SessionJoin + AgentState classifiers · DONE
+  (2026-08-31: red-first — stubs first so the red landed on ASSERTIONS, not a compile error;
+  11 of 15 failed with value mismatches, then implemented to green. BATTLE-TESTED: planted the
+  tab-order guess (resolve to lowest tabIndex instead of admitting ambiguity) -> caught by
+  "two tabs sharing a cwd are ambiguous"; planted whole-buffer classify instead of tail-only ->
+  caught by "a marker stranded in scrollback history". Both restored to green. Full gate:
+  core-purity PASS, swift build complete, 292 tests / 38 suites passed, swiftlint --strict 0
+  violations in 42 files. NO live-surface PROVE: this task is pure functions with no side
+  effects; live proof arrives with the adapters in #37b-#37e.
+  CORRECTION made during build: the drafted background-tab test asserted resolution by lowest
+  tab index, which is a GUESS — AX cannot see which tab is active and nothing tty-side says.
+  Split into two honest tests: distinct-cwd resolves (the AX pane carries the active session's
+  own cwd, which is real evidence), shared-cwd is .multipleCandidates.)
   blocked-by nothing. Foundational — the whole design is proven here before a window is
   touched. `SessionJoin`: (badge?, cwd, pane geometry, ITERM_SESSION_ID) -> JoinResult with
   an explicit `.ambiguous` case. `AgentState`: scrollback tail -> .ready | .working |
