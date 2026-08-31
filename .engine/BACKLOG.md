@@ -596,7 +596,48 @@ only — Apple Events is backlog `#38` / EvanCNavarro/TermTile#12, and is NOT in
   (200 rapid writes mid-render, scrollback byte-identical) — but that run rules out buffer
   corruption ONLY, not visual flicker; PROVE must include a human/screencapture check for
   flicker against a live agent session.
-#37e · Shell: TintingCoordinator + menu toggle + colour settings · S1 · UNBLOCKED
+#37e · Tinting: coordinator + shell wiring — SPLIT into #37e1/#37e2 · S1 · UNBLOCKED
+  (Split 2026-08-31. The README privacy rewrite is an obligation of the moment the feature becomes
+  USER-VISIBLE, not of an internal actor, so it travels with the shell wiring rather than with the
+  coordinator. Keeping them in one task would either delay the coordinator or ship a README
+  correction describing a feature no user can yet turn on.)
+#37e1 · Kit: TintingCoordinator — the stateful pass · DONE
+  (2026-08-31: TintingCoordinator actor + TintDecision + InMemoryTTYProbe/RecordingTinter doubles.
+  ObservedPane gains characterCount, and its tail WIDENS 400 -> 2000 because finding 9's interrupt
+  affordance sits above the input box. Deliberate privacy change, recorded: still ~5% of a full
+  ~44k AXValue pull, and the BLOCKED marker still matches only the last 400 so widening cannot
+  make a stale block-marker fire.
+  BATTLE-TESTED: keyed baseline by tty alone -> caught, and the planted version painted the
+  recycled tty READY, i.e. the false green; merge instead of replace (no eviction) -> caught;
+  .unknown mapped to a colour -> caught by 5 tests. A fourth plant did not compile and was redone
+  rather than counted.
+  LIVE-PROVEN, two real passes 4s apart with the real reader+probe (recording writer, since the
+  write leg was live-proven separately in #37d):
+    PASS1  all unknown except invela-marketing-suite=blocked; only the blocked pane written
+    PASS2  evancnavarro=ready ChangeFabric=ready termtile=working invela=blocked
+           pushtext=ready portfolio=ready  -- 6/6 resolved and decided
+  Cross-checked against the session-name glyph: every state agrees, EXCEPT ttys003 where the glyph
+  reads idle and we read blocked -- and we are right. `✳` cannot separate finished from waiting-on-
+  a-human, which is precisely why window-state-flag.sh exists. Reading the screen removes the need
+  for it, which is the whole thesis of ADR-0006.
+  KNOWN RISK from the widening: a stale `esc to interrupt` sitting in the 2000-char window could
+  read as working after a session went idle. That fails to NORMAL, not to green, so it is the safe
+  direction -- but it is a real staleness window that did not exist at 400.
+  Gate: core-purity PASS, 369 tests / 55 suites, swiftlint 0 violations in 53 files.)
+  blocked-by #37a-#37d (all DONE). One pass: read panes -> probe ttys -> join -> classify -> write.
+  STATEFUL per ADR-0006 finding 9: holds the previous character count per session so ready can
+  require a MEASURED delta. Key the baseline by (tty, cwd) NOT tty alone — a tty number is recycled,
+  and presence-based eviction alone cannot catch a session that dies and is reborn within one poll
+  interval, which would compare a new session against a dead one's baseline.
+  MUST NOT WRITE for .unknown or an .ambiguous join. MUST be able to reset every touched session to
+  normal (for disable and for quit) — a tinted window outliving the feature is orphaned state.
+#37e2 · Shell: menu toggle + colour settings + README privacy rewrite · S0
+  blocked-by #37e1. Timer wiring, menu toggle, colour pickers seeded with TintPalette and its
+  subtle/louder/loudest presets, reset-on-disable and reset-on-quit.
+  SHIPS WITH THE README REWRITE (ADR-0006 "Privacy surface"): the current "It only moves windows...
+  It never reads window contents" promise becomes FALSE the moment this lands — the feature reads
+  scrollback via AX and reads other processes' environment blocks. Correct it in the SAME change,
+  not after.
   (Was BLOCKED-BY-FINDING after ADR-0006 finding 8 removed the false-green READY marker.
   UNBLOCKED 2026-08-31 by finding 9: ready-detection now works, measured at 24 observations with
   0 misfires. WorkingSignal + StateEvidence are landed in Core.)

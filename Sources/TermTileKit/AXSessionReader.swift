@@ -16,7 +16,7 @@ public actor AXSessionReader: SessionReading {
     /// two agree about what "the tail" means.
     private let tailLength: Int
 
-    public init(bundleID: String, tailLength: Int = AgentStateClassifier.tailWindow) {
+    public init(bundleID: String, tailLength: Int = ObservedPane.tailLength) {
         self.bundleID = bundleID
         self.tailLength = tailLength
     }
@@ -49,7 +49,8 @@ public actor AXSessionReader: SessionReading {
             ) else { return nil }   // no cwd = nothing the join could match on
             return ObservedPane(
                 snapshot: AXPaneSnapshot(windowBadge: badge, cwd: cwd),
-                scrollbackTail: tail(of: area)
+                scrollbackTail: tail(of: area),
+                characterCount: copyAttr(area, "AXNumberOfCharacters") as? Int ?? 0
             )
         }
     }
