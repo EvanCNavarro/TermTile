@@ -18,9 +18,11 @@ nothing until you ask it to.
   default, which you can re-record in the menu). Your windows are yours the rest of the time.
 - **Optional focus** — when enabled, Rearrange asks macOS to bring the selected target app forward.
 - **Adjustable gap** — set the spacing between tiled windows from the menu.
-- **Session tint (optional, off by default)** — colours each terminal session by what its agent is
-  doing: green when idle, amber when it is blocked waiting on you, normal while it works. Needs no
-  extra permission, but it does read on-screen text — see **Privacy & permissions**.
+- **Session tint (optional, off by default, iTerm2 only)** — colours each terminal session by what
+  its agent is doing: green when idle, amber when it is blocked waiting on you, normal while it
+  works. Needs no extra permission, but it does read on-screen text — see **Privacy & permissions**.
+  **WezTerm is not supported for this feature**: it ignores the OSC escape TermTile uses to set a
+  background colour (measured 2026-08-31). Tiling works for both terminals as before.
 - **Auto-updates** — a passive update availability check can mark the menu-bar indicator and ellipsis
   when an update is available; **Check for Updates…** opens the signed Sparkle update flow.
 - **Clean uninstall** — an **About** panel with a one-click uninstall that removes the app, its data,
