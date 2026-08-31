@@ -32,13 +32,31 @@ public enum ITermBadge {
 /// as the job allows, and a quarter-megabyte of the user's terminal in app memory is not that.
 public struct ObservedPane: Equatable, Sendable {
     public let snapshot: AXPaneSnapshot
-    /// The last few hundred characters of the pane's scrollback — the classifier's whole input.
+
+    /// The tail of the pane's scrollback — the classifier's whole textual input.
+    ///
+    /// WIDENED from 400 to `ObservedPane.tailLength` on 2026-08-31, and this is a deliberate
+    /// change to how much of the user's terminal the app reads. ADR-0006 finding 9 measured the
+    /// interrupt affordance that distinguishes working from idle sitting ABOVE the input box,
+    /// outside a 400-character window. Ready-detection does not work without it. The ADR's
+    /// commitment is to read as narrowly as the job allows, not to a particular number, so the
+    /// number moved when the job was measured — but it moved by evidence, and no further.
     public let scrollbackTail: String
 
-    public init(snapshot: AXPaneSnapshot, scrollbackTail: String) {
+    /// The pane's total character count, used ONLY to detect movement between polls. A count is
+    /// not content: it carries no terminal text, and comparing two of them is what lets ready
+    /// require a MEASURED delta rather than an assumed one.
+    public let characterCount: Int
+
+    public init(snapshot: AXPaneSnapshot, scrollbackTail: String, characterCount: Int) {
         self.snapshot = snapshot
         self.scrollbackTail = scrollbackTail
+        self.characterCount = characterCount
     }
+
+    /// How much tail one poll reads. Wide enough for the interrupt affordance (finding 9), and
+    /// still ~5% of the ~44k a full `AXValue` pull would take.
+    public static let tailLength = 2000
 }
 
 /// Extracts the directory NAME from an iTerm session's `AXDocument`.

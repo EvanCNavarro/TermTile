@@ -26,8 +26,13 @@ struct AXSessionReaderLiveTests {
 
         for pane in panes {
             #expect(!pane.snapshot.cwd.isEmpty, "a pane was returned with an empty cwd")
-            #expect(pane.scrollbackTail.count <= AgentStateClassifier.tailWindow,
+            // The bound is ObservedPane.tailLength, not the classifier's marker window: the tail
+            // widened on 2026-08-31 so ready-detection could see the interrupt affordance
+            // (ADR-0006 finding 9). It still asserts an UPPER bound, so a regression to a full
+            // ~44k AXValue pull fails loudly.
+            #expect(pane.scrollbackTail.count <= ObservedPane.tailLength,
                     "tail \(pane.scrollbackTail.count) chars exceeded the window — ranged read regressed")
+            #expect(pane.characterCount > 0, "a pane reported no characters at all")
             if let badge = pane.snapshot.windowBadge {
                 #expect(ITermBadge.validRange.contains(badge), "badge \(badge) out of range")
             }

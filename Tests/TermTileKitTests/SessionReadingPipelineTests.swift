@@ -16,14 +16,14 @@ struct SessionReadingPipelineTests {
     /// Tails are real captures from the 2026-08-28 probe.
     static let blockedPane = ObservedPane(
         snapshot: AXPaneSnapshot(windowBadge: 4, cwd: "invela-marketing-suite"),
-        scrollbackTail: "  /rc\n  ⧉  waiting-on-a-person\n")
+        scrollbackTail: "  /rc\n  ⧉  waiting-on-a-person\n", characterCount: 1000)
     /// A WORKING tail, not a ready one. Ready-detection was withdrawn on 2026-08-31 after
     /// `shift+tab to cycle` was measured on a window that was actively running a command
     /// (ADR-0006 finding 8) — so this pane exercises the second real state the pipeline can
     /// currently produce.
     static let workingPane = ObservedPane(
         snapshot: AXPaneSnapshot(windowBadge: 6, cwd: "termtile"),
-        scrollbackTail: "• Ran 7 commands\n• Working (15s · esc to interrupt)\n")
+        scrollbackTail: "• Ran 7 commands\n• Working (15s · esc to interrupt)\n", characterCount: 2000)
 
     @Test("panes resolve to their ttys and classify to their states")
     func endToEnd() async {
@@ -47,7 +47,7 @@ struct SessionReadingPipelineTests {
             TTYSessionSnapshot(tty: "/dev/ttys011", windowIndex: 10, tabIndex: 0, paneIndex: 0, cwd: "same")
         ]
         let pane = ObservedPane(snapshot: AXPaneSnapshot(windowBadge: nil, cwd: "same"),
-                                scrollbackTail: "⧉  waiting-on-a-person")
+                                scrollbackTail: "⧉  waiting-on-a-person", characterCount: 500)
         let reader = InMemorySessionReader(panes: [pane])
         let panes = await reader.visiblePanes()
         #expect(panes.count == 1)
