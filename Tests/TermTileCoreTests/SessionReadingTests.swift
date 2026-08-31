@@ -38,3 +38,44 @@ struct ITermBadgeTests {
         #expect(ITermBadge.parse("⌥⌘99") == nil)
     }
 }
+
+@Suite("AXDocument -> cwd name")
+struct SessionDocumentTests {
+    /// Verbatim from the 2026-08-28 probe.
+    @Test("the observed AXDocument form yields the directory name")
+    func observedForm() {
+        let raw = "file://evancnavarro@MacBookPro.lan/Users/evancnavarro/Developer/invela-marketing-suite"
+        #expect(SessionDocument.cwdName(fromAXDocument: raw) == "invela-marketing-suite")
+    }
+
+    @Test("a hostless file URL also works")
+    func hostless() {
+        #expect(SessionDocument.cwdName(fromAXDocument: "file:///Users/evancnavarro/Developer/termtile")
+            == "termtile")
+    }
+
+    /// The one that bites: a directory with a space arrives percent-encoded and would never
+    /// match the tty-side basename unless it is decoded.
+    @Test("percent-encoding is decoded so it can match the tty-side basename")
+    func percentDecoded() {
+        let raw = "file:///Users/evancnavarro/Developer/My%20Project"
+        #expect(SessionDocument.cwdName(fromAXDocument: raw) == "My Project")
+    }
+
+    @Test("a trailing slash does not swallow the name")
+    func trailingSlash() {
+        #expect(SessionDocument.cwdName(fromAXDocument: "file:///Users/evancnavarro/Developer/portfolio/")
+            == "portfolio")
+    }
+
+    @Test("absent or empty yields nil, never an empty string")
+    func absent() {
+        #expect(SessionDocument.cwdName(fromAXDocument: nil) == nil)
+        #expect(SessionDocument.cwdName(fromAXDocument: "") == nil)
+    }
+
+    @Test("the filesystem root has no meaningful name")
+    func root() {
+        #expect(SessionDocument.cwdName(fromAXDocument: "file:///") == nil)
+    }
+}

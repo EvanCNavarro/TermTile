@@ -521,13 +521,23 @@ only — Apple Events is #38 and is NOT in scope for #37*.
   two sessions sharing a cwd with no badge (-> .ambiguous), >9 windows where badge is nil,
   and a background-tab session absent from the AX side. Assert `.ambiguous` NEVER resolves
   to a concrete session — a wrong tint is a silent lie (ADR 0006, Tenet 8).
-#37b · Kit: AXSessionReader — text areas, badges, AXDocument · S1
+#37b · Kit: AXSessionReader — text areas, badges, AXDocument · DONE
   (2026-08-31 IN PROGRESS: Core prerequisites landed — ITermBadge.parse (strict) + ObservedPane.
   MEASUREMENT CHANGED THE DESIGN: pane geometry was believed to recover the iTerm pane index;
   a 2x2 grid built right-before-left disproved it (ADR-0006 finding 6b) — `p` is a CREATION
   counter. PaneOrdering deleted before it shipped; AXPaneSnapshot.paneOrdinal removed from the
   #37a join. Remaining: the AX adapter itself + SessionReading port + in-memory double + an
   opt-in live test (TT_LIVE_AX=1) so CI stays hermetic.)
+  (2026-08-31 COMPLETE: SessionReading port + AXSessionReader actor + InMemorySessionReader
+  double + opt-in live test. LIVE-PROVEN against real iTerm2 — 6 panes, badges 1-6, correct cwds,
+  tails bounded 398-400ch (not 44k), states blocked/working/unknown; 6/6/6 panes across 3 runs.
+  CI-mode skips the live test. Gate: core-purity PASS, 308 tests / 42 suites, swiftlint 0/46.
+  MEASURED: AXNumberOfCharacters is UTF-16 while Swift .count is graphemes (40,210 vs 40,208), so
+  a 400-unit request yields 398 chars — documented, bounded, benign.
+  FALSE ALARM worth recording: a pane reading `unknown` while its tail visibly held a ready marker
+  looked like a truncation bug; running the comparison showed BOTH reads agreed and the terminal
+  content had simply changed between samples. Diagnosis was wrong; the disproof caught it.
+  OBSERVED: 4 of 6 panes classify `unknown` -- real evidence for EvanCNavarro/TermTile#6.)
   Reads per window: AXStaticText badge, and per active-tab pane: AXTextArea ranged tail,
   AXDocument. Use AXStringForRange for the tail, NOT full AXValue: measured 2026-08-31, full
   reads pulled 253,773 chars vs 2,390 ranged across six sessions. The speed gain is minor
