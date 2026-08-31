@@ -576,7 +576,21 @@ only — Apple Events is backlog `#38` / EvanCNavarro/TermTile#12, and is NOT in
   environment read while probing this design. Return type MUST be incapable of carrying any
   other variable. Red-first test asserting no other env var can escape the parser lands
   BEFORE the parser does. Nothing from the environment is logged, persisted, or returned.
-#37d · Kit: OSCColorWriter — OSC 1337 SetColors to tty · S0
+#37d · Kit: OSCColorWriter — OSC 1337 SetColors to tty · DONE
+  (2026-08-31: SessionTinting port + OSCColorWriter actor + injected DeviceWriter seam + TintColor/
+  TintPalette in Core carrying the replaced tool's exact palette and presets.
+  SAFETY: the tty string comes from parsed `ps` output, so the path is VALIDATED before the device
+  is opened -- only /dev/ttysNNN, digits-only, whole-string. Battle-tested: planted the dropped
+  emptiness check (allSatisfy is TRUE on an empty collection, so "/dev/ttys" would have passed)
+  -> caught; planted hasPrefix-only -> caught on traversal and /dev/ttysABC. A unit test asserts
+  the device writer is never REACHED with a bad path, not merely that it refuses.
+  .unknown maps to NO colour, asserted end to end -- an unrecognised state produces no write.
+  LIVE-PROVEN through the REAL writer: wrote #6A1B9A to /dev/ttys005, AppleScript readback
+  24415036595 (normal reads 427250206014) -- byte-identical to the 2026-08-28 manual measurement,
+  two runs three days apart. The real writer also refused /etc/passwd.
+  Gate: core-purity PASS, 359 tests / 53 suites, swiftlint 0 violations in 52 files.
+  NOT COVERED: visual flicker over a long soak. The 200-write load test showed no BUFFER
+  corruption, but AX reads a rendered view and cannot see a transient repaint artifact.)
   blocked-by #37a. Writes `\033]1337;SetColors=bg=RRGGBB\a` to /dev/ttysNNN. Protocol-backed;
   no-op double in tests so the suite never writes to a real terminal. Proven safe under load
   (200 rapid writes mid-render, scrollback byte-identical) — but that run rules out buffer
