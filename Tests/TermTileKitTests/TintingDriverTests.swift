@@ -90,6 +90,74 @@ struct TintingDriverTests {
 
     /// THE ORPHAN GUARD. Disabling the feature must leave no window wearing a colour TermTile is
     /// no longer maintaining.
+    /// EvanCNavarro/TermTile#20 — the shutdown race.
+    ///
+    /// The loop is `await coordinator.pass()` then `await self.countPass()`. If `cancel()` lands
+    /// during the pass, that pass runs to completion and `countPass` then queues on the DRIVER
+    /// actor behind `stop()` — landing AFTER `stop()` returns. The driver reports itself stopped
+    /// while its counter is still moving.
+    ///
+    /// This can only be seen with a pass IN FLIGHT, which is why it needs a slow reader: a fake
+    /// that returns instantly never leaves a window for the cancel to land in.
+    @Test("no pass lands after stop() returns")
+    func noLateCountAfterStop() async throws {
+        let pane = ObservedPane(snapshot: AXPaneSnapshot(windowBadge: 6, cwd: "termtile"),
+                                scrollbackTail: "❯", characterCount: 100)
+        let session = TTYSessionSnapshot(tty: "/dev/ttys005", windowIndex: 5, tabIndex: 0,
+                                         paneIndex: 0, cwd: "termtile")
+        let reader = SlowSessionReader(panes: [pane], delay: .milliseconds(200))
+        let driver = TintingDriver(
+            coordinator: TintingCoordinator(reader: reader,
+                                            probe: InMemoryTTYProbe(sessions: [session]),
+                                            writer: RecordingTinter()),
+            interval: .milliseconds(10))
+        await driver.start()
+        // Cancel while a pass is genuinely in flight, not before one starts.
+        #expect(await Self.eventually { await reader.entered >= 1 },
+                "no pass ever started, so cancelling mid-pass proves nothing")
+        await driver.stop()
+
+        let atStop = await driver.completedPasses
+        #expect(!(await driver.isRunning))
+        // Longer than the slow pass, so a late continuation has every chance to land.
+        try await Task.sleep(for: .milliseconds(400))
+        let later = await driver.completedPasses
+        #expect(later == atStop,
+                "completedPasses moved from \(atStop) to \(later) AFTER stop() returned")
+    }
+
+    /// THE ORPHANED-TINT ORDERING. Found by planting: moving `resetAll()` BEFORE the cancel passed
+    /// every other test, yet it is the precise failure the reset exists to prevent — the reset
+    /// paints normal, then the still-running pass repaints a colour on top, and the session is left
+    /// wearing a tint after the user disabled the feature.
+    ///
+    /// Asserting the LAST write is what catches it. "a normal was written somewhere" is true in
+    /// both orderings and proves nothing.
+    @Test("after stop(), the LAST write is normal — no pass repaints over the reset")
+    func resetIsTheLastWrite() async {
+        // A blocked marker, so the pass writes WITHOUT needing a delta — a first pass that
+        // classifies unknown writes nothing and the ordering would go untested.
+        let pane = ObservedPane(snapshot: AXPaneSnapshot(windowBadge: 6, cwd: "termtile"),
+                                scrollbackTail: "⧉  waiting-on-a-person", characterCount: 100)
+        let session = TTYSessionSnapshot(tty: "/dev/ttys005", windowIndex: 5, tabIndex: 0,
+                                         paneIndex: 0, cwd: "termtile")
+        let reader = SlowSessionReader(panes: [pane], delay: .milliseconds(200))
+        let tinter = RecordingTinter()
+        let driver = TintingDriver(
+            coordinator: TintingCoordinator(reader: reader,
+                                            probe: InMemoryTTYProbe(sessions: [session]),
+                                            writer: tinter),
+            interval: .milliseconds(10))
+        await driver.start()
+        #expect(await Self.eventually { await reader.entered >= 1 })
+        await driver.stop()
+
+        let writes = await tinter.writtenHexes
+        #expect(!writes.isEmpty, "nothing was written at all, so ordering proves nothing")
+        #expect(writes.last == TintPalette.normal.hex,
+                "last write was \(writes.last ?? "none") — a pass repainted over the reset")
+    }
+
     @Test("stopping repaints touched sessions back to normal")
     func stopResets() async {
         let (driver, tinter) = Self.rig()
