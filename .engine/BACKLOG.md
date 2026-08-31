@@ -548,7 +548,18 @@ only — Apple Events is #38 and is NOT in scope for #37*.
   and shuffles between polls — key on the badge, never on index. Background tabs are
   invisible to AX by design (ADR 0006 finding 6); the reader reports what it can see and
   does not pretend otherwise.
-#37c · Kit: TTYProbe — ITERM_SESSION_ID extraction, environment-scoped · S0
+#37c · Kit: TTYProbe — ITERM_SESSION_ID extraction, environment-scoped · DONE
+  (2026-08-31: TTYProbing port + ProcessTTYProbe actor + injected CommandRunner seam (mirrors
+  PermissionRepairer.Runner) + EnvironmentScan/ITermSessionID pure Core parser.
+  SECURITY GUARANTEE IS STRUCTURAL: the scanner returns three Ints, so it CANNOT carry a
+  credential -- no rawValue, no uuid, no dictionary. The leak test landed BEFORE the parser and
+  asserts no fragment of a realistic env block (fake API key, session secret, PWD, UUID) can be
+  rendered out of the return value. BATTLE-TESTED: planted a "just for debugging" rawValue field
+  -> caught, reporting `leaked 7F8B92B6`; planted a boundary-free substring match ->
+  caught by the MY_ITERM_SESSION_ID trap. Env read is per-PID, asserted by test, never `ps -E`.
+  LIVE-PROVEN: 6/6 real agent sessions read with correct w/t/p and cwd; and the END-TO-END join
+  (TintingPipelineLiveTests) resolved 6/6 panes to the correct ttys with a cwd cross-check,
+  0 ambiguous. Gate: core-purity PASS, 328 tests / 46 suites, swiftlint 0/49.)
   blocked-by #37a. tty -> agent pid -> `ITERM_SESSION_ID` (`w<W>t<T>p<P>:UUID`). SECURITY-
   CRITICAL, see ADR 0006 "Privacy surface": a process environment block also contains
   secrets — an ANTHROPIC_API_KEY and a SESSION_SECRET were exposed by one unguarded
