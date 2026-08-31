@@ -96,6 +96,38 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
    characters. NOTE the blind spot: AX reads a RENDERED view, so this rules out buffer
    corruption, not a transient visual flicker.
 
+7b. **iTerm's AX text carries NUL where padding sits.** The rendered "shift+tab to cycle"
+   arrives as `shift+tab\0to\0cycle` (U+0000, measured on a live pane 2026-08-31). Every marker
+   containing a SPACE therefore matched only intermittently, which is why the hyphenated
+   `waiting-on-a-person` always worked while the others flapped. The classifier now normalizes
+   padding to single spaces, preserving newlines so a marker's words on two rows cannot fabricate
+   a phrase that was never rendered.
+
+8. **THE GREEN STATE DOES NOT CURRENTLY WORK, and the obvious marker is a false green.**
+   `shift+tab to cycle` was used as the READY marker until 2026-08-31. Measured on a window that
+   was ACTIVELY RUNNING a command:
+
+   ```
+   contains 'esc to interrupt'   : false
+   contains 'shift+tab to cycle' : true
+   ```
+
+   It indicates "the input box is rendered", not "the agent is idle". As a READY marker it paints
+   a window green while work is still running — and green invites the user to interrupt live work,
+   which makes it worse than no signal at all. It has been REMOVED with no replacement guessed at.
+
+   **Consequence, and it is a real reduction in what Tier 1 delivers:** blocked (amber) and working
+   (normal) classify; READY does not, so idle sessions read `.unknown` and stay untinted. The
+   feature currently cannot turn a window green. Shipping the coordinator (#37e) before this is
+   solved would deliver a tinter that never shows the state the user most wants to see.
+
+   Note this is the SAME ambiguity the out-of-tree hook existed to work around, arriving from the
+   other direction: that tool could not separate "finished" from "waiting on you" and solved it with
+   a hook; reading the screen solves THAT, but cannot yet separate "finished" from "working". The
+   session-name glyph the old poller reads (`✳` idle vs spinner) remains a candidate — it is
+   AX-readable as `AXTitle`, but is suppressed on windows with a manual title override, which is
+   most of the real ones. Tracked as EvanCNavarro/TermTile#6.
+
 ## Decision
 
 ### Tier 1 — the default, and the only tier built here

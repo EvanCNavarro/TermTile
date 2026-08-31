@@ -572,7 +572,11 @@ only — Apple Events is #38 and is NOT in scope for #37*.
   (200 rapid writes mid-render, scrollback byte-identical) — but that run rules out buffer
   corruption ONLY, not visual flicker; PROVE must include a human/screencapture check for
   flicker against a live agent session.
-#37e · Shell: TintingCoordinator + menu toggle + colour settings · S0
+#37e · Shell: TintingCoordinator + menu toggle + colour settings · S0 · BLOCKED-BY-FINDING
+  DO NOT START until EvanCNavarro/TermTile#6 resolves ready-detection. ADR-0006 finding 8: the
+  READY marker was removed on 2026-08-31 after being measured on an ACTIVELY WORKING window, so
+  Tier 1 currently cannot turn a window green. Shipping the coordinator now would deliver a tinter
+  that never shows the state the user most wants.
   blocked-by #37b, #37c, #37d. Timer-driven pass (replaces the 5s launchd tick), menu toggle,
   colour pickers seeded with the three defaults + the subtle/louder/loudest presets carried
   over from the tool being replaced. MUST reset every touched session to normal on disable

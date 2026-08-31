@@ -38,9 +38,12 @@ struct AgentStateTests {
         #expect(AgentStateClassifier.classify(scrollback: Self.workingTail) == .working)
     }
 
-    @Test("an idle session reads as ready")
-    func ready() {
-        #expect(AgentStateClassifier.classify(scrollback: Self.readyTail) == .ready)
+    /// MEASURED 2026-08-31: this tail was captured from a window that was ACTIVELY RUNNING a
+    /// command, so `shift+tab to cycle` cannot mean idle. Ready-detection is therefore absent
+    /// rather than wrong, and an idle-looking session is untinted (ADR-0006 finding 8, #6).
+    @Test("the old ready marker no longer fires — it was present on a WORKING window")
+    func formerReadyMarkerDoesNotFalselyGreen() {
+        #expect(AgentStateClassifier.classify(scrollback: Self.readyTail) == .unknown)
     }
 
     @Test("unrecognised output is unknown, never a guessed default")
@@ -81,5 +84,47 @@ struct AgentStateTests {
     func recentMarkerIsSeen() {
         let old = String(repeating: "old line\n", count: 400)
         #expect(AgentStateClassifier.classify(scrollback: old + Self.blockedTail) == .blocked)
+    }
+}
+
+/// iTerm2's AX text carries U+0000 NUL where padding cells sit, so the rendered
+/// "shift+tab to cycle" arrives as "shift+tab\0to\0cycle". Measured 2026-08-31 on a live
+/// session; it is why space-containing markers flapped between matching and not, while the
+/// hyphenated `waiting-on-a-person` always matched.
+@Suite("Agent state — NUL padding in iTerm's AX text")
+struct AgentStateNormalizationTests {
+    /// The exact scalars read off a live pane.
+    /// Normalization is proven by the WORKING marker instead, since the ready marker was
+    /// withdrawn for being a false green. The NUL handling is the same code path.
+    @Test("a NUL-padded former-ready marker does not resurrect a false green")
+    func nulPaddedFormerReadyStaysUnknown() {
+        let real = "ions\u{0}on (shift+tab\u{0}to\u{0}cycle) · ← 1 agent"
+        #expect(AgentStateClassifier.classify(scrollback: real) == .unknown)
+    }
+
+    @Test("NUL-padded working marker still classifies working")
+    func nulPaddedWorking() {
+        #expect(AgentStateClassifier.classify(scrollback: "Working (15s · esc\u{0}to\u{0}interrupt)")
+            == .working)
+    }
+
+    @Test("other C0 control characters are normalized too")
+    func otherControls() {
+        #expect(AgentStateClassifier.classify(scrollback: "esc\u{1}to\u{2}interrupt") == .working)
+    }
+
+    /// The widening guard. Normalizing must not join LINES, or a marker's words appearing on
+    /// two different rows would fabricate a match that was never on screen.
+    @Test("normalization does not join lines into a marker that was never rendered")
+    func doesNotJoinLines() {
+        #expect(AgentStateClassifier.classify(scrollback: "esc\nto interrupt") == .unknown)
+        #expect(AgentStateClassifier.classify(scrollback: "waiting-on\na-person") == .unknown)
+    }
+
+    /// Runs of padding collapse to a single space, which is what the marker text assumes.
+    @Test("repeated padding collapses rather than blocking the match")
+    func collapsesRuns() {
+        #expect(AgentStateClassifier.classify(scrollback: "esc\u{0}\u{0}\u{0} to  interrupt")
+            == .working)
     }
 }

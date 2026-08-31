@@ -17,13 +17,17 @@ struct SessionReadingPipelineTests {
     static let blockedPane = ObservedPane(
         snapshot: AXPaneSnapshot(windowBadge: 4, cwd: "invela-marketing-suite"),
         scrollbackTail: "  /rc\n  ⧉  waiting-on-a-person\n")
-    static let readyPane = ObservedPane(
+    /// A WORKING tail, not a ready one. Ready-detection was withdrawn on 2026-08-31 after
+    /// `shift+tab to cycle` was measured on a window that was actively running a command
+    /// (ADR-0006 finding 8) — so this pane exercises the second real state the pipeline can
+    /// currently produce.
+    static let workingPane = ObservedPane(
         snapshot: AXPaneSnapshot(windowBadge: 6, cwd: "termtile"),
-        scrollbackTail: "❯\n  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent\n")
+        scrollbackTail: "• Ran 7 commands\n• Working (15s · esc to interrupt)\n")
 
     @Test("panes resolve to their ttys and classify to their states")
     func endToEnd() async {
-        let reader = InMemorySessionReader(panes: [Self.blockedPane, Self.readyPane])
+        let reader = InMemorySessionReader(panes: [Self.blockedPane, Self.workingPane])
         let panes = await reader.visiblePanes()
         #expect(panes.count == 2)
 
@@ -32,7 +36,7 @@ struct SessionReadingPipelineTests {
         #expect(outcomes == [.resolved(tty: "/dev/ttys003"), .resolved(tty: "/dev/ttys005")])
 
         let states = panes.map { AgentStateClassifier.classify(scrollback: $0.scrollbackTail) }
-        #expect(states == [.blocked, .ready])
+        #expect(states == [.blocked, .working])
     }
 
     /// The negative contract end-to-end: an unresolvable pane must produce NO tty to write to.
@@ -63,7 +67,7 @@ struct SessionReadingPipelineTests {
 
     @Test("the port is polled, not read once and cached")
     func pollsEachTime() async {
-        let reader = InMemorySessionReader(panes: [Self.readyPane])
+        let reader = InMemorySessionReader(panes: [Self.workingPane])
         _ = await reader.visiblePanes()
         await reader.reseed([])
         let second = await reader.visiblePanes()
