@@ -90,8 +90,34 @@ struct MenuBarContent: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    // #37f — what the last pass decided. Without this, a session that stays its
+                    // normal colour is indistinguishable from a broken feature, and the most
+                    // useful thing the app can say is "it works, it just can't tell which window
+                    // this is."
+                    if !viewModel.tintDiagnostics.isEmpty {
+                        Divider()
+                        ForEach(viewModel.tintDiagnostics, id: \.cwd) { decision in
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack {
+                                    Text(decision.cwd).font(.caption)
+                                    Spacer()
+                                    Text(decision.state.displayName)
+                                        .font(.caption)
+                                        .foregroundStyle(decision.wrote ? .primary : .secondary)
+                                }
+                                if let reason = decision.untintedReason {
+                                    Text(reason)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
                 }
             }
+            .task(id: viewModel.tintingEnabled) { await viewModel.refreshTintDiagnostics() }
 
             SectionCard("Drag") {
                 Toggle("Reorder windows on drag", isOn: Binding(

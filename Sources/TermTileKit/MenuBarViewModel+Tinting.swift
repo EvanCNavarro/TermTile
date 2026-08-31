@@ -7,6 +7,25 @@ import TermTileCore
 /// landed, and tinting is the one feature whose lifecycle is genuinely separable — it owns a poll
 /// loop nothing else touches.
 extension MenuBarViewModel {
+    /// Refresh the diagnostics from the driver's most recent pass.
+    ///
+    /// Called when the menu appears. A session that stays its normal colour is otherwise
+    /// indistinguishable from a broken feature, and "it is working, it just cannot tell which
+    /// window this is" is the single most useful thing the app can say at that moment.
+    public func refreshTintDiagnostics() async {
+        guard let tinting else { return }
+        tintDiagnostics = await tinting.lastDecisions()
+    }
+
+    /// Seed the diagnostics directly, for the gallery's rendered check (FL-9).
+    ///
+    /// Named for its ONE caller rather than as a generic setter: the gallery injects no tinting
+    /// controller, so `refreshTintDiagnostics()` finds nothing and the #37f panel would never
+    /// render. Mirrors `Updater.recordAvailableUpdate`, which exists for the same reason.
+    public func seedTintDiagnosticsForGallery(_ decisions: [TintDecision]) {
+        tintDiagnostics = decisions
+    }
+
     /// Start tinting at launch IF the user had it enabled. Called by the composition root after
     /// construction, mirroring `setHotKeyRegistered`.
     ///

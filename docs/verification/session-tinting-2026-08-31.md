@@ -17,6 +17,25 @@ with `screencapture -l<window-id>`:
 The on-state screenshot doubles as proof that `readyIntensity` round-trips from `UserDefaults` into
 the rendered control: the suite was seeded with `louder` and the picker rendered `Louder`.
 
+## Degradation diagnostics (`#37f`)
+
+`screenshots/session-tint-diagnostics-2026-08-31.png`, rendered via
+`TERMTILE_GALLERY_TINT_DIAGNOSTICS=1`, which seeds one row of every shape a user can actually meet.
+The gallery injects no tinting controller — it has no business writing escape sequences into live
+terminals — so without the seed the panel would render empty and prove nothing.
+
+| row | renders |
+|---|---|
+| painted, idle | `termtile — Idle`, no reason line |
+| painted, blocked | `invela-marketing-suite — Waiting on you`, no reason line |
+| first sighting | `portfolio — Not yet` + "Just noticed — TermTile decides on the next check." |
+| unrecognised state | `pushtext — Not yet` + "Running, but TermTile doesn't recognise what it's doing." |
+| unjoinable | `shared-folder — Not yet` + "Several terminals share this folder, so TermTile can't tell which window this is." |
+
+The third and fourth rows are the point of the feature: both are `.unknown`, and the user's correct
+reaction differs — wait, versus a marker is missing (EvanCNavarro/TermTile#6). `TintDecision.hadBaseline`
+is what separates them; without it both would read the same and the panel would be decoration.
+
 ## The whole stack against real sessions
 
 Real reader, real probe, real join, real classifier, real `OSCColorWriter`
