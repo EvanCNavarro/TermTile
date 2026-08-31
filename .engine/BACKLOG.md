@@ -631,7 +631,26 @@ only — Apple Events is backlog `#38` / EvanCNavarro/TermTile#12, and is NOT in
   interval, which would compare a new session against a dead one's baseline.
   MUST NOT WRITE for .unknown or an .ambiguous join. MUST be able to reset every touched session to
   normal (for disable and for quit) — a tinted window outliving the feature is orphaned state.
-#37e2 · Shell: menu toggle + colour settings + README privacy rewrite · S0
+#37e2 · Shell: menu toggle + colour settings + README privacy rewrite · DONE
+  (2026-08-31: ReadyIntensity in Core; AppSettings gains tintingEnabled + readyIntensity with
+  per-key persistence; TintingDriver replaces the launchd job; TintingControlling seam; VM
+  setters + startTintingIfEnabled; menu "Session tint" card with toggle + shade picker; composition
+  root wires the real stack and passes nil on selftest/gallery paths.
+  README PRIVACY SECTION REWRITTEN in this same change, as required: the "never reads window
+  contents" promise is now scoped to the default-off state, and the two new reads (visible text,
+  one env var) are described with what is NOT read alongside them.
+  BATTLE-TESTED: load() ignoring the stored flag -> caught; save() dropping the intensity key ->
+  caught; start() without the idempotence guard -> caught; stop() without resetAll -> caught.
+  TWO TEST-QUALITY FIXES made rather than papered over:
+   - the idempotence test counted passes over a wall-clock window; the plant beat it 10 vs a
+     threshold of 8, one flaky run from useless. Replaced with a deterministic loopsStarted counter,
+     plus a restart-after-stop test so an over-eager guard cannot pass by never restarting.
+   - the VM launch test slept 50ms for an async Task: green in isolation, RED in the full suite.
+     Replaced with poll-to-deadline.
+  LINT forced three real extractions, not suppressions: MenuBarViewModel+Tinting.swift (type body +
+  file length), applyLaunchPolicy and makeViewModel (initializer body), LaunchEnvironment (parameter
+  count).
+  Gate: core-purity PASS, 383 tests / 58 suites, swiftlint 0 violations in 56 files.)
   blocked-by #37e1. Timer wiring, menu toggle, colour pickers seeded with TintPalette and its
   subtle/louder/loudest presets, reset-on-disable and reset-on-quit.
   SHIPS WITH THE README REWRITE (ADR-0006 "Privacy surface"): the current "It only moves windows...

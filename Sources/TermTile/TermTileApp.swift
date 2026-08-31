@@ -44,23 +44,11 @@ struct TermTileApp: App {
                                                   settings: settings, loginItem: loginItem)
 
         appInfo = AppInfo.fromBundle()
-        viewModel = MenuBarViewModel(
-            settings: settings,
-            loginItem: loginItem,
-            appsProvider: WorkspaceTargetAppsProvider(),
-            isTrustedProbe: MenuBarViewModel.liveTrustProbe,
-            visibleFrame: visibleFrame,
-            epsilon: eps,
-            makeActor: { bundleID in
-                TilingActor(system: AXWindowSystem(bundleID: bundleID), epsilon: eps)
-            },
-            uninstaller: privacy.uninstaller,
-            foregrounder: (!isSelftest && !isGallery) ? WorkspaceTargetAppForegrounder() : nil,
-            permissionRepairer: privacy.permissionRepairer)
-
-        // Menu-bar utility: no dock icon, never takes window focus. Set here (init is reliable);
-        // the delegate re-asserts it as a belt.
-        NSApplication.shared.setActivationPolicy(.accessory)
+        viewModel = Self.makeViewModel(
+            settings: settings, loginItem: loginItem, privacy: privacy,
+            launch: LaunchEnvironment(isSelftest: isSelftest, isGallery: isGallery,
+                                      visibleFrame: visibleFrame, epsilon: eps))
+        Self.applyLaunchPolicy(viewModel: viewModel)
 
         // Global hotkey → the same rearrangeNow() the menu button invokes (#25). Active on the normal
         // path only (not selftest/gallery, where a global hotkey would interfere).
@@ -145,6 +133,65 @@ struct TermTileApp: App {
         return monitor
     }
 
+    /// The launch-shape inputs the composition root threads through its factories. A value type
+    /// rather than four loose parameters — the factory had grown past SwiftLint's parameter budget,
+    /// and these four always travel together anyway.
+    private struct LaunchEnvironment {
+        let isSelftest: Bool
+        let isGallery: Bool
+        let visibleFrame: CGRect
+        let epsilon: CGFloat
+    }
+
+    /// The production view model. Extracted from `init` because a composition root grows with
+    /// every wired feature, and the initializer had reached SwiftLint's body budget.
+    private static func makeViewModel(settings: UserDefaultsSettingsStore, loginItem: SMAppServiceLoginItem,
+                                      privacy: PrivacyComposition,
+                                      launch: LaunchEnvironment) -> MenuBarViewModel {
+        let (visibleFrame, eps) = (launch.visibleFrame, launch.epsilon)
+        let (isSelftest, isGallery) = (launch.isSelftest, launch.isGallery)
+        return MenuBarViewModel(
+            settings: settings,
+            loginItem: loginItem,
+            appsProvider: WorkspaceTargetAppsProvider(),
+            isTrustedProbe: MenuBarViewModel.liveTrustProbe,
+            visibleFrame: visibleFrame,
+            epsilon: eps,
+            makeActor: { bundleID in
+                TilingActor(system: AXWindowSystem(bundleID: bundleID), epsilon: eps)
+            },
+            uninstaller: privacy.uninstaller,
+            foregrounder: (!isSelftest && !isGallery) ? WorkspaceTargetAppForegrounder() : nil,
+            permissionRepairer: privacy.permissionRepairer,
+            // Session tinting (#37e2, ADR-0006). NIL on the selftest and gallery paths: both run
+            // against the real machine, and a gallery render has no business writing escape
+            // sequences into someone's live terminals.
+            tinting: (!isSelftest && !isGallery)
+                ? Self.makeTintingDriver(targetBundleID: settings.load().targetBundleID)
+                : nil)
+    }
+
+    /// Post-construction launch policy: activation policy, and starting tinting if the user had
+    /// it enabled. Extracted from `init` to keep the initializer inside SwiftLint's body budget —
+    /// the initializer is a composition root and grows with every wired feature.
+    private static func applyLaunchPolicy(viewModel: MenuBarViewModel) {
+        // A persisted "tinting on" must take effect at launch, not wait for a toggle — otherwise
+        // the setting survives a relaunch while the behaviour silently does not.
+        viewModel.startTintingIfEnabled()
+        // Menu-bar utility: no dock icon, never takes window focus. Set here (init is reliable);
+        // the delegate re-asserts it as a belt.
+        NSApplication.shared.setActivationPolicy(.accessory)
+    }
+
+    /// The production tinting stack: real AX reader, real tty probe, real OSC writer, behind the
+    /// coordinator that owns the per-session baselines.
+    private static func makeTintingDriver(targetBundleID: String) -> TintingDriver {
+        TintingDriver(coordinator: TintingCoordinator(
+            reader: AXSessionReader(bundleID: targetBundleID),
+            probe: ProcessTTYProbe(),
+            writer: OSCColorWriter()))
+    }
+
     /// A VM forced into the `grantBroken` state (untrusted probe + seeded `wasTrusted`) so the
     /// grant-break fix-it copy can be render-validated (#23). Throwaway suite; never the real domain.
     private static func brokenGalleryVM(loginItem: any LoginItem, visibleFrame: CGRect,
@@ -152,7 +199,8 @@ struct TermTileApp: App {
         let store = UserDefaultsSettingsStore(suiteName: "dev.ecn.apps.termtile.gallery")
         store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8,
                                hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap,
-                               bringToFrontOnRearrange: false))
+                               bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         return MenuBarViewModel(settings: store, loginItem: loginItem,
             appsProvider: WorkspaceTargetAppsProvider(), isTrustedProbe: { false },
             visibleFrame: visibleFrame, epsilon: eps,

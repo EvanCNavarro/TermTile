@@ -64,7 +64,8 @@ struct MenuBarViewModelTests {
         // Seed gap=10 (≠ the 8 default) into the store so the VM LOADS it — this also proves the
         // #17a settings→VM→TileConfig→layout flow: the EXACT targets below use the same gap.
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm, fake) = makeVM(windows: seed, store: store)
         let t = targets(3)
         for k in 0..<3 { #expect(seed[k].frame != t[k]) }  // genuinely off-grid → writes provable
@@ -80,7 +81,8 @@ struct MenuBarViewModelTests {
     @Test("init loads persisted target")
     func initLoadsPersistedSettings() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+        store.save(AppSettings(targetBundleID: "com.example.other", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm, _) = makeVM(store: store)
         #expect(vm.targetBundleID == "com.example.other")
     }
@@ -178,7 +180,8 @@ struct MenuBarViewModelTests {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
                                gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
-                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         let foregrounder = SpyTargetAppForegrounder()
         let (vm, fake) = makeVM(windows: seed, store: store, trusted: true, foregrounder: foregrounder)
         foregrounder.writeCount = { await fake.recordedWrites.count }
@@ -195,7 +198,8 @@ struct MenuBarViewModelTests {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: false,
                                gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
-                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         let foregrounder = SpyTargetAppForegrounder()
         let (vm, _) = makeVM(windows: [off(1)], store: store, trusted: false, foregrounder: foregrounder)
 
@@ -210,7 +214,8 @@ struct MenuBarViewModelTests {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
                                gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
-                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm, _) = makeVM(windows: [off(1)], store: store, trusted: true)
 
         await vm.rearrangeNow()
@@ -224,7 +229,8 @@ struct MenuBarViewModelTests {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
                                gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
-                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         let foregrounder = SpyTargetAppForegrounder(result: .activationRejected)
         let (vm, _) = makeVM(windows: [off(1)], store: store, trusted: true, foregrounder: foregrounder)
 
@@ -269,7 +275,8 @@ struct MenuBarViewModelTests {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.example.first", wasTrusted: true,
                                gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
-                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         let gate = AsyncGate()
         let foregrounder = SpyTargetAppForegrounder(result: .activationRejected)
         foregrounder.beforeReturn = { await gate.wait() }
@@ -295,7 +302,8 @@ struct MenuBarViewModelTests {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.example.first", wasTrusted: true,
                                gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
-                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         let activationStarted = AsyncGate()
         let allowActivationToFinish = AsyncGate()
         let system = BlockingWindowSystem(
@@ -330,7 +338,8 @@ struct MenuBarViewModelTests {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
                                gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
-                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         let gate = AsyncGate()
         let foregrounder = SpyTargetAppForegrounder(result: .activationRejected)
         foregrounder.beforeReturn = { await gate.wait() }
@@ -356,7 +365,8 @@ struct MenuBarViewModelTests {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
                                gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
-                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         let activationStarted = AsyncGate()
         let allowActivationToFinish = AsyncGate()
         let system = BlockingWindowSystem(
@@ -493,7 +503,8 @@ struct MenuBarViewModelTests {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.example.target", wasTrusted: true,
                                gap: Double(gap), hotKey: .rearrange, reorderOnDrag: false,
-                               reorderStrategy: .swap, bringToFrontOnRearrange: true))
+                               reorderStrategy: .swap, bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         let foregrounder = SpyTargetAppForegrounder(result: result)
         let (vm, _) = makeVM(windows: [off(1)], store: store, trusted: true, foregrounder: foregrounder)
         await vm.rearrangeNow()
@@ -514,7 +525,8 @@ struct MenuBarViewModelTests {
     // Idempotent on the PERSISTED flag — repeated refreshTrust after true writes nothing more.
     @Test("latch is idempotent")
     func latchIdempotent() {
-        let spy = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+        let spy = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm, _) = makeVM(store: spy, trusted: true)
         let base = spy.saveCount                    // 0 — already true, no init latch
         vm.refreshTrust(); vm.refreshTrust()
@@ -528,7 +540,8 @@ struct MenuBarViewModelTests {
         let (vm1, _) = makeVM(store: spy1, trusted: false)
         #expect(vm1.accessibilityState == .needsFirstGrant)
         #expect(spy1.saveCount == 0)
-        let spy2 = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+        let spy2 = SaveSpyStore(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: true, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm2, _) = makeVM(store: spy2, trusted: false)
         #expect(vm2.accessibilityState == .grantBroken)
     }
@@ -591,7 +604,8 @@ struct MenuBarViewModelTests {
     func launchRequestsInputMonitoringIndependentOfAccessibility() {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.x", wasTrusted: false, gap: 8,
-                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (_, spy) = makeVMWithReorder(store: store, trusted: false, granted: false)
         #expect(spy.requestCount >= 1)   // registered in the IM pane despite AX being untrusted
     }
@@ -628,7 +642,8 @@ struct MenuBarViewModelTests {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8,
                                hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap,
-                               bringToFrontOnRearrange: true))
+                               bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm, _) = makeVM(store: store)
         #expect(vm.bringToFrontOnRearrange)
     }
@@ -678,7 +693,8 @@ struct MenuBarViewModelTests {
         // opted-in at launch (seeded) + trusted + granted → started at init
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
-                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm, spy) = makeVMWithReorder(store: store, trusted: true, granted: true)
         #expect(spy.isRunning)
         vm.setReorderOnDrag(false)               // toggle off → stops
@@ -700,7 +716,8 @@ struct MenuBarViewModelTests {
     func reorderNeedsInputMonitoringState() {
         let on = InMemorySettingsStore()
         on.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
-                            hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+                            hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         #expect(makeVMWithReorder(store: on, trusted: true, granted: false).0.reorderNeedsInputMonitoring)
         #expect(!makeVMWithReorder(store: on, trusted: true, granted: true).0.reorderNeedsInputMonitoring)
         #expect(!makeVMWithReorder(store: on, trusted: false, granted: false).0.reorderNeedsInputMonitoring)
@@ -719,7 +736,8 @@ struct MenuBarViewModelTests {
         let repairer = SpyPermissionRepairer()
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
-                               hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+                               hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm, _) = makeVM(store: store, trusted: false, permissionRepairer: repairer)
         vm.repairAccessibilityPermission()
         #expect(repairer.resetScopes == [[.accessibility]])
@@ -737,7 +755,8 @@ struct MenuBarViewModelTests {
         let repairer = SpyPermissionRepairer()
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.x", wasTrusted: true, gap: 8,
-                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+                               hotKey: .rearrange, reorderOnDrag: true, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm, drag) = makeVMWithReorder(store: store, trusted: true, granted: false,
                                            permissionRepairer: repairer)
         let before = drag.requestCount
@@ -800,7 +819,8 @@ struct MenuBarViewModelTests {
     @Test("gap loads from settings")
     func gapLoadsFromSettings() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 24, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 24, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm, _) = makeVM(store: store)
         #expect(vm.gap == 24)
     }
@@ -810,7 +830,8 @@ struct MenuBarViewModelTests {
     @Test("out-of-range persisted gap is clamped on load")
     func outOfRangeLoadedGapClamped() {
         let store = InMemorySettingsStore()
-        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 9999, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false))
+        store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 9999, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm, _) = makeVM(store: store)
         #expect(vm.gap == 40)                             // clamped, not 9999
     }
@@ -853,7 +874,8 @@ struct MenuBarViewModelTests {
         let store = InMemorySettingsStore()
         store.save(AppSettings(targetBundleID: "com.googlecode.iterm2", wasTrusted: false, gap: 8,
                                hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .adaptive,
-                               bringToFrontOnRearrange: true))
+                               bringToFrontOnRearrange: true,
+                               tintingEnabled: false, readyIntensity: .standard))
         let (vm, _) = makeVM(store: store)
         vm.setGap(16)
         #expect(store.load().bringToFrontOnRearrange == true)

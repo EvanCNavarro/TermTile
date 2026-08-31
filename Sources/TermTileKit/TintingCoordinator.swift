@@ -31,7 +31,7 @@ public actor TintingCoordinator {
     private let reader: any SessionReading
     private let probe: any TTYProbing
     private let writer: any SessionTinting
-    private let readyColor: TintColor
+    private var readyColor: TintColor
 
     /// Previous character count per tty, WITH the cwd it belonged to.
     ///
@@ -49,6 +49,13 @@ public actor TintingCoordinator {
         self.probe = probe
         self.writer = writer
         self.readyColor = readyColor
+    }
+
+    /// Change the READY shade. Takes effect on the next pass; nothing is repainted eagerly,
+    /// because the next pass is at most one interval away and an eager repaint would paint a
+    /// session whose state may since have changed.
+    public func setReadyIntensity(_ intensity: ReadyIntensity) {
+        readyColor = intensity.color
     }
 
     /// One pass: read panes, probe ttys, join, classify, write.
