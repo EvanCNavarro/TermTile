@@ -1,5 +1,15 @@
 # TermTile backlog
 
+TWO NUMBERING SYSTEMS, DO NOT CROSS THEM (added 2026-08-31 after a fabricated citation).
+`#N` in THIS FILE and in `docs/decisions/` is a task id local to this backlog. GitHub issues and
+PRs are a SEPARATE sequence. Writing a bare `#38` inside a PR body, issue comment, or any other
+GitHub surface auto-links to whatever issue/PR happens to hold that number — which at the time
+was nothing, while `#7`–`#11` were real and unrelated PRs. A citation is a claim that an artifact
+exists, and the number reads as diligence while sending the reader somewhere empty.
+RULE: in GitHub-facing text cite `EvanCNavarro/TermTile#N` and verify it resolves; in repo-local
+text write backlog ids as `` `#37a` `` in backticks. Where a backlog task also has a GitHub issue,
+this file records both.
+
 Taxonomy: `#N · title · S0|S1|S2|DONE` (S0 captured · S1 stoke-planned · S2 brutally
 audited). Loop beats route S0/S1 through stoke-01-launch before building. Dependencies
 are explicit — do not start a task whose `blocked-by` is not DONE.
@@ -492,7 +502,7 @@ committed; findings notes are the durable output.
 
 Authority: `docs/decisions/0006-session-state-tinting.md`. Every finding cited below was
 measured on 2026-08-28 against live iTerm2 windows; do not re-derive from reading. Tier 1
-only — Apple Events is #38 and is NOT in scope for #37*.
+only — Apple Events is backlog `#38` / EvanCNavarro/TermTile#12, and is NOT in scope for `#37*`.
 
 #37 · Session-state tinting, Tier 1 (AX read + OSC write) — SPLIT into #37a–#37f · S1
   Replaces the out-of-tree `~/.local/bin/claude-window-state` + its launchd job + the
@@ -596,7 +606,7 @@ only — Apple Events is #38 and is NOT in scope for #37*.
   and unwire `window-state-flag.sh` from `~/.claude/settings.json`. Machine-local cleanup
   outside this repo — sequence it so the replacement is proven BEFORE the original is
   removed, and keep the script recoverable until then. [Tenet 9: cleanup is part of shipping]
-#38 · Tier 2: Apple Events precision mode (opt-in) · S0 · DEFERRED
+#38 · Tier 2: Apple Events precision mode (opt-in) · S0 · DEFERRED · GitHub: EvanCNavarro/TermTile#12
   blocked-by #37e. Removes every Tier 1 ceiling at once: background tabs, >9 windows, exact
   session mapping, and a future tab-bar indicator. `text of session` also supplies state
   hook-free. Cost: `com.apple.security.automation.apple-events` + NSAppleEventsUsageDescription
@@ -604,7 +614,7 @@ only — Apple Events is #38 and is NOT in scope for #37*.
   workload is 6 single-pane single-tab windows, which Tier 1 covers entirely; building this
   now would be a speculative feature. Requires an amendment to ADR 0006 (it changes the
   permission surface), not a silent add.
-#39 · Verify OSC 1337 SetColors against WezTerm · S0
+#39 · Verify OSC 1337 SetColors against WezTerm · S0 · GitHub: EvanCNavarro/TermTile#13
   blocked-by #37d. ADR 0006 claims the OSC write path has a ROUTE to WezTerm (already a
   TermTile target) that AppleScript never had. This is UNVERIFIED. Run it against real
   WezTerm before any README or ADR text claims multi-terminal support.

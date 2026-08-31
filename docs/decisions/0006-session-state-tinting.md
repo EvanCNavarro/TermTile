@@ -1,8 +1,8 @@
 # ADR 0006 — Session-state tinting: AX for state, OSC for colour
 
 Status: proposed (2026-08-28). Amended 2026-08-31 — finding 6 CORRECTED and finding 6b added
-after a measurement disproved the pane-geometry claim. Supersedes nothing. Binding for #37a–#37f. Tier 2
-(Apple Events) is explicitly OUT of scope here and tracked as #38; adopting it requires
+after a measurement disproved the pane-geometry claim. Supersedes nothing. Binding for backlog tasks `#37a`–`#37f` (`.engine/BACKLOG.md`). Tier 2
+(Apple Events) is explicitly OUT of scope here and tracked as EvanCNavarro/TermTile#12; adopting it requires
 an amendment to this ADR, because it changes the app's permission surface.
 
 ## Context
@@ -78,7 +78,8 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
    `.ambiguous`, so the window is left untinted. Single-session windows, which is the entire
    current real workload, are unaffected: the badge alone resolves them.
 
-   This is the strongest argument yet for Tier 2 (#38), which has no pane problem at all.
+   This is the strongest argument yet for Tier 2 (EvanCNavarro/TermTile#12), which has no
+   pane problem at all.
 
 7. **The nonce probe is not a viable fallback.** OSC 2 title writes DO reach `AXTitle` on
    ordinary windows. They do NOT pierce a window-title override: Claude Code writes OSC
@@ -118,7 +119,7 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
 
    **Consequence, and it is a real reduction in what Tier 1 delivers:** blocked (amber) and working
    (normal) classify; READY does not, so idle sessions read `.unknown` and stay untinted. The
-   feature currently cannot turn a window green. Shipping the coordinator (#37e) before this is
+   feature currently cannot turn a window green. Shipping the coordinator (backlog `#37e`) before this is
    solved would deliver a tinter that never shows the state the user most wants to see.
 
    Note this is the SAME ambiguity the out-of-tree hook existed to work around, arriving from the
@@ -143,7 +144,7 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
    The `AXTitle` glyph is out: it carries the state only on windows WITHOUT a manual title
    override, and 5 of the 6 real windows have one. That is worth stating plainly — the signal the
    old poller relies on is present in the session NAME, and only Apple Events reads that when the
-   window title is overridden. It is the strongest argument yet for Tier 2 (#38).
+   window title is overridden. It is the strongest argument yet for Tier 2 (EvanCNavarro/TermTile#12).
 
    The two surviving signals are complementary, not redundant: a Claude session redrawing in place
    holds its character count steady while a Codex session's interrupt affordance sits outside the
@@ -156,7 +157,7 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
    so stillness has not been observed, only assumed — that classifies `.unknown`. "We have not
    looked twice yet" and "this session is idle" are different claims and only one is safe to paint.
 
-   **Consequence:** the reader becomes STATEFUL. The coordinator (#37e) must hold the previous
+   **Consequence:** the reader becomes STATEFUL. The coordinator (backlog `#37e`) must hold the previous
    character count per session between polls. That is the one architectural requirement this
    finding adds.
 
@@ -176,7 +177,7 @@ silent lie of exactly the kind Tenet 8 forbids.
 The background-tab ceiling is accepted rather than worked around, because a background
 tab's background colour is not rendered to the user in the first place — the blind spot
 coincides with what cannot be seen. The cost is that a tab-BAR indicator is impossible in
-Tier 1; that is Tier 2's job (#38).
+Tier 1; that is Tier 2's job (EvanCNavarro/TermTile#12).
 
 ### Target graph (ADR 0001 rules hold unchanged)
 
@@ -236,7 +237,7 @@ The "no telemetry, no network" promise is unaffected and stays true.
 - **Apple Events (Tier 2).** Exact mapping with no join problem, handles background tabs,
   >9 windows and splits, and `text of session` supplies state hook-free. Rejected as the
   DEFAULT because it needs `com.apple.security.automation.apple-events`, a usage string, and
-  a third TCC prompt, and it locks the feature to iTerm2 permanently. Deferred to #38 as an
+  a third TCC prompt, and it locks the feature to iTerm2 permanently. Deferred to EvanCNavarro/TermTile#12 as an
   opt-in upgrade for users who hit a Tier 1 ceiling.
 - **iTerm2 Python/WebSocket API.** `EnableAPIServer` is on and the socket is live. Full
   fidelity, but it means a protobuf websocket client for a job two simpler mechanisms
