@@ -685,7 +685,13 @@ only — Apple Events is backlog `#38` / EvanCNavarro/TermTile#12, and is NOT in
   blocked-by #37e. A menu surface listing each session's join outcome and confidence, so an
   ambiguous/failed join is visible rather than mysterious. Closes the failure mode where a
   window silently stays normal and the user cannot tell whether that is the state or a bug.
-#37g · Retire the out-of-tree toolchain · S0
+#37g · Retire the out-of-tree toolchain · S0 · TRIGGER NOT FIRED, AND NOW WEAKER
+  (2026-08-31: the case for retiring the poller was partly built on TermTile reporting `blocked`
+  where the poller's glyph said idle. That was a FALSE POSITIVE — the marker was a task label, not
+  a state (ADR-0006 finding 10). The poller was right. TermTile currently has NO blocked detection
+  at all, so on that axis the poller is strictly ahead: its hook-flag mechanism genuinely resolves
+  the ✳ ambiguity. Do not retire it until EvanCNavarro/TermTile#6 produces a real blocked marker,
+  in addition to the original daily-use requirement.)
   blocked-by #37e. Only after #37e is live-proven: unload+remove
   `com.evancnavarro.claude-window-state.plist`, remove `~/.local/bin/claude-window-state`,
   and unwire `window-state-flag.sh` from `~/.claude/settings.json`. Machine-local cleanup

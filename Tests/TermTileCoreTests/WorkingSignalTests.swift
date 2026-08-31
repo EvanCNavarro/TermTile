@@ -64,8 +64,8 @@ struct StateEvidenceClassificationTests {
     /// human is the fact that matters.
     @Test("blocked outranks working even when the count is moving")
     func blockedOutranksWorking() {
-        let e = Self.evidence(tail: "⧉  waiting-on-a-person", delta: 99, interrupt: true)
-        #expect(AgentStateClassifier.classify(e) == .blocked)
+        let e = Self.evidence(tail: "NEEDS-YOUR-ANSWER", delta: 99, interrupt: true)
+        #expect(AgentStateClassifier.classify(e, blocked: ["NEEDS-YOUR-ANSWER"]) == .blocked)
     }
 
     @Test("movement classifies working")
