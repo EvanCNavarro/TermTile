@@ -1,6 +1,6 @@
 # TermTile - Handoff
 
-_Last updated: 2026-07-19. This is the single spot to pick TermTile back up. Read it top-to-bottom,
+_Last updated: 2026-08-31. This is the single spot to pick TermTile back up. Read it top-to-bottom,
 then jump to **Start here**. (Companion handoffs: `RememBar/HANDOFF.md`, `MacFaceKit/README.md` -
 the three repos share the MacFaceKit design system.)_
 
@@ -14,7 +14,7 @@ the three repos share the MacFaceKit design system.)_
 | Git | Check `git status --short` before release |
 | Latest published release | **v0.2.6** (2026-07-18), build 138, Developer ID signed/notarized/stapled |
 | Release target | None active; v0.2.6 is published |
-| Latest unreleased work | Live-app polish after v0.2.6: top-right update indicators, stale-permission recovery, and zoom-safe drag-reorder. |
+| Latest unreleased work | **Session tint (ADR 0006, Phase F)** — colours each terminal session by what its agent is doing. Complete and live-verified, OFF by default, NOT yet released. Plus earlier live-app polish: top-right update indicators, stale-permission recovery, zoom-safe drag-reorder. |
 | Public signing | Developer ID Application: Evan Navarro (`XG9SBNWNXT`) |
 | Notarization | Accepted; release CI notarizes, staples, and Gatekeeper-assesses before zipping |
 | Design-system dep | MacFaceKit `.upToNextMinor(from: "0.4.2")` (public git URL, auto-resolved) |
@@ -63,6 +63,43 @@ the three repos share the MacFaceKit design system.)_
   passive `checkForUpdateInformation()` probe for update-available indicators; **Check for Updates…**
   still opens the foreground Sparkle update flow through `TermTileUserDriver` and
   `MacFaceKit.UpdateWindowController`.
+
+## Session tint (ADR 0006) — the newest feature, and the one with the most context
+
+Colours each target session by agent state: green idle, amber blocked on you, normal working.
+**Off by default**, and it needs no permission beyond the Accessibility grant tiling already uses.
+
+Read `docs/decisions/0006-session-state-tinting.md` before touching it. Nine findings there were
+measured, several of them after a wrong first answer, and the ADR keeps the corrections visible
+rather than rewriting history.
+
+**The four that will bite you if you skip them:**
+
+- **Pane index is a CREATION counter, not a position** (finding 6b). Geometry cannot recover it. An
+  earlier two-pane observation looked like row-major only because the panes were created
+  left-then-right; a 2x2 grid built right-before-left disproved it.
+- **`shift+tab to cycle` is NOT an idle marker** (finding 8). It was measured on a window actively
+  running a command. Using it turns a working window green, which invites interrupting live work.
+- **iTerm's AX text carries `U+0000` where padding sits** (finding 7b), so every marker containing a
+  space matched only intermittently. Normalise before matching.
+- **Ready requires a MEASURED character-count delta** (finding 9), and the delta can go NEGATIVE as
+  scrollback re-renders — the test is `!= 0`, never `> 0`.
+
+**Proving it:** `TT_LIVE_AX=1 swift test --filter Live` runs every live test; they skip without the
+env var so CI stays hermetic. `TT_LIVE_AX=1 TT_LIVE_WRITE=1` additionally paints real terminals.
+Rendered UI evidence and the full method are in `docs/verification/session-tinting-2026-08-31.md`.
+
+**Testing the debug binary?** `.build/debug/TermTile` has no `Info.plist`, so `UserDefaults.standard`
+resolves to the **`TermTile`** domain, not `dev.ecn.apps.termtile`. Seeding the bundle-id domain and
+launching the debug binary proves nothing — it reads absent keys and correctly does nothing, which
+is indistinguishable from broken wiring. This cost a confident wrong conclusion once already.
+
+**What remains:** backlog `#37g` retires the out-of-tree poller this replaces, and is deliberately
+gated on daily use rather than on a green suite. Its source is preserved at
+`docs/reference/replaced-tooling/` so the removal is recoverable. Open issues:
+EvanCNavarro/TermTile#6 (widen the blocked-marker vocabulary), #12 (Tier 2 Apple Events — stronger
+now than when deferred, since the session-name glyph is unreadable on renamed windows), #13 (verify
+the OSC write path against WezTerm before any multi-terminal claim).
 
 ## Known-good dev hooks / gotchas
 
