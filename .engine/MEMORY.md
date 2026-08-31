@@ -12,3 +12,11 @@
 - **Research authority:** `docs/research/macos-tiling-research.md` (verified deep-research).
   Spec draft: `docs/product/spec-draft.md`. Template app: RememBar at
   `~/Desktop/safari-history-export/BrowserMemoryBar/`.
+
+- **Testing the DEBUG binary vs the packaged app — different UserDefaults domains.** `.build/debug/TermTile`
+  has no `Info.plist`, so `UserDefaults.standard` resolves to the **`TermTile`** domain (process name),
+  not `dev.ecn.apps.termtile`. Seeding the bundle-id domain and launching the debug binary proves
+  NOTHING — the app reads absent keys, falls back to defaults, and behaves correctly-but-inertly,
+  which is indistinguishable from broken wiring. Measured 2026-08-31 while proving session tinting;
+  it produced a confident wrong "the app does not write" conclusion. Seed `TermTile`, or test the
+  packaged `.app`. Evidence: `docs/verification/session-tinting-2026-08-31.md`.
