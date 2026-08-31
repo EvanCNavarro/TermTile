@@ -596,7 +596,7 @@ only — Apple Events is backlog `#38` / EvanCNavarro/TermTile#12, and is NOT in
   (200 rapid writes mid-render, scrollback byte-identical) — but that run rules out buffer
   corruption ONLY, not visual flicker; PROVE must include a human/screencapture check for
   flicker against a live agent session.
-#37e · Tinting: coordinator + shell wiring — SPLIT into #37e1/#37e2 · S1 · UNBLOCKED
+#37e · Tinting: coordinator + shell wiring — SPLIT into #37e1/#37e2 · DONE (both halves merged 2026-08-31)
   (Split 2026-08-31. The README privacy rewrite is an obligation of the moment the feature becomes
   USER-VISIBLE, not of an internal actor, so it travels with the shell wiring rather than with the
   coordinator. Keeping them in one task would either delay the coordinator or ship a README
