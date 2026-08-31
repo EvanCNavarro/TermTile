@@ -223,6 +223,28 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
    to resolve, and reading the screen now resolves it — which the earlier false positive only
    appeared to do.
 
+12. **WezTerm ignores OSC 1337 `SetColors` — the portability argument was wrong.**
+   Measured with WezTerm installed and running. Writing `\033]1337;SetColors=bg=6A1B9A\a` to its
+   tty left the background BLACK.
+
+   The instrument was checked first, because "nothing happened" and "the write never arrived" look
+   identical: plain text written to the SAME tty (`WEZTERM-CHANNEL-CHECK-12345`) rendered in the
+   window. The channel works; WezTerm consumes the sequence and does nothing with it.
+
+   **This reverses an argument made in this ADR's own Consequences and repeated to the user.** The
+   claim was that OSC is a terminal PROTOCOL rather than an app API, so Tier 1's write path was the
+   more portable route and Tier 2's iTerm2-only nature counted against it. Measured, Tier 1 is
+   **also iTerm2-only** — portability is not a discriminator between the tiers at all. The original
+   objection, that this feature works for only one of TermTile's two supported terminals, was
+   CORRECT; calling it "wrong, and backwards" was itself wrong.
+
+   Only the WRITE path was measured. The read path on WezTerm — AX text areas, a window-number
+   badge, a session-id environment variable — was NOT tested, and is moot for tinting while the
+   write path fails. That is an untested gap, not a verified absence.
+
+   **Consequence:** Session tint is iTerm2-only. The README advertised "iTerm2 or WezTerm" as
+   targets and described the feature without scoping it, which over-promised.
+
 ## Decision
 
 ### Tier 1 — the default, and the only tier built here
@@ -286,9 +308,10 @@ The "no telemetry, no network" promise is unaffected and stays true.
 
 - Deletes the launchd job and `window-state-flag.sh` outright. The `✳` ambiguity that hook
   existed to solve dissolves once the screen is readable.
-- Portable in principle beyond iTerm2: OSC 1337 is a terminal protocol, not an app API, so
+- ~~Portable in principle beyond iTerm2: OSC 1337 is a terminal protocol, not an app API, so
   the write path has a route to WezTerm (already a TermTile target) that AppleScript never
-  had. NOT verified against WezTerm — do not claim it until it is run.
+  had.~~ **DISPROVEN 2026-08-31 — see finding 12. WezTerm ignores OSC 1337 `SetColors`, so
+  Tier 1 is iTerm2-only in practice, exactly like Tier 2.**
 - Ceilings accepted in Tier 1: >9 windows lose the badge and fall back to cwd; background
   tabs are unreadable; sessions sharing a cwd with no badge are ambiguous and stay untinted;
   and per finding 6b any multi-session window whose sessions share a cwd is likewise untinted.

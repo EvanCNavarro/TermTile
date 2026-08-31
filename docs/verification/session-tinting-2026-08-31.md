@@ -125,3 +125,24 @@ LIVE-PASS2  portfolio              -> /dev/ttys004  ready     (glyph ✳)
 `ttys007` is the case the retraction was about: the glyph says idle, TermTile says blocked. This
 time TermTile is right, **verifiably** — the block was created on purpose. That is the `✳` ambiguity
 the out-of-tree hook exists to resolve, now actually resolved rather than apparently resolved.
+
+
+## WezTerm: the OSC write path does NOT work (EvanCNavarro/TermTile#13)
+
+`screenshots/wezterm-osc-ignored-2026-08-31.png`.
+
+Writing `\033]1337;SetColors=bg=6A1B9A\a` to a live WezTerm session's tty left the background
+BLACK. The instrument was checked before concluding, because "nothing happened" and "the write
+never arrived" are indistinguishable: plain text written to the SAME tty
+(`WEZTERM-CHANNEL-CHECK-12345`) rendered in the window, and is visible in the screenshot. The
+channel works; WezTerm consumes the sequence and does nothing.
+
+**This reverses an argument made repeatedly during this work** — that OSC is a terminal protocol
+rather than an app API, so Tier 1 was the more portable route and Tier 2's iTerm2-only nature
+counted against it. Tier 1 is also iTerm2-only. Portability does not separate the tiers.
+
+Only the WRITE path was measured. WezTerm's read path (AX text areas, a badge, a session-id
+environment variable) was not tested and is moot while the write fails — an untested gap, not a
+verified absence.
+
+README and ADR 0006 now scope Session tint to iTerm2.

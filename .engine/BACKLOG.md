@@ -707,7 +707,11 @@ only — Apple Events is backlog `#38` / EvanCNavarro/TermTile#12, and is NOT in
   workload is 6 single-pane single-tab windows, which Tier 1 covers entirely; building this
   now would be a speculative feature. Requires an amendment to ADR 0006 (it changes the
   permission surface), not a silent add.
-#39 · Verify OSC 1337 SetColors against WezTerm · S0 · GitHub: EvanCNavarro/TermTile#13
+#39 · Verify OSC 1337 SetColors against WezTerm · DONE · GitHub: EvanCNavarro/TermTile#13
+  (2026-08-31: MEASURED — WezTerm IGNORES OSC 1337 SetColors. Background stayed black; the tty
+  channel was proven working first by rendering plain text to the same device. Session tint is
+  iTerm2-only; README and ADR-0006 finding 12 corrected. Reverses the portability argument that
+  had counted against Tier 2 — neither tier is portable.)
   blocked-by #37d. ADR 0006 claims the OSC write path has a ROUTE to WezTerm (already a
   TermTile target) that AppleScript never had. This is UNVERIFIED. Run it against real
   WezTerm before any README or ADR text claims multi-terminal support.
