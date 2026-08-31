@@ -1,6 +1,7 @@
 # ADR 0006 — Session-state tinting: AX for state, OSC for colour
 
-Status: proposed (2026-08-28). Supersedes nothing. Binding for #37a–#37f. Tier 2
+Status: proposed (2026-08-28). Amended 2026-08-31 — finding 6 CORRECTED and finding 6b added
+after a measurement disproved the pane-geometry claim. Supersedes nothing. Binding for #37a–#37f. Tier 2
 (Apple Events) is explicitly OUT of scope here and tracked as #38; adopting it requires
 an amendment to this ADR, because it changes the app's permission surface.
 
@@ -50,9 +51,34 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
    user-disableable, so a fallback is still required.
 
 6. **Background tabs are invisible to AX.** A window with 3 sessions across 2 tabs showed
-   2 text areas to AX (active tab only) and 3 sessions to AppleScript. Panes WITHIN the
-   active tab are resolvable by geometry: `area[0] x=578` = p0 = ttys006,
-   `area[1] x=912` = p1 = ttys007.
+   2 text areas to AX (active tab only) and 3 sessions to AppleScript.
+
+   ~~Panes WITHIN the active tab are resolvable by geometry: `area[0] x=578` = p0 = ttys006,
+   `area[1] x=738` = p1 = ttys007.~~ **CORRECTED 2026-08-31 — see finding 6b. That two-pane
+   result coincided with creation order and did not establish what it appeared to.**
+
+6b. **Pane index is a CREATION COUNTER, not a position — panes are NOT resolvable by geometry.**
+   The two-pane observation in finding 6 was built left-then-right, so creation order and
+   left-to-right order agreed and the case could not distinguish them. Re-measured with a 2x2
+   grid built by splitting the RIGHT side BEFORE the left:
+
+   | position | observed pane | row-major geometry predicts |
+   |---|---|---|
+   | left-top | p0 | p0 |
+   | right-top | p1 | p1 |
+   | right-bottom | **p2** | p3 |
+   | left-bottom | **p3** | p2 |
+
+   The `p` in `ITERM_SESSION_ID=w<W>t<T>p<P>` tracks the order panes were CREATED. Geometry
+   cannot recover it, and no AX attribute carries it (the exhaustive attribute sweep in finding
+   7's probe found no session identifier anywhere in the tree).
+
+   **Consequence:** a window holding more than one session — splits, tabs, or both — is
+   resolvable ONLY when cwd separates its sessions. Identical cwds are unresolvable and yield
+   `.ambiguous`, so the window is left untinted. Single-session windows, which is the entire
+   current real workload, are unaffected: the badge alone resolves them.
+
+   This is the strongest argument yet for Tier 2 (#38), which has no pane problem at all.
 
 7. **The nonce probe is not a viable fallback.** OSC 2 title writes DO reach `AXTitle` on
    ordinary windows. They do NOT pierce a window-title override: Claude Code writes OSC
@@ -137,7 +163,8 @@ The "no telemetry, no network" promise is unaffected and stays true.
   the write path has a route to WezTerm (already a TermTile target) that AppleScript never
   had. NOT verified against WezTerm — do not claim it until it is run.
 - Ceilings accepted in Tier 1: >9 windows lose the badge and fall back to cwd; background
-  tabs are unreadable; sessions sharing a cwd with no badge are ambiguous and stay untinted.
+  tabs are unreadable; sessions sharing a cwd with no badge are ambiguous and stay untinted;
+  and per finding 6b any multi-session window whose sessions share a cwd is likewise untinted.
 - The README privacy section must be rewritten in the shipping change, not after it.
 
 ## Alternatives rejected
