@@ -25,7 +25,24 @@ public enum AgentState: String, Equatable, Sendable {
 public enum AgentStateClassifier {
     /// Blocked beats everything: "finished" and "waiting on you" are otherwise indistinguishable,
     /// which is the exact ambiguity the out-of-tree hook existed to work around (ADR-0006 Context).
-    static let blockedMarkers = ["waiting-on-a-person"]
+    /// EMPTY since 2026-08-31, and the reason is a defect that shipped.
+    ///
+    /// `waiting-on-a-person` was the sole blocked marker, taken from a live session's tail on
+    /// 2026-08-28. It is not a state — it is the text of Claude Code's per-session TASK LABEL,
+    /// rendered in a `⧉ <text>` slot. Measured across five live sessions: three carried that slot
+    /// with three DIFFERENT values (`waiting-on-a-person`, `icon-marks`, `portfolio-roster`), all
+    /// three were IDLE by the session-name glyph, and two sessions had no slot at all. If the
+    /// first meant "blocked on a human", the other two would mean the same thing in other words.
+    ///
+    /// The marker reported one session as blocked in every pass for hours while it sat idle. A
+    /// false AMBER is worse than a missing one: it calls the user over to a window where nothing
+    /// is wrong, and a signal that cries wolf stops being read.
+    ///
+    /// No replacement is guessed at. Blocked-detection is therefore ABSENT — those sessions
+    /// classify `.unknown` and stay untinted. Finding a real marker needs a captured sample of a
+    /// genuinely blocked session (a permission prompt, an AskUserQuestion), which is rare under
+    /// `--dangerously-skip-permissions`. Tracked as EvanCNavarro/TermTile#6.
+    static let blockedMarkers: [String] = []
     static let workingMarkers = ["esc to interrupt"]
     /// EMPTY, DELIBERATELY — see ADR-0006 finding 8. `shift+tab to cycle` was used here until
     /// 2026-08-31, when it was measured on a window that was ACTIVELY RUNNING a command and found
@@ -85,8 +102,12 @@ public enum AgentStateClassifier {
     /// twice yet" and "this session is idle" are different claims and only one of them is safe
     /// to paint green (ADR-0006 finding 8).
     public static func classify(_ evidence: StateEvidence) -> AgentState {
+        classify(evidence, blocked: blockedMarkers)
+    }
+
+    static func classify(_ evidence: StateEvidence, blocked: [String]) -> AgentState {
         let tail = normalize(String(evidence.tail.suffix(tailWindow)))
-        if blockedMarkers.contains(where: tail.contains) { return .blocked }
+        if blocked.contains(where: tail.contains) { return .blocked }
         if WorkingSignal.isWorking(evidence) { return .working }
         guard evidence.charCountDelta != nil else { return .unknown }
         return .ready
@@ -94,8 +115,16 @@ public enum AgentStateClassifier {
 
     /// - Parameter scrollback: the session's full visible text, oldest first.
     public static func classify(scrollback: String) -> AgentState {
+        classify(scrollback: scrollback, blocked: blockedMarkers)
+    }
+
+    /// Marker-set injectable so the BLOCKED semantics — precedence over working, and needing no
+    /// delta — stay under test while `blockedMarkers` is empty (see its comment). Without this
+    /// seam those properties would be unreachable, their tests would be deleted, and whoever adds
+    /// a real marker for EvanCNavarro/TermTile#6 would be re-deriving the ordering from scratch.
+    static func classify(scrollback: String, blocked: [String]) -> AgentState {
         let tail = normalize(String(scrollback.suffix(tailWindow)))
-        if blockedMarkers.contains(where: tail.contains) { return .blocked }
+        if blocked.contains(where: tail.contains) { return .blocked }
         if workingMarkers.contains(where: tail.contains) { return .working }
         if readyMarkers.contains(where: tail.contains) { return .ready }
         return .unknown

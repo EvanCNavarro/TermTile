@@ -126,19 +126,26 @@ struct TintingDriverTests {
                 "completedPasses moved from \(atStop) to \(later) AFTER stop() returned")
     }
 
-    /// THE ORPHANED-TINT ORDERING. Found by planting: moving `resetAll()` BEFORE the cancel passed
-    /// every other test, yet it is the precise failure the reset exists to prevent — the reset
-    /// paints normal, then the still-running pass repaints a colour on top, and the session is left
-    /// wearing a tint after the user disabled the feature.
+    /// WEAKENED 2026-08-31, and named for what it still proves rather than what it used to.
     ///
-    /// Asserting the LAST write is what catches it. "a normal was written somewhere" is true in
-    /// both orderings and proves nothing.
-    @Test("after stop(), the LAST write is normal — no pass repaints over the reset")
-    func resetIsTheLastWrite() async {
-        // A blocked marker, so the pass writes WITHOUT needing a delta — a first pass that
-        // classifies unknown writes nothing and the ordering would go untested.
+    /// It was `after stop(), the LAST write is normal`, and it CAUGHT reset-before-cancel: the
+    /// blocked marker painted a distinct colour (amber) WITHOUT needing a baseline, so a pass
+    /// resuming after the reset repainted over it visibly. That marker was retracted — it was
+    /// Claude Code's task label, not a state (EvanCNavarro/TermTile#6).
+    ///
+    /// With the remaining vocabulary the ordering is UNTESTABLE here, and this was measured rather
+    /// than assumed: re-planting reset-before-cancel now PASSES twice over. Working paints
+    /// `normal`, indistinguishable from the reset; and ready needs a baseline that `resetAll()`
+    /// has already cleared by the time the in-flight pass reads it, so that pass classifies
+    /// `.unknown` and writes nothing at all.
+    ///
+    /// So this asserts only the weaker, still-true property: a stop leaves the session at normal.
+    /// Restoring the ordering guard DEPENDS on a verified marker that paints a distinct colour
+    /// without a baseline — tracked on EvanCNavarro/TermTile#6.
+    @Test("after stop(), the session is left at normal")
+    func stopLeavesSessionAtNormal() async {
         let pane = ObservedPane(snapshot: AXPaneSnapshot(windowBadge: 6, cwd: "termtile"),
-                                scrollbackTail: "⧉  waiting-on-a-person", characterCount: 100)
+                                scrollbackTail: "❯ steady", characterCount: 100)
         let session = TTYSessionSnapshot(tty: "/dev/ttys005", windowIndex: 5, tabIndex: 0,
                                          paneIndex: 0, cwd: "termtile")
         let reader = SlowSessionReader(panes: [pane], delay: .milliseconds(200))
@@ -149,13 +156,14 @@ struct TintingDriverTests {
                                             writer: tinter),
             interval: .milliseconds(10))
         await driver.start()
-        #expect(await Self.eventually { await reader.entered >= 1 })
+        #expect(await Self.eventually { await tinter.writtenHexes.contains(TintPalette.ready.hex) },
+                "the pass never painted, so a reset proves nothing")
         await driver.stop()
 
         let writes = await tinter.writtenHexes
-        #expect(!writes.isEmpty, "nothing was written at all, so ordering proves nothing")
+        #expect(writes.contains(TintPalette.ready.hex))
         #expect(writes.last == TintPalette.normal.hex,
-                "last write was \(writes.last ?? "none") — a pass repainted over the reset")
+                "last write was \(writes.last ?? "none") — the session was not left at normal")
     }
 
     @Test("stopping repaints touched sessions back to normal")
@@ -174,7 +182,8 @@ struct TintingDriverTests {
 struct TintingDriverDiagnosticsTests {
     static func rig() -> (TintingDriver, RecordingTinter) {
         let pane = ObservedPane(snapshot: AXPaneSnapshot(windowBadge: 6, cwd: "termtile"),
-                                scrollbackTail: "⧉  waiting-on-a-person", characterCount: 100)
+                                scrollbackTail: "• Working (3s · esc to interrupt)",
+                                characterCount: 100)
         let session = TTYSessionSnapshot(tty: "/dev/ttys005", windowIndex: 5, tabIndex: 0,
                                          paneIndex: 0, cwd: "termtile")
         let tinter = RecordingTinter()
@@ -192,7 +201,7 @@ struct TintingDriverDiagnosticsTests {
         #expect(await TintingDriverTests.eventually { await !driver.lastDecisions().isEmpty })
         let decisions = await driver.lastDecisions()
         #expect(decisions.count == 1)
-        #expect(decisions.first?.state == .blocked)
+        #expect(decisions.first?.state == .working)
         await driver.stop()
     }
 

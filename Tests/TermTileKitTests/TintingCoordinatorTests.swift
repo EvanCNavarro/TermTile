@@ -54,13 +54,16 @@ struct TintingCoordinatorTests {
         #expect(await tinter.writtenHexes == [TintPalette.normal.hex])
     }
 
-    @Test("a blocked marker paints amber without needing a delta")
-    func blockedNeedsNoDelta() async {
+    /// A marker-derived state paints on the FIRST pass, with no baseline. Uses the interrupt
+    /// affordance because it is the only VERIFIED marker: the blocked marker this test previously
+    /// used turned out to be Claude Code's task label (EvanCNavarro/TermTile#6).
+    @Test("a marker-derived state paints without needing a delta")
+    func markerStateNeedsNoDelta() async {
         let (coord, _, _, tinter) = Self.rig(
-            panes: [Self.pane(tail: "⧉  waiting-on-a-person", count: 1000)])
+            panes: [Self.pane(tail: "• Working (3s · esc to interrupt)", count: 1000)])
         let decisions = await coord.pass()
-        #expect(decisions.first?.state == .blocked)
-        #expect(await tinter.writtenHexes == [TintPalette.blocked.hex])
+        #expect(decisions.first?.state == .working)
+        #expect(await tinter.writtenHexes == [TintPalette.normal.hex])
     }
 
     /// An unresolvable pane must produce NO write — the state may be knowable while the target
@@ -72,7 +75,8 @@ struct TintingCoordinatorTests {
             TTYSessionSnapshot(tty: "/dev/ttys011", windowIndex: 10, tabIndex: 0, paneIndex: 0, cwd: "same")
         ]
         let (coord, _, _, tinter) = Self.rig(
-            panes: [Self.pane(cwd: "same", badge: nil, tail: "⧉  waiting-on-a-person", count: 500)],
+            panes: [Self.pane(cwd: "same", badge: nil,
+                              tail: "• Working (3s · esc to interrupt)", count: 500)],
             sessions: shared)
         let decisions = await coord.pass()
         #expect(decisions.first?.tty == nil)

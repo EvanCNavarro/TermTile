@@ -14,9 +14,12 @@ struct SessionReadingPipelineTests {
     ]
 
     /// Tails are real captures from the 2026-08-28 probe.
-    static let blockedPane = ObservedPane(
+    /// An idle-looking tail with NO recognised marker. It was a blocked fixture until the marker
+    /// it relied on was found to be a task label (EvanCNavarro/TermTile#6); `.unknown` is the
+    /// honest classification for a pane carrying no verified marker.
+    static let unknownPane = ObservedPane(
         snapshot: AXPaneSnapshot(windowBadge: 4, cwd: "invela-marketing-suite"),
-        scrollbackTail: "  /rc\n  ⧉  waiting-on-a-person\n", characterCount: 1000)
+        scrollbackTail: "  /rc\n  ⧉  some-task-label\n", characterCount: 1000)
     /// A WORKING tail, not a ready one. Ready-detection was withdrawn on 2026-08-31 after
     /// `shift+tab to cycle` was measured on a window that was actively running a command
     /// (ADR-0006 finding 8) — so this pane exercises the second real state the pipeline can
@@ -27,7 +30,7 @@ struct SessionReadingPipelineTests {
 
     @Test("panes resolve to their ttys and classify to their states")
     func endToEnd() async {
-        let reader = InMemorySessionReader(panes: [Self.blockedPane, Self.workingPane])
+        let reader = InMemorySessionReader(panes: [Self.unknownPane, Self.workingPane])
         let panes = await reader.visiblePanes()
         #expect(panes.count == 2)
 
@@ -36,7 +39,7 @@ struct SessionReadingPipelineTests {
         #expect(outcomes == [.resolved(tty: "/dev/ttys003"), .resolved(tty: "/dev/ttys005")])
 
         let states = panes.map { AgentStateClassifier.classify(scrollback: $0.scrollbackTail) }
-        #expect(states == [.blocked, .working])
+        #expect(states == [.unknown, .working])
     }
 
     /// The negative contract end-to-end: an unresolvable pane must produce NO tty to write to.
@@ -47,7 +50,8 @@ struct SessionReadingPipelineTests {
             TTYSessionSnapshot(tty: "/dev/ttys011", windowIndex: 10, tabIndex: 0, paneIndex: 0, cwd: "same")
         ]
         let pane = ObservedPane(snapshot: AXPaneSnapshot(windowBadge: nil, cwd: "same"),
-                                scrollbackTail: "⧉  waiting-on-a-person", characterCount: 500)
+                                scrollbackTail: "• Working (3s · esc to interrupt)",
+                                characterCount: 500)
         let reader = InMemorySessionReader(panes: [pane])
         let panes = await reader.visiblePanes()
         #expect(panes.count == 1)
@@ -57,7 +61,7 @@ struct SessionReadingPipelineTests {
 
         // The state is knowable; the TARGET is not. Both facts must survive to the caller, or it
         // would tint a guessed window with a correctly-read state — the worst of both.
-        #expect(AgentStateClassifier.classify(scrollback: panes[0].scrollbackTail) == .blocked)
+        #expect(AgentStateClassifier.classify(scrollback: panes[0].scrollbackTail) == .working)
         let targets = outcomes.compactMap { outcome -> String? in
             if case .resolved(let tty) = outcome { return tty }
             return nil

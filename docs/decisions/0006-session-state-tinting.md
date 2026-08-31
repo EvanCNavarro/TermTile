@@ -29,9 +29,11 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
 
 1. **AX can read session state.** Each iTerm session's `AXTextArea` exposes its full
    scrollback (17k–44k chars observed) plus `AXDocument` (cwd) and `AXDescription: shell`.
-   The blocked-state signal is literal visible text — a live session's tail read
-   `⧉  waiting-on-a-person`. TermTile's EXISTING Accessibility grant covers this. No
-   AppleScript, no hooks.
+   TermTile's EXISTING Accessibility grant covers this. No AppleScript, no hooks.
+
+   ~~The blocked-state signal is literal visible text — a live session's tail read
+   `⧉  waiting-on-a-person`.~~ **RETRACTED 2026-08-31 — see finding 10. That string is a
+   task LABEL, not a state, and reading it as one was a defect that shipped.**
 
 2. **Colour can be set without Apple Events.** `printf '\033]1337;SetColors=bg=RRGGBB\a'
    > /dev/ttysNNN` changes the session background. Verified by AppleScript readback inside
@@ -160,6 +162,37 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
    **Consequence:** the reader becomes STATEFUL. The coordinator (backlog `#37e`) must hold the previous
    character count per session between polls. That is the one architectural requirement this
    finding adds.
+
+10. **`⧉ <text>` is a task LABEL slot, and reading it as a state was wrong.**
+   `waiting-on-a-person` was taken from a live tail on 2026-08-28 and shipped as the sole blocked
+   marker. Re-measured across five live sessions on 2026-08-31:
+
+   | session | `⧉` slot | session-name glyph |
+   |---|---|---|
+   | invela-marketing-suite | `waiting-on-a-person` | `✳` IDLE |
+   | pushtext | `icon-marks` | `✳` IDLE |
+   | portfolio | `portfolio-roster` | `✳` IDLE |
+   | termtile | *(no slot)* | working |
+   | ChangeFabric | *(no slot)* | `✳` IDLE |
+
+   Three different values in the same slot, all on IDLE sessions, and two sessions with no slot at
+   all. If the first meant "blocked on a human", the other two would mean the same thing in other
+   words. It is whatever the user named their task.
+
+   The marker reported one session as blocked in EVERY pass for hours while it sat idle. **A false
+   amber is worse than a missing one** — it calls the user to a window where nothing is wrong, and
+   a signal that cries wolf stops being read.
+
+   **This also retracts a comparison.** PR bodies and the verification doc claimed TermTile beat
+   the out-of-tree poller because it reported `blocked` where the poller's glyph said idle. The
+   poller was RIGHT and this was wrong. The `✳`-versus-blocked ambiguity that the old hook exists
+   to resolve is real, and nothing here has resolved it.
+
+   **Consequence:** blocked-detection is ABSENT. Those sessions classify `.unknown` and stay
+   untinted; amber never fires. A real marker needs a captured sample of a genuinely blocked
+   session — rare under `--dangerously-skip-permissions` — tracked as EvanCNavarro/TermTile#6.
+   The ordering guard in `TintingDriverTests` is weakened by the same retraction and is named for
+   what it now proves; restoring it depends on that marker too.
 
 ## Decision
 

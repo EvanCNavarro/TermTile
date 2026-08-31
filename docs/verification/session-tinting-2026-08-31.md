@@ -43,7 +43,7 @@ Real reader, real probe, real join, real classifier, real `OSCColorWriter`
 
 ```
 E2E  termtile               -> /dev/ttys005  working  wrote=true
-E2E  invela-marketing-suite -> /dev/ttys003  blocked  wrote=true
+E2E  invela-marketing-suite -> /dev/ttys003  blocked  wrote=true   <-- WRONG, see below
 E2E  ChangeFabric           -> /dev/ttys000  ready    wrote=true
 E2E  evancnavarro           -> /dev/ttys001  working  wrote=true
 E2E  pushtext               -> /dev/ttys002  ready    wrote=true
@@ -78,3 +78,22 @@ The instrument would have reported "no writes" whether the feature worked or not
   reads a rendered view and cannot see a transient repaint artifact.
 - Long-run behaviour alongside the out-of-tree poller. Both write every ~5s; they will fight until
   the poller is retired (`#37g`). That is expected, not a defect, and is why `#37g` exists.
+
+
+## RETRACTION (same day)
+
+The `blocked` classifications above are **false positives**, and so is the superiority claim made
+from them.
+
+`⧉ waiting-on-a-person` is Claude Code's per-session task LABEL, not a state. Measured across five
+live sessions: three carried that slot with three different values (`waiting-on-a-person`,
+`icon-marks`, `portfolio-roster`), all three were IDLE by the session-name glyph, and two sessions
+had no slot at all.
+
+This document previously said TermTile was better than the out-of-tree poller because it reported
+`blocked` on `ttys003` where the poller's glyph said idle. **The poller was right.** That session
+was idle; TermTile was reading a task name. The claim is withdrawn.
+
+Blocked-detection is now absent (ADR 0006 finding 10). Everything else in this document stands:
+the join, the ready/working classification, the write path, and the rendered UI were all measured
+independently of the retracted marker.
