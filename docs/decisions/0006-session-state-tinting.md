@@ -278,16 +278,38 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
     AppKit's conversion agrees with the terminal at full precision — 13.434/255 predicted against
     13.432/255 measured — so the transform is the platform's own, not a fitted curve.
 
-    **Consequence:** `OSCColorWriter` converts Generic RGB to Display P3 before formatting the
-    escape sequence. Live-proven: five of the six palette colours now render as exactly the hex
-    they request, and `readySubtle` lands 1/255 low because `#0E2B18` has no exact 8-bit Display
-    P3 preimage — a property of that colour, not an error in the transform. Alternating the two
-    writers on one window now yields the same 8-bit colour from both, residual 75/65535 (0.29 of
-    one 8-bit step), where before it was a zeroed red channel.
+    ~~**Consequence:** `OSCColorWriter` converts Generic RGB to Display P3 before formatting the
+    escape sequence.~~ **SUPERSEDED THE SAME DAY — see finding 14.** That fix worked and was
+    live-proven, but it was the wrong shape: it compensated for a default instead of overriding
+    it.
 
-    NOT verified: whether iTerm's interpretation follows the attached display's profile. This
-    machine has one display, so a fixed transform is all that could be tested here.
-    Tracked as EvanCNavarro/TermTile#31.
+14. **`SetColors` takes an explicit colour space, and naming it removes the problem rather than
+    correcting for it.** (2026-09-01, EvanCNavarro/TermTile#29.) The escape accepts
+    `cs:RRGGBB` where `cs` is `srgb`, `rgb` (the device space) or `p3` — documented since iTerm
+    3.3, and absent from every measurement in finding 13 because I characterised the protocol's
+    BEHAVIOUR without reading its SPECIFICATION. Doing the second first would have skipped the
+    entire space-identification exercise.
+
+    Finding 13's measurement was not wasted and was not wrong — it is what makes the default
+    legible. Confirmed directly this time rather than inferred: `p3:143C22` and bare `143C22`
+    read back byte-identically (`0,12253,6093`), which pins the unprefixed default to Display P3.
+
+    The load-bearing surprise was `rgb:`. I predicted it would read back `#112F1A`, the same as
+    `srgb:`; it read back `5139,15419,8737` — **exactly the value the AppleScript poller writes.**
+    iTerm's device space and AppleScript's `background color` space are the same one, so the
+    palette hex needs no conversion at all.
+
+    **Consequence:** `OSCSequence.setBackground` emits `bg=rgb:HEX` and nothing converts. All six
+    palette colours render as exactly the hex they request, drift 0 including `readySubtle`,
+    whose 1/255 residual was an artefact of the conversion and not of the colour. Three
+    dependencies disappear with the arithmetic: on iTerm's undocumented default, on AppKit
+    agreeing with iTerm about Generic RGB's primaries, and on the transform being
+    display-independent — `rgb:` and AppleScript name the SAME space, so they cannot diverge on
+    any display. That resolves EvanCNavarro/TermTile#31, and returns the write path to the pure
+    core with no AppKit in it.
+
+    Residual risk: an iTerm older than 3.3 would not parse the prefix. Untested — this machine
+    runs 3.6.11.
 
 ## Decision
 

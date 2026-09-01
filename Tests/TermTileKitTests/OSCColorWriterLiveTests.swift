@@ -42,6 +42,10 @@ struct OSCColorWriterLiveTests {
 /// adapter at a real session and reads the colour back out of iTerm2.
 ///
 ///     TT_LIVE_AX=1 TT_LIVE_TTY=/dev/ttysNNN swift test --filter PaletteRendersAsRequestedLiveTests
+///
+/// RUN IT ALONE. Both live suites drive the SAME `TT_LIVE_TTY`, so a filter that selects both
+/// lets `OSCColorWriterLiveTests` repaint the session between this one's write and its readback
+/// — observed 2026-09-01, reporting `#6A1B9A` (the other suite's probe colour) as `ready`.
 struct PaletteRendersAsRequestedLiveTests {
     static var target: String? { OSCColorWriterLiveTests.target }
 
@@ -98,9 +102,9 @@ struct PaletteRendersAsRequestedLiveTests {
             let got = try #require(Self.readBackground(tty: tty), "\(name): readback failed")
             let want = (Int(colour.red), Int(colour.green), Int(colour.blue))
             let drift = max(abs(got.0 - want.0), max(abs(got.1 - want.1), abs(got.2 - want.2)))
-            // 1/255 is the documented quantisation residual (DisplayP3Compensation); anything
-            // larger means the compensation is wrong for this machine.
-            #expect(drift <= 1,
+            // EXACT. The `rgb:` prefix sends the palette hex unconverted, so there is no
+            // quantisation step left to absorb — a drift of even 1 now means something moved.
+            #expect(drift == 0,
                     "\(name) asked for #\(colour.hex), rendered (\(got.0),\(got.1),\(got.2)) — drift \(drift)")
             print("LIVE-RENDER \(name)\trequested #\(colour.hex)\tgot (\(got.0),\(got.1),\(got.2))\tdrift \(drift)")
         }

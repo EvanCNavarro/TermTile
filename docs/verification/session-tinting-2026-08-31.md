@@ -56,6 +56,11 @@ Running the built app is the only thing that exercises `makeTintingDriver` +
 `startTintingIfEnabled`. Proving it needs a DISCRIMINATOR, because the out-of-tree poller this
 feature replaces writes to the same sessions:
 
+> **SUPERSEDED 2026-09-01.** The divergence described below was real, and its cause was an
+> unnamed colour space: with no `cs:` prefix iTerm reads an OSC triple as Display P3. The write
+> path now sends `bg=rgb:HEX`, which names the same device space AppleScript uses, so the two
+> paths no longer differ. See `session-tinting-colour-space-2026-09-01.md` and #29.
+
 - the poller sets colours over **AppleScript**, which lands EXACT values (`#143C22` reads back as
   `5139,15419,8737`)
 - TermTile writes **OSC 1337**, which iTerm converts (`#1D7538` reads back as `0,26380,9230`)

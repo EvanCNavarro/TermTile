@@ -23,13 +23,7 @@ public actor OSCColorWriter: SessionTinting {
         // VALIDATE BEFORE OPENING. The tty string comes from parsed `ps` output; without this
         // check a malformed value would make TermTile write escape bytes into an arbitrary file.
         guard OSCSequence.isWritableTerminalDevice(tty) else { return false }
-        // COMPENSATE BEFORE FORMATTING. iTerm reads an OSC triple as Display P3 while the
-        // palette is authored in Generic RGB, so sending the palette hex raw renders a
-        // different colour than the AppleScript path produces for the same hex — which is what
-        // made a doubly-written window oscillate (EvanCNavarro/TermTile#29). This belongs HERE
-        // and not in the palette: it is a property of the OSC wire format, and a tinting
-        // adapter that used Apple Events would need the opposite of it.
-        return write(tty, OSCSequence.setBackground(DisplayP3Compensation.oscValue(for: color)))
+        return write(tty, OSCSequence.setBackground(color))
     }
 
     /// Appends to the device. Fails closed: any error means the session simply is not tinted.
