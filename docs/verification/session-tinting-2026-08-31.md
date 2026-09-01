@@ -146,3 +146,34 @@ environment variable) was not tested and is moot while the write fails — an un
 verified absence.
 
 README and ADR 0006 now scope Session tint to iTerm2.
+
+
+## Packaged-app verification, and why it matters for the domain trap
+
+The feature had only ever run from `.build/debug`. Built and smoke-tested as a real bundle:
+
+- `dist/TermTile.app` carries the tinting symbols — the feature survives packaging.
+- Bundle id is `dev.ecn.apps.termtile`, so `UserDefaults.standard` resolves to the **correct**
+  domain. **The debug-binary trap recorded above does NOT apply to the shipped app** — it is
+  specific to running the bare executable, which has no `Info.plist` and therefore falls back to
+  the process-name domain.
+- `scripts/test-packaged-app.sh` (sandbox `HOME`, never touches `/Applications`): launched,
+  rendered the gallery, armed the update probe, stayed alive 8/8, 0 crash reports.
+
+**Signing:** both the newly built app and the one currently installed are signed
+`TermTile Dev Signing` with `TeamIdentifier=not set` — like for like, so installing is not a
+signing downgrade. A Developer ID identity exists on this machine if the stable-TCC posture is
+wanted later.
+
+**NOT verified:** whether a freshly installed build keeps its Accessibility grant, or needs
+re-approval in System Settings. That cannot be determined without installing, and the app already
+ships an **Allow Accessibility** action and a **Reset & Open Settings** recovery for exactly this
+case. Everything measured above was measured with the DEBUG binary inheriting the terminal's grant;
+the packaged app's own TCC identity is untested.
+
+## What actually gates daily use
+
+The installed app is from 2026-07-20 and contains **zero** tinting symbols. The feature cannot be
+used daily until a build carrying it is installed — which is the real blocker behind both
+EvanCNavarro/TermTile#27 (retire the poller) and EvanCNavarro/TermTile#12 (Tier 2), not the passage
+of time.
