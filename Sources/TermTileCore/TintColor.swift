@@ -18,8 +18,17 @@ public struct TintColor: Equatable, Sendable {
     }
 }
 
-/// The palette, carried over from the out-of-tree tool this replaces so the colours a user
-/// already recognises do not change underneath them.
+/// The palette, carried over from the out-of-tree tool this replaces.
+///
+/// ~~so the colours a user already recognises do not change underneath them.~~ **CORRECTED
+/// 2026-08-31: that is FALSE.** The hex values match the replaced tool, but the RENDERED colours
+/// do not. That tool sets colours over AppleScript, which lands exact; TermTile writes OSC 1337
+/// `SetColors`, which iTerm converts. Measured: `#143C22` renders as `#003018` — darker, red
+/// channel zeroed. With both writers active a window visibly oscillates between the two.
+///
+/// The hexes stay as they are because they are still the right REQUEST; the divergence is in the
+/// write path, and pre-compensating before the cause is known would be wrong for anyone whose
+/// iTerm settings differ. Tracked as EvanCNavarro/TermTile#29.
 public enum TintPalette {
     /// Idle and finished. `#143C22` — dark enough that light terminal text stays readable.
     public static let ready = TintColor(red: 0x14, green: 0x3C, blue: 0x22)
