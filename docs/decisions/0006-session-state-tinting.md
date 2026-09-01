@@ -311,6 +311,45 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
     Residual risk: an iTerm older than 3.3 would not parse the prefix. Untested — this machine
     runs 3.6.11.
 
+15. **A text marker needs a POSITION, not just a window. The blocked marker now matches only on
+    the final line.** (2026-09-01, EvanCNavarro/TermTile#34.) Finding 11 shipped `Esc to cancel`
+    with a stated known limit — a session that DISPLAYS the string matches — and named the
+    400-character window as the mitigation. That was too weak, and the issue's own wording
+    ("unlikely, not impossible") was too generous: an idle session asked to print the string ONCE
+    was scored `blocked` and would have been painted amber. 400 characters is several screen rows.
+
+    The discriminator was measured, not reasoned about. A real blocking prompt REPLACES the status
+    footer, so its marker is the last text in the pane; text that merely mentions the phrase is
+    followed by the footer still being drawn.
+
+    | pane | marker position | what follows | status footer |
+    |---|---|---|---|
+    | blocked — AskUserQuestion | final line | nothing | absent |
+    | blocked — plan-mode question | final line | one newline | absent |
+    | blocked — Bash permission prompt | final line, at its START | nothing | absent |
+    | displayed, NOT blocked | ~150 chars from end | `──── / [Opus 5…] / …/rc` | present |
+
+    The third row is the one that matters, because it was captured AFTER the rule was chosen and
+    is a different UI family. Getting it needed a project-local `permissions.ask` rule: the global
+    config is `defaultMode: auto` with an empty allowlist, which is why three earlier attempts
+    produced no prompt at all.
+
+    **It confirms two decisions that were otherwise only arguments.** A co-occurrence rule keyed
+    on `Enter to select` — the more semantic option, and the one I nearly took — would have
+    returned a false NEGATIVE on every permission prompt, whose footer reads `Tab to amend` and
+    `ctrl+e to explain` instead. And "final LINE" beats "end of tail": here the marker sits at the
+    START of its line.
+
+    **Consequence:** `AgentStateClassifier.markerOnFinalLine` gates both classify entry points.
+    The whole state space was enumerated as a table and run against the old code first — exactly
+    four rows moved, eight read identically. Proven live in both directions on real panes: the
+    displayed-marker pane went blocked → ready, a real block still reads blocked and still paints
+    `#4A320F`.
+
+    Residual: an unreproduced prompt shape that renders its marker above a footer would be missed.
+    That is a false NEGATIVE — an unpainted window rather than a wrong one, which is the safe
+    direction for this feature.
+
 ## Decision
 
 ### Tier 1 — the default, and the only tier built here
