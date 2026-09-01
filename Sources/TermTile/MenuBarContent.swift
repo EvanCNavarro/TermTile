@@ -171,6 +171,21 @@ struct MenuBarContent: View {
             }
         }
         .frame(width: 280)
+        // FILL WHATEVER HEIGHT THE PANEL TAKES, pinned to the top.
+        //
+        // MEASURED 2026-09-01: the MenuBarExtra window keeps a HIGH-WATER MARK. Opening the panel
+        // while an extra terminal was listed grew it 823 -> 873 pt; closing that terminal shrank
+        // the content back to 823 and the window STAYED at 873. SwiftUI then centres the smaller
+        // content, so the window's own material shows as symmetric bands above and below — 125 pt
+        // each on the report that prompted this. A freshly launched app sizes correctly, which is
+        // why it looks fine until the panel has seen a taller state once.
+        //
+        // `maxHeight: .infinity` sets a MAXIMUM, not an ideal, so it cannot make the window grow;
+        // it only lets the content expand into height the window already has. `.top` keeps the
+        // card from floating in the middle of that space. Same remedy as the RememBar hosting-view
+        // bug (see the nshostingview-window-autosizes note): let the content fill the window, and
+        // put the brand surface on the FILLING frame so no window material is left visible.
+        .frame(maxHeight: .infinity, alignment: .top)
         .background(Tokens.panel)   // fixed-dark brand surface (shared with RememBar)
         .onAppear { viewModel.refreshTrust() }
         // MenuBarExtra(.window) keeps this view alive across opens, so `.onAppear` fires once per
