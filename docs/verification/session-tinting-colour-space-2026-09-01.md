@@ -44,11 +44,45 @@ before the run.
 
 AppKit agrees with the terminal at full precision: 13.434/255 predicted, 13.432/255 measured.
 
-## Fix
+## First fix — worked, and was the wrong shape
 
-`TermTileKit/DisplayP3Compensation` converts Generic RGB → Display P3 before `OSCSequence`
-formats the escape. It lives in the writer, not the palette: it is a property of the OSC wire
-format, and an Apple Events adapter (#12) would need the opposite of it.
+`TermTileKit/DisplayP3Compensation` converted Generic RGB → Display P3 before `OSCSequence`
+formatted the escape. Live-proven, merged as #32, and superseded within the hour. It corrected
+for a default rather than overriding it, and it carried three dependencies it did not need:
+iTerm's undocumented default space, AppKit agreeing with iTerm about Generic RGB's primaries, and
+the transform being display-independent.
+
+## Actual fix — name the space
+
+**I characterised the protocol's behaviour without reading its specification.** `SetColors`
+accepts `cs:RRGGBB` where `cs` is `srgb`, `rgb` (the device space) or `p3` — documented since
+iTerm 3.3. Reading that first would have skipped the entire space-identification exercise above.
+
+That exercise was not wasted, because it makes the default legible, and the prefix let me confirm
+the default DIRECTLY instead of inferring it:
+
+| write | readback | says |
+|---|---|---|
+| `143C22` (bare) | `0,12253,6093` | — |
+| `p3:143C22` | `0,12253,6093` | **byte-identical: the bare default IS Display P3** |
+| `srgb:143C22` | `4488,11980,6594` | prefix honoured, as predicted |
+| `rgb:143C22` | `5139,15419,8737` | **I predicted `#112F1A`. Wrong.** |
+
+That last value is exactly what the AppleScript poller writes. iTerm's device space and
+AppleScript's `background color` space are the same one, so the palette hex needs **no conversion
+at all**.
+
+`OSCSequence.setBackground` now emits `bg=rgb:HEX`. All colour arithmetic is deleted, and the
+write path returns to the pure core with no AppKit in it.
+
+Unconverted, under `rgb:`, every colour round-trips exactly — including the discriminator colour
+the P3 default mangled to `#03FBFE`:
+
+```
+rgb:143C22 -> #143C22    rgb:0E2B18 -> #0E2B18    rgb:FFFFFF -> #FFFFFF
+rgb:4A320F -> #4A320F    rgb:185634 -> #185634    rgb:6CF6FC -> #6CF6FC
+rgb:111417 -> #111417    rgb:1D7538 -> #1D7538
+```
 
 ## Live proof
 
@@ -59,13 +93,14 @@ reads the colour back out of iTerm2.
 LIVE-RENDER ready    requested #143C22  got (20,60,34)   drift 0
 LIVE-RENDER blocked  requested #4A320F  got (74,50,15)   drift 0
 LIVE-RENDER normal   requested #111417  got (17,20,23)   drift 0
-LIVE-RENDER subtle   requested #0E2B18  got (13,43,24)   drift 1
+LIVE-RENDER subtle   requested #0E2B18  got (14,43,24)   drift 0
 LIVE-RENDER louder   requested #185634  got (24,86,52)   drift 0
 LIVE-RENDER loudest  requested #1D7538  got (29,117,56)  drift 0
 ```
 
-`subtle` is 1/255 low because `#0E2B18` has no exact 8-bit Display P3 preimage. That is a
-property of the colour, not an error in the transform.
+Every colour exact. Under the first fix `subtle` was 1/255 low — that residual was an artefact of
+the conversion, not of the colour, and it vanished with the arithmetic. The test now asserts
+`drift == 0` rather than `<= 1`, so the instrument can say NO more sharply than before.
 
 ### The writers now agree
 
@@ -94,5 +129,15 @@ channel low by one and reporting drift 1 on all six colours.
 
 ## Not verified
 
-Whether iTerm's interpretation follows the attached display's profile. This machine has a
-single display, so only a fixed transform could be tested. Tracked as EvanCNavarro/TermTile#31.
+Whether an iTerm older than 3.3 parses the `cs:` prefix. This machine runs 3.6.11. The docs carry
+the prefix as far back as the 3.3 documentation, so the exposure is versions predating that.
+
+The display-dependence question (#31) is **resolved, not deferred**: there is no transform left to
+be display-dependent, and `rgb:` names the same device space AppleScript does, so the two write
+paths cannot diverge on any display.
+
+## Lesson
+
+Read the protocol's specification before characterising its behaviour. The measurement work was
+careful, held-out-validated and correct — and entirely unnecessary. A single documentation fetch,
+done first, would have replaced it.

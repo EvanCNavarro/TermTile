@@ -41,7 +41,7 @@ struct TintColorTests {
     /// The exact bytes proven against live iTerm2 on 2026-08-28.
     @Test("the escape sequence is OSC 1337 SetColors terminated by BEL")
     func sequence() {
-        #expect(OSCSequence.setBackground(TintPalette.ready) == "\u{1B}]1337;SetColors=bg=143C22\u{07}")
+        #expect(OSCSequence.setBackground(TintPalette.ready) == "\u{1B}]1337;SetColors=bg=rgb:143C22\u{07}")
     }
 }
 

@@ -23,10 +23,10 @@ struct OSCColorWriterTests {
         let writes = await recorder.writes
         #expect(writes.count == 1)
         #expect(writes.first?.path == "/dev/ttys005")
-        // COMPENSATED, not the palette hex: iTerm reads an OSC triple as Display P3 while the
-        // palette is authored in Generic RGB. #264A30 is the value measured on a live terminal
-        // to render as #143C22 (EvanCNavarro/TermTile#29).
-        #expect(writes.first?.bytes == "\u{1B}]1337;SetColors=bg=264A30\u{07}")
+        // The palette hex goes out UNCONVERTED under an explicit `rgb:` space. Measured: that
+        // renders exactly #143C22, identical to what the AppleScript path produces for the same
+        // hex, because `rgb:` names the same device space AppleScript uses (#29).
+        #expect(writes.first?.bytes == "\u{1B}]1337;SetColors=bg=rgb:143C22\u{07}")
     }
 
     /// THE SAFETY TEST. An invalid path must be refused BEFORE the device writer is reached —
@@ -71,40 +71,11 @@ struct OSCColorWriterTests {
         try? await Task.sleep(nanoseconds: 50_000_000)
         let writes = await recorder.writes
         #expect(writes.count == 3, "unknown must not produce a write")
-        #expect(writes.contains { $0.bytes.contains("264A30") })   // renders as #143C22
-        #expect(writes.contains { $0.bytes.contains("59421B") })   // renders as #4A320F
-        #expect(writes.contains { $0.bytes.contains("161A1E") })   // renders as #111417
-        #expect(!writes.contains { $0.bytes.contains("143C22") },
-                "wrote the palette hex raw — the Display P3 compensation is not wired in")
+        #expect(writes.contains { $0.bytes.contains("rgb:143C22") })
+        #expect(writes.contains { $0.bytes.contains("rgb:4A320F") })
+        #expect(writes.contains { $0.bytes.contains("rgb:111417") })
+        #expect(!writes.contains { $0.bytes.contains("bg=143C22") },
+                "sent a bare hex — iTerm would read it as Display P3 and render the wrong colour")
         #expect(!writes.contains { $0.path == "/dev/ttys004" }, "unknown wrote to a tty")
-    }
-}
-
-/// The wiring test. `DisplayP3CompensationTests` proves the transform; this proves the writer
-/// actually calls it, which is a separate claim — a correct function nobody invokes ships the
-/// same bug.
-@Suite("OSC colour writer applies Display P3 compensation")
-struct OSCColorWriterCompensationTests {
-    @Test("every palette colour reaches the device compensated")
-    func compensatesOnTheWire() async {
-        let expected = [(TintPalette.ready, "264A30"),
-                        (TintPalette.blocked, "59421B"),
-                        (TintPalette.normal, "161A1E"),
-                        (TintPalette.readySubtle, "1A3722"),
-                        (TintPalette.readyLouder, "336646"),
-                        (TintPalette.readyLoudest, "41834E")]
-        #expect(expected.count == 6)
-        for (colour, wire) in expected {
-            let recorder = RecordingDeviceWriter()
-            let writer = OSCColorWriter { path, bytes in
-                Task { await recorder.record(path, bytes) }
-                return true
-            }
-            #expect(await writer.setBackground(colour, onTTY: "/dev/ttys009"))
-            try? await Task.sleep(nanoseconds: 30_000_000)
-            let bytes = await recorder.writes.first?.bytes ?? ""
-            #expect(bytes == "\u{1B}]1337;SetColors=bg=\(wire)\u{07}",
-                    "palette #\(colour.hex) should go on the wire as #\(wire)")
-        }
     }
 }

@@ -23,6 +23,9 @@ nothing until you ask it to.
   works. Needs no extra permission, but it does read on-screen text — see **Privacy & permissions**.
   **WezTerm is not supported for this feature**: it ignores the OSC escape TermTile uses to set a
   background colour (measured 2026-08-31). Tiling works for both terminals as before.
+  **Needs iTerm2 3.3 or newer** — the escape TermTile writes names its colour space (`bg=rgb:…`),
+  and that prefix is documented from 3.3 onward. Without it iTerm reads the colour as Display P3
+  and renders the wrong shade. Tiling has no such requirement.
 - **Auto-updates** — a passive update availability check can mark the menu-bar indicator and ellipsis
   when an update is available; **Check for Updates…** opens the signed Sparkle update flow.
 - **Clean uninstall** — an **About** panel with a one-click uninstall that removes the app, its data,

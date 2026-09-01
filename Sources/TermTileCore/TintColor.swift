@@ -26,13 +26,17 @@ public struct TintColor: Equatable, Sendable {
 /// `SetColors`, which iTerm converts. Measured: `#143C22` renders as `#003018` — darker, red
 /// channel zeroed. With both writers active a window visibly oscillates between the two.
 ///
-/// **RESOLVED 2026-09-01 (EvanCNavarro/TermTile#29).** The cause is a colour-space mismatch: an
-/// OSC 1337 triple is read as Display P3, while `background color` sets and reports Generic RGB.
-/// The hexes below stay exactly as they are — they were always the right REQUEST — and
-/// `DisplayP3Compensation` in TermTileKit converts them at the point the escape sequence is
-/// built, which is where the divergence actually lives. Live-proven: five of the six now render
-/// as the hex they ask for, and `readySubtle` lands 1/255 low because `#0E2B18` has no exact
-/// 8-bit Display P3 preimage.
+/// **RESOLVED 2026-09-01 (EvanCNavarro/TermTile#29).** The cause was a colour space left
+/// unnamed: with no `cs:` prefix iTerm reads an OSC triple as Display P3, while AppleScript's
+/// `background color` uses the device space. The hexes below stay exactly as they are — they
+/// were always the right REQUEST — and `OSCSequence.setBackground` now declares `rgb:`, the
+/// device space, so no conversion happens at all and both write paths mean the same thing by
+/// construction. Live-proven: all six render as exactly the hex they ask for.
+///
+/// A first fix pre-converted the hexes with AppKit instead, and worked — but it depended on
+/// iTerm's UNDOCUMENTED default space and carried a 1/255 quantisation residual. Naming the
+/// space removes both. The lesson is the general one: reading the protocol's own documentation
+/// beat characterising its behaviour empirically, and I did the second first.
 public enum TintPalette {
     /// Idle and finished. `#143C22` — dark enough that light terminal text stays readable.
     public static let ready = TintColor(red: 0x14, green: 0x3C, blue: 0x22)
@@ -61,8 +65,16 @@ public enum TintPalette {
 /// Builds the escape sequence, and validates where it may be sent.
 public enum OSCSequence {
     /// OSC 1337 `SetColors`, proven against live iTerm2 on 2026-08-28 by reading the colour back.
+    ///
+    /// The `rgb:` prefix NAMES THE COLOUR SPACE, and dropping it is a real bug, not a tidy-up.
+    /// `SetColors` accepts `cs:RRGGBB` where `cs` is `srgb`, `rgb` (the device space) or `p3`;
+    /// with no prefix iTerm defaults to **Display P3**, so a bare `143C22` renders as `#003018`
+    /// with the red channel zeroed. Measured 2026-09-01: `p3:143C22` and bare `143C22` read back
+    /// byte-identically, which is what pins the default. `rgb:` is the same device space
+    /// AppleScript's `background color` uses, so the palette hex needs NO conversion and the two
+    /// write paths cannot drift apart on any display. See EvanCNavarro/TermTile#29.
     public static func setBackground(_ color: TintColor) -> String {
-        "\u{1B}]1337;SetColors=bg=\(color.hex)\u{07}"
+        "\u{1B}]1337;SetColors=bg=rgb:\(color.hex)\u{07}"
     }
 
     /// Whether `path` is a terminal device this may be written to.
