@@ -41,6 +41,37 @@ struct AgentStateFinalLineTests {
 
         """
 
+    /// BLOCKED shape 3 — a Bash PERMISSION-APPROVAL prompt, captured 2026-09-01 by giving a
+    /// scratch project a local `permissions.ask` rule (the global config is `defaultMode: auto`
+    /// with an empty allowlist, which is why earlier attempts never prompted).
+    ///
+    /// THIS IS THE OUT-OF-SAMPLE CASE. The rule was designed against two SELECTION prompts; this
+    /// is a different UI family and it was never consulted while choosing the rule. It confirms
+    /// two decisions that were otherwise only arguments:
+    ///
+    ///   - Rejecting a co-occurrence rule keyed on `Enter to select` was CORRECT. This footer has
+    ///     no such text — it reads `Tab to amend` and `ctrl+e to explain` — so that variant would
+    ///     have returned a false NEGATIVE on every permission prompt.
+    ///   - "Final LINE", not "end of tail". Here the marker is at the START of its line.
+    static let blockedPermissionPrompt = """
+        ⏺ Bash(echo hello)
+          ⎿  Waiting…
+        ────────────────────────────────────────────────────────────────────
+        \u{0}Bash command
+
+          \u{0}echo\u{0}hello
+           Print hello
+
+        \u{0}Permission rule Bash requires\u{0}confirmation\u{0}for\u{0}this\u{0}command.
+        \u{0}/permissions to update rules
+
+        \u{0}Do\u{0}you\u{0}want\u{0}to\u{0}proceed?
+        \u{0}❯\u{0}1.\u{0}Yes
+        \u{0}\u{0}\u{0}2.\u{0}No
+
+        \u{0}Esc\u{0}to\u{0}cancel\u{0}\u{0}\u{0}Tab\u{0}to\u{0}amend\u{0}\u{0}\u{0}ctrl+e\u{0}to\u{0}explain
+        """
+
     /// THE FALSE POSITIVE — an idle agent session that was asked to print the string. The status
     /// footer is still present BELOW the marker, which is exactly what a real block lacks.
     static let displayedNotBlocked = """
@@ -53,11 +84,12 @@ struct AgentStateFinalLineTests {
 
     // MARK: - The captures
 
-    @Test("both real blocked captures still classify blocked")
+    @Test("every real blocked capture still classifies blocked")
     func realBlockedCapturesStillBlock() {
         let captures = [("AskUserQuestion", Self.blockedAskUserQuestion),
-                        ("plan mode", Self.blockedPlanMode)]
-        #expect(captures.count == 2)
+                        ("plan mode", Self.blockedPlanMode),
+                        ("Bash permission prompt", Self.blockedPermissionPrompt)]
+        #expect(captures.count == 3)
         for (name, tail) in captures {
             #expect(AgentStateClassifier.classify(scrollback: tail, blocked: [Self.marker]) == .blocked,
                     "\(name) capture stopped classifying blocked")
@@ -68,6 +100,17 @@ struct AgentStateFinalLineTests {
     func displayedMarkerDoesNotBlock() {
         #expect(AgentStateClassifier.classify(scrollback: Self.displayedNotBlocked,
                                               blocked: [Self.marker]) != .blocked)
+    }
+
+    /// Why the co-occurrence rule was rejected, as an assertion rather than a comment. If someone
+    /// later "improves" the rule by also requiring `Enter to select`, this fails and says why.
+    @Test("the permission prompt carries no Enter-to-select, so co-occurrence would miss it")
+    func permissionPromptLacksSelectionAffordance() {
+        let normalized = AgentStateClassifier.normalize(Self.blockedPermissionPrompt)
+        #expect(normalized.contains("Esc to cancel"), "the marker itself must be present")
+        #expect(!normalized.contains("Enter to select"),
+                "if this ever becomes true the co-occurrence rule is worth revisiting")
+        #expect(normalized.contains("Tab to amend"), "fixture drifted from the capture")
     }
 
     // MARK: - The full transition table
