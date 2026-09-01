@@ -44,10 +44,12 @@ public enum AgentStateClassifier {
     /// The trust-this-folder prompt renders `Enter to confirm · Esc to cancel` — READ from a
     /// screenshot, NOT captured live, so treat that second shape as expected-not-verified.
     ///
-    /// KNOWN LIMIT, inherent to text markers: a session that DISPLAYS this string — reading this
-    /// file, grepping for it — matches. The 400-char window keeps it scoped to the live UI footer,
-    /// which is why a session whose scrollback held the string further back did NOT match during
-    /// the A/B. That is mitigation, not immunity.
+    /// ~~KNOWN LIMIT ... The 400-char window keeps it scoped to the live UI footer ... That is
+    /// mitigation, not immunity.~~ **THE MITIGATION WAS TOO WEAK — measured 2026-09-01
+    /// (EvanCNavarro/TermTile#34).** An idle session asked to print the string once was scored
+    /// `.blocked` and would have been painted amber: 400 characters is several screen rows, so
+    /// "unlikely" took exactly one sentence to defeat. Matching is now confined to the FINAL LINE
+    /// — see `markerOnFinalLine`.
     static let blockedMarkers = ["Esc to cancel"]
     static let workingMarkers = ["esc to interrupt"]
     /// EMPTY, DELIBERATELY — see ADR-0006 finding 8. `shift+tab to cycle` was used here until
@@ -101,6 +103,34 @@ public enum AgentStateClassifier {
         return out
     }
 
+    /// Whether any of `markers` appears on the LAST non-blank line of `text`.
+    ///
+    /// THE DISCRIMINATOR FOR EvanCNavarro/TermTile#34, measured across three live panes rather
+    /// than reasoned about. A real blocking prompt REPLACES the status footer, so its
+    /// `Esc to cancel` is the last text in the pane; text that merely mentions the phrase is
+    /// followed by the footer that is still being drawn:
+    ///
+    ///     blocked (AskUserQuestion)   ... Enter to select   up/down to navigate   Esc to cancel
+    ///     blocked (plan-mode question) ... n to add notes   Esc to cancel\n
+    ///     displayed, NOT blocked       ... Esc to cancel \n ---- \n [Opus 5 ...] \n /rc
+    ///
+    /// Blank trailing lines are skipped rather than trimmed off the whole string: iTerm pads
+    /// unused rows, and `normalize` has already turned those NUL cells into spaces, so a padded
+    /// pane would otherwise present an empty final line and match nothing.
+    ///
+    /// Deliberately NOT keyed on the sibling affordances (`Enter to select`, `up/down to
+    /// navigate`). That reads more semantic but binds to one UI family's footer wording, and both
+    /// captures are the same family — a permission-approval prompt was never reproduced, so a
+    /// wording rule would be fitted to two samples of one shape. Position is the weaker claim and
+    /// the one the evidence actually supports.
+    static func markerOnFinalLine(_ markers: [String], in text: String) -> Bool {
+        guard let finalLine = text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .last(where: { line in line.contains { $0 != " " } })
+        else { return false }
+        return markers.contains(where: finalLine.contains)
+    }
+
     /// Full classification from one poll's evidence. Precedence is blocked > working > ready.
     ///
     /// READY IS RETURNED ONLY ON POSITIVE EVIDENCE OF STILLNESS — a delta that was actually
@@ -113,7 +143,7 @@ public enum AgentStateClassifier {
 
     static func classify(_ evidence: StateEvidence, blocked: [String]) -> AgentState {
         let tail = normalize(String(evidence.tail.suffix(tailWindow)))
-        if blocked.contains(where: tail.contains) { return .blocked }
+        if markerOnFinalLine(blocked, in: tail) { return .blocked }
         if WorkingSignal.isWorking(evidence) { return .working }
         guard evidence.charCountDelta != nil else { return .unknown }
         return .ready
@@ -130,7 +160,7 @@ public enum AgentStateClassifier {
     /// a real marker for EvanCNavarro/TermTile#6 would be re-deriving the ordering from scratch.
     static func classify(scrollback: String, blocked: [String]) -> AgentState {
         let tail = normalize(String(scrollback.suffix(tailWindow)))
-        if blocked.contains(where: tail.contains) { return .blocked }
+        if markerOnFinalLine(blocked, in: tail) { return .blocked }
         if workingMarkers.contains(where: tail.contains) { return .working }
         if readyMarkers.contains(where: tail.contains) { return .ready }
         return .unknown
