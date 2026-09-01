@@ -685,7 +685,7 @@ only — Apple Events is backlog `#38` / EvanCNavarro/TermTile#12, and is NOT in
   blocked-by #37e. A menu surface listing each session's join outcome and confidence, so an
   ambiguous/failed join is visible rather than mysterious. Closes the failure mode where a
   window silently stays normal and the user cannot tell whether that is the state or a bug.
-#37g · Retire the out-of-tree toolchain · S0 · TRIGGER NOT FIRED (blocked-detection restored) · GitHub: EvanCNavarro/TermTile#27
+#37g · Retire the out-of-tree toolchain · DONE (2026-09-01, Bobby approved) · GitHub: EvanCNavarro/TermTile#27
   (2026-08-31: the case for retiring the poller was partly built on TermTile reporting `blocked`
   where the poller's glyph said idle. That was a FALSE POSITIVE — the marker was a task label, not
   a state (ADR-0006 finding 10). The poller was right. TermTile currently has NO blocked detection
@@ -694,6 +694,18 @@ only — Apple Events is backlog `#38` / EvanCNavarro/TermTile#12, and is NOT in
   finding 11) and a live pass scored 7/7 including a deliberately-blocked session the glyph called
   idle. The capability gap is closed; the ORIGINAL daily-use requirement still stands and is the
   only remaining gate.)
+  RETIRED 2026-09-01. Sequence run and verified step by step: preserved copies diffed against the
+  originals FIRST (script and hook byte-identical; plist differs only by the documented
+  placeholdered path), launchd job unloaded and plist deleted, hook unwired from settings.json
+  (41 hooks -> 33, 0 lines added, every survivor asserted unchanged and in order), poller script
+  and its runtime flag directory deleted last. `~/.claude/hooks/window-state-flag.sh` stays on
+  disk, unwired and inert: security-validator's paiProtection blocks `rm` on any `.claude` path,
+  tested rather than assumed.
+  Step 5 was NOT a formality, exactly as this entry warned. The writers used different values for
+  `normal` — the poller's constant was off from `#111417 x 257` by (-96,-120,+104) — so 24
+  observations across 4 samples and 6 sessions discriminate cleanly: TermTile's exact
+  4368,5139,5910 in 24 of 24, the poller's 4272,5020,6014 in 0 of 24, no alternation, and a live
+  ready->working transition tracked mid-sampling.
   blocked-by #37e. Only after #37e is live-proven: unload+remove
   `com.evancnavarro.claude-window-state.plist`, remove `~/.local/bin/claude-window-state`,
   and unwire `window-state-flag.sh` from `~/.claude/settings.json`. Machine-local cleanup
