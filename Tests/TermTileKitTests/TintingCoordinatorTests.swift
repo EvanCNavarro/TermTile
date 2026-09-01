@@ -139,11 +139,11 @@ struct TintingCoordinatorTests {
         let reader = InMemorySessionReader(panes: [Self.pane(count: 1000)])
         let tinter = RecordingTinter()
         let coord = TintingCoordinator(reader: reader, probe: InMemoryTTYProbe(sessions: [Self.session]),
-                                       writer: tinter, readyColor: TintPalette.readyLoudest)
+                                       writer: tinter, readyColor: TintPalette.readyBold)
         await coord.pass()
         await reader.reseed([Self.pane(count: 1000)])
         await coord.pass()
-        #expect(await tinter.writtenHexes == [TintPalette.readyLoudest.hex])
+        #expect(await tinter.writtenHexes == [TintPalette.readyBold.hex])
     }
 }
 

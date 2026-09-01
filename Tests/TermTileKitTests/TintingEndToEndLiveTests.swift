@@ -25,7 +25,7 @@ struct TintingEndToEndLiveTests {
             reader: AXSessionReader(bundleID: "com.googlecode.iterm2"),
             probe: ProcessTTYProbe(),
             writer: OSCColorWriter(),
-            readyColor: ReadyIntensity.loudest.color)
+            readyColor: ReadyIntensity.bold.color)
 
         let first = await coordinator.pass()
         #expect(!first.isEmpty, "no panes — is iTerm2 running with agent sessions?")

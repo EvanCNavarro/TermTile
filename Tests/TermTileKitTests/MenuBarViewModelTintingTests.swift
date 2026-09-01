@@ -74,19 +74,19 @@ struct MenuBarViewModelTintingTests {
     /// A persisted preference that does not take effect on relaunch reads as broken, not as off.
     @Test("a persisted enabled preference starts at launch, with its intensity")
     func persistedPreferenceStartsAtLaunch() async {
-        let (vm, _, fake) = Self.make(enabled: true, intensity: .loudest)
+        let (vm, _, fake) = Self.make(enabled: true, intensity: .bold)
         #expect(vm.tintingEnabled == true)
         vm.startTintingIfEnabled()
         #expect(await Self.eventually { await fake.starts == 1 })
-        #expect(await fake.intensities == [.loudest], "launch did not carry the saved intensity")
+        #expect(await fake.intensities == [.bold], "launch did not carry the saved intensity")
     }
 
     @Test("changing intensity persists and reaches the driver")
     func intensityForwarded() async {
         let (vm, store, fake) = Self.make(enabled: true)
-        vm.setReadyIntensity(.subtle)
-        #expect(store.load().readyIntensity == .subtle)
-        #expect(await Self.eventually { await fake.intensities == [.subtle] })
+        vm.setReadyIntensity(.bold)
+        #expect(store.load().readyIntensity == .bold)
+        #expect(await Self.eventually { await fake.intensities == [.bold] })
     }
 }
 

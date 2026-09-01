@@ -45,10 +45,16 @@ public enum TintPalette {
     /// Working, and the resting colour every session returns to. `#111417`.
     public static let normal = TintColor(red: 0x11, green: 0x14, blue: 0x17)
 
-    /// Intensity presets for `ready`, carried over verbatim.
-    public static let readySubtle = TintColor(red: 0x0E, green: 0x2B, blue: 0x18)
-    public static let readyLouder = TintColor(red: 0x18, green: 0x56, blue: 0x34)
-    public static let readyLoudest = TintColor(red: 0x1D, green: 0x75, blue: 0x38)
+    /// The one stronger preset, for a dim display or where the standard green does not read.
+    ///
+    /// ~~Four presets carried over verbatim: subtle / standard / louder / loudest.~~ **CUT TO TWO
+    /// 2026-09-01.** Measured ΔE2000 against `normal`, which is the only comparison that matters:
+    /// subtle 18.0, standard 22.3, louder 28.6, loudest 37.2 — every one unmistakable. The four
+    /// steps ARE distinguishable side by side (adjacent ΔE 5.7 / 8.4 / 11.4), but two tinted
+    /// windows are never seen side by side, so the choice was made blind between options that all
+    /// worked. A setting that cannot be got wrong is a setting that should not exist; one
+    /// "stronger" option is a legible accessibility affordance, four gradations are taste.
+    public static let readyBold = TintColor(red: 0x1D, green: 0x75, blue: 0x38)
 
     /// The colour a state should paint, or `nil` when the state must not be painted at all.
     /// `.unknown` returns `nil` — an unrecognised state is left alone, never guessed (ADR-0006).
@@ -98,30 +104,25 @@ public enum OSCSequence {
 
 /// User-selectable intensity for the READY tint, persisted by `rawValue`.
 ///
-/// The four steps are the presets the out-of-tree tool shipped, kept identical so a user who
-/// already picked one does not have to re-find it here.
+/// TWO steps, ΔE2000 19.2 apart — unmistakable rather than merely different. A persisted value
+/// that no longer resolves (`subtle`, `louder`, `loudest`) falls back to the default in
+/// `SettingsStore`, which is what makes cutting cases safe rather than a migration.
 public enum ReadyIntensity: String, Equatable, Sendable, CaseIterable {
-    case subtle
     case standard
-    case louder
-    case loudest
+    case bold
 
     public var color: TintColor {
         switch self {
-        case .subtle: return TintPalette.readySubtle
         case .standard: return TintPalette.ready
-        case .louder: return TintPalette.readyLouder
-        case .loudest: return TintPalette.readyLoudest
+        case .bold: return TintPalette.readyBold
         }
     }
 
     /// What the menu shows.
     public var title: String {
         switch self {
-        case .subtle: return "Subtle"
         case .standard: return "Standard"
-        case .louder: return "Louder"
-        case .loudest: return "Loudest"
+        case .bold: return "Bold"
         }
     }
 }

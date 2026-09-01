@@ -91,26 +91,33 @@ struct MenuBarContent: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    // #37f — what the last pass decided. Without this, a session that stays its
-                    // normal colour is indistinguishable from a broken feature, and the most
-                    // useful thing the app can say is "it works, it just can't tell which window
-                    // this is."
+                    // #37f — but only the sessions that need EXPLAINING. Listing every session
+                    // restated in text what the colours already show; a painted window says what
+                    // it is by being painted. What a user cannot see is a window that stayed
+                    // normal, and whether that means "working" or "TermTile could not tell".
+                    // The count keeps "all tinted" from looking like "not running".
                     if !viewModel.tintDiagnostics.isEmpty {
                         Divider()
-                        ForEach(viewModel.tintDiagnostics, id: \.cwd) { decision in
-                            VStack(alignment: .leading, spacing: 1) {
-                                HStack {
+                        if viewModel.unexplainedTintDiagnostics.isEmpty {
+                            Text("\(viewModel.tintedSessionCount) sessions tinted.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            if viewModel.tintedSessionCount > 0 {
+                                Text("\(viewModel.tintedSessionCount) tinted · "
+                                     + "\(viewModel.unexplainedTintDiagnostics.count) not:")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            ForEach(viewModel.unexplainedTintDiagnostics, id: \.cwd) { decision in
+                                VStack(alignment: .leading, spacing: 1) {
                                     Text(decision.cwd).font(.caption)
-                                    Spacer()
-                                    Text(decision.state.displayName)
-                                        .font(.caption)
-                                        .foregroundStyle(decision.wrote ? .primary : .secondary)
-                                }
-                                if let reason = decision.untintedReason {
-                                    Text(reason)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
+                                    if let reason = decision.untintedReason {
+                                        Text(reason)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
                                 }
                             }
                         }

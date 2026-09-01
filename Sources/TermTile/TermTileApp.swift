@@ -129,8 +129,21 @@ struct TermTileApp: App {
     @MainActor
     private static func armGalleryTintDiagnosticsIfRequested(vm: MenuBarViewModel, isGallery: Bool) {
         guard isGallery,
-              ProcessInfo.processInfo.environment["TERMTILE_GALLERY_TINT_DIAGNOSTICS"] != nil
+              let mode = ProcessInfo.processInfo.environment["TERMTILE_GALLERY_TINT_DIAGNOSTICS"]
         else { return }
+        // The panel has two shapes and FL-9 wants both rendered, not one rendered and one argued.
+        // `all-tinted` is the common case — every session painted, so nothing is listed and only
+        // the count shows. Anything else seeds the mixed case, which is the one with layout risk.
+        let painted = [
+            TintDecision(cwd: "termtile", tty: "/dev/ttys005", state: .ready, wrote: true,
+                         hadBaseline: true),
+            TintDecision(cwd: "invela-marketing-suite", tty: "/dev/ttys003", state: .blocked,
+                         wrote: true, hadBaseline: true)
+        ]
+        guard mode != "all-tinted" else {
+            vm.seedTintDiagnosticsForGallery(painted)
+            return
+        }
         vm.seedTintDiagnosticsForGallery([
             TintDecision(cwd: "termtile", tty: "/dev/ttys005", state: .ready, wrote: true,
                          hadBaseline: true),

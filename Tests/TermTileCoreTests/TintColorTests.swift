@@ -10,11 +10,18 @@ struct TintColorTests {
         #expect(TintPalette.normal.hex == "111417")
     }
 
-    @Test("presets carry over verbatim")
+    /// TWO shades since 2026-09-01. The assertion that matters is not the hex — it is that the
+    /// two are far enough apart to be told apart, and that BOTH clear `normal` by a wide margin.
+    /// A test pinning only the hexes would pass on two identical greens.
+    @Test("the two ready shades are distinct from each other and from normal")
     func presets() {
-        #expect(TintPalette.readySubtle.hex == "0E2B18")
-        #expect(TintPalette.readyLouder.hex == "185634")
-        #expect(TintPalette.readyLoudest.hex == "1D7538")
+        #expect(TintPalette.ready.hex == "143C22")
+        #expect(TintPalette.readyBold.hex == "1D7538")
+        #expect(TintPalette.ready != TintPalette.readyBold)
+        #expect(TintPalette.ready != TintPalette.normal)
+        #expect(TintPalette.readyBold != TintPalette.normal)
+        #expect(Set(ReadyIntensity.allCases.map(\.color.hex)).count == ReadyIntensity.allCases.count,
+                "two intensities resolved to the same colour")
     }
 
     @Test("low components keep both hex digits")
@@ -34,8 +41,8 @@ struct TintColorTests {
 
     @Test("a chosen ready intensity is honoured")
     func readyIntensity() {
-        #expect(TintPalette.color(for: .ready, ready: TintPalette.readyLoudest)
-            == TintPalette.readyLoudest)
+        #expect(TintPalette.color(for: .ready, ready: TintPalette.readyBold)
+            == TintPalette.readyBold)
     }
 
     /// The exact bytes proven against live iTerm2 on 2026-08-28.

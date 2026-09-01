@@ -92,10 +92,9 @@ struct PaletteRendersAsRequestedLiveTests {
         let writer = OSCColorWriter()
         let palette: [(String, TintColor)] = [
             ("ready", TintPalette.ready), ("blocked", TintPalette.blocked),
-            ("normal", TintPalette.normal), ("subtle", TintPalette.readySubtle),
-            ("louder", TintPalette.readyLouder), ("loudest", TintPalette.readyLoudest)
+            ("normal", TintPalette.normal), ("bold", TintPalette.readyBold)
         ]
-        #expect(palette.count == 6)
+        #expect(palette.count == 4)
         for (name, colour) in palette {
             #expect(await writer.setBackground(colour, onTTY: tty), "\(name): the write failed")
             try await Task.sleep(nanoseconds: 500_000_000)
