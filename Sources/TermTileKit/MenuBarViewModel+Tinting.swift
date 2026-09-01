@@ -17,6 +17,26 @@ extension MenuBarViewModel {
         tintDiagnostics = await tinting.lastDecisions()
     }
 
+    /// The sessions the menu should LIST: only those TermTile could not paint.
+    ///
+    /// The panel used to name every session, which is mostly noise — a painted session already
+    /// says what it is BY BEING COLOURED, so repeating it in text is the one thing the feature
+    /// exists to avoid needing. What the user cannot see is a session that stayed normal, and
+    /// whether that means "working" or "TermTile could not tell". That is what #37f is for, and
+    /// `untintedReason` is non-nil on exactly those.
+    public var unexplainedTintDiagnostics: [TintDecision] {
+        tintDiagnostics.filter { $0.untintedReason != nil }
+    }
+
+    /// How many sessions WERE painted — one line, instead of naming each of them.
+    ///
+    /// Kept rather than dropped entirely: with nothing at all shown, "every session is tinted"
+    /// and "the feature is not running" look identical, which is the ambiguity the panel was
+    /// added to remove.
+    public var tintedSessionCount: Int {
+        tintDiagnostics.filter { $0.untintedReason == nil }.count
+    }
+
     /// Seed the diagnostics directly, for the gallery's rendered check (FL-9).
     ///
     /// Named for its ONE caller rather than as a generic setter: the gallery injects no tinting

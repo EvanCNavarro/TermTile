@@ -22,7 +22,7 @@ struct SettingsStoreTests {
     @Test("in-memory fake round-trips a saved value")
     func fakeRoundTrip() {
         let store = InMemorySettingsStore()
-        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false, tintingEnabled: true, readyIntensity: .loudest)
+        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false, tintingEnabled: true, readyIntensity: .bold)
         store.save(saved)
         #expect(store.load() == saved)
     }
@@ -33,7 +33,7 @@ struct SettingsStoreTests {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
 
-        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false, tintingEnabled: true, readyIntensity: .loudest)
+        let saved = AppSettings(targetBundleID: "com.mitchellh.ghostty", wasTrusted: false, gap: 8, hotKey: .rearrange, reorderOnDrag: false, reorderStrategy: .swap, bringToFrontOnRearrange: false, tintingEnabled: true, readyIntensity: .bold)
         UserDefaultsSettingsStore(suiteName: suite).save(saved)
 
         let loaded = UserDefaultsSettingsStore(suiteName: suite).load()   // a NEW instance
@@ -230,8 +230,8 @@ struct TintingSettingsPersistenceTests {
         for intensity in ReadyIntensity.allCases {
             #expect(ReadyIntensity(rawValue: intensity.rawValue) == intensity)
         }
-        #expect(ReadyIntensity.allCases.count == 4)
+        #expect(ReadyIntensity.allCases.count == 2)
         // Each maps to a DISTINCT colour — two steps that paint the same shade is a broken picker.
-        #expect(Set(ReadyIntensity.allCases.map(\.color.hex)).count == 4)
+        #expect(Set(ReadyIntensity.allCases.map(\.color.hex)).count == 2)
     }
 }
