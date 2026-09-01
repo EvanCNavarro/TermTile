@@ -245,6 +245,50 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
    **Consequence:** Session tint is iTerm2-only. The README advertised "iTerm2 or WezTerm" as
    targets and described the feature without scoping it, which over-promised.
 
+13. **The OSC and AppleScript write paths disagree because they use DIFFERENT COLOUR SPACES.
+    An OSC 1337 `SetColors` triple is read as Display P3; `background color` sets and reports
+    Generic RGB.** (2026-09-01, EvanCNavarro/TermTile#29.) Finding 12's measurement — `#143C22`
+    over OSC reading back as `#003018` — was correct but undiagnosed, and two of my own
+    explanations for it were wrong before this one.
+
+    Wrong twice, both recorded because the errors are instructive:
+    - "The red channel surviving `#FF0000` rules out a gamut conversion." It does not. A pure
+      primary clamps back to itself under exactly the conversion it appeared to rule out.
+    - "The profile says `Color Space = sRGB`, so the source cannot be P3." Those 78 keys describe
+      how each STORED PROFILE COLOUR is encoded; they say nothing about how an escape sequence is
+      interpreted. The config read predicted the opposite of the measurement, and the measurement
+      won.
+
+    Identified, not guessed. Five OSC writes were read back from a scratch window with no agent
+    (so the poller would not overwrite them mid-measurement — an earlier run was contaminated
+    exactly that way), then every pairing of macOS's RGB spaces was applied to the requests and
+    scored. `displayP3 -> genericRGB` reproduced all five to the 8-bit round with no free
+    parameters; the nearest rival was out by 9.
+
+    Then CONFIRMED on held-out colours, because an exact fit on the data that produced it is not
+    evidence. Two colours were computed to split `displayP3 -> genericRGB` from
+    `sRGB -> genericRGB` by 92 and 98 points, and predictions for both models were written down
+    before the run:
+
+    | write | Display P3 model | sRGB model | terminal said |
+    |---|---|---|---|
+    | `#6CF6FC` | `#03FBFE` | `#5FF6FB` | `#03FBFE` |
+    | `#6EFF00` | `#00FF00` | `#62FF07` | `#00FF00` |
+
+    AppKit's conversion agrees with the terminal at full precision — 13.434/255 predicted against
+    13.432/255 measured — so the transform is the platform's own, not a fitted curve.
+
+    **Consequence:** `OSCColorWriter` converts Generic RGB to Display P3 before formatting the
+    escape sequence. Live-proven: five of the six palette colours now render as exactly the hex
+    they request, and `readySubtle` lands 1/255 low because `#0E2B18` has no exact 8-bit Display
+    P3 preimage — a property of that colour, not an error in the transform. Alternating the two
+    writers on one window now yields the same 8-bit colour from both, residual 75/65535 (0.29 of
+    one 8-bit step), where before it was a zeroed red channel.
+
+    NOT verified: whether iTerm's interpretation follows the attached display's profile. This
+    machine has one display, so a fixed transform is all that could be tested here.
+    Tracked as EvanCNavarro/TermTile#31.
+
 ## Decision
 
 ### Tier 1 — the default, and the only tier built here

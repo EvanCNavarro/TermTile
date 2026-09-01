@@ -36,3 +36,73 @@ struct OSCColorWriterLiveTests {
         print("LIVE-WRITE  /etc/passwd refused=\(!refused)")
     }
 }
+
+/// THE PROOF FOR EvanCNavarro/TermTile#29. The unit tests show the writer emits a compensated
+/// hex; they cannot show the terminal then RENDERS the requested one. This drives the real
+/// adapter at a real session and reads the colour back out of iTerm2.
+///
+///     TT_LIVE_AX=1 TT_LIVE_TTY=/dev/ttysNNN swift test --filter PaletteRendersAsRequestedLiveTests
+struct PaletteRendersAsRequestedLiveTests {
+    static var target: String? { OSCColorWriterLiveTests.target }
+
+    /// Reads `background color` for the session on `tty`. Returns nil rather than a default:
+    /// an unreadable colour must FAIL the test, never silently score as a match.
+    static func readBackground(tty: String) -> (Int, Int, Int)? {
+        let script = """
+        tell application "iTerm2"
+          repeat with w in windows
+            repeat with t in tabs of w
+              repeat with s in sessions of t
+                if tty of s is "\(tty)" then return background color of s
+              end repeat
+            end repeat
+          end repeat
+        end tell
+        """
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        // Parse the three components SEPARATELY. "0, 12253, 6093" concatenated is ambiguous —
+        // it reads equally as (0,12253,6093) or (0,1225,36093), and eyeballing it that way
+        // produced two wrong readings earlier in this investigation.
+        let parts = (String(data: data, encoding: .utf8) ?? "")
+            .split(separator: ",")
+            .compactMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        guard parts.count == 3 else { return nil }
+        // ROUND, never truncate. Integer `n * 255 / 65535` floors, which biased every channel
+        // low by one and made all six palette colours report drift 1 — an instrument error that
+        // the tolerance would have hidden, and that a real 1-LSB regression would then hide behind.
+        func to8(_ n: Int) -> Int { (n * 255 + 32767) / 65535 }
+        return (to8(parts[0]), to8(parts[1]), to8(parts[2]))
+    }
+
+    @Test("every palette colour renders as the hex it asks for", .enabled(if: target != nil))
+    func paletteRendersAsRequested() async throws {
+        let tty = try #require(Self.target)
+        let writer = OSCColorWriter()
+        let palette: [(String, TintColor)] = [
+            ("ready", TintPalette.ready), ("blocked", TintPalette.blocked),
+            ("normal", TintPalette.normal), ("subtle", TintPalette.readySubtle),
+            ("louder", TintPalette.readyLouder), ("loudest", TintPalette.readyLoudest)
+        ]
+        #expect(palette.count == 6)
+        for (name, colour) in palette {
+            #expect(await writer.setBackground(colour, onTTY: tty), "\(name): the write failed")
+            try await Task.sleep(nanoseconds: 500_000_000)
+            let got = try #require(Self.readBackground(tty: tty), "\(name): readback failed")
+            let want = (Int(colour.red), Int(colour.green), Int(colour.blue))
+            let drift = max(abs(got.0 - want.0), max(abs(got.1 - want.1), abs(got.2 - want.2)))
+            // 1/255 is the documented quantisation residual (DisplayP3Compensation); anything
+            // larger means the compensation is wrong for this machine.
+            #expect(drift <= 1,
+                    "\(name) asked for #\(colour.hex), rendered (\(got.0),\(got.1),\(got.2)) — drift \(drift)")
+            print("LIVE-RENDER \(name)\trequested #\(colour.hex)\tgot (\(got.0),\(got.1),\(got.2))\tdrift \(drift)")
+        }
+    }
+}

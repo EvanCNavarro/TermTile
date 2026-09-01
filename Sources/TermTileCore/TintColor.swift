@@ -26,9 +26,13 @@ public struct TintColor: Equatable, Sendable {
 /// `SetColors`, which iTerm converts. Measured: `#143C22` renders as `#003018` — darker, red
 /// channel zeroed. With both writers active a window visibly oscillates between the two.
 ///
-/// The hexes stay as they are because they are still the right REQUEST; the divergence is in the
-/// write path, and pre-compensating before the cause is known would be wrong for anyone whose
-/// iTerm settings differ. Tracked as EvanCNavarro/TermTile#29.
+/// **RESOLVED 2026-09-01 (EvanCNavarro/TermTile#29).** The cause is a colour-space mismatch: an
+/// OSC 1337 triple is read as Display P3, while `background color` sets and reports Generic RGB.
+/// The hexes below stay exactly as they are — they were always the right REQUEST — and
+/// `DisplayP3Compensation` in TermTileKit converts them at the point the escape sequence is
+/// built, which is where the divergence actually lives. Live-proven: five of the six now render
+/// as the hex they ask for, and `readySubtle` lands 1/255 low because `#0E2B18` has no exact
+/// 8-bit Display P3 preimage.
 public enum TintPalette {
     /// Idle and finished. `#143C22` — dark enough that light terminal text stays readable.
     public static let ready = TintColor(red: 0x14, green: 0x3C, blue: 0x22)
