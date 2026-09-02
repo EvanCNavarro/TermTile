@@ -171,29 +171,48 @@ struct MenuBarContent: View {
             }
         }
         .frame(width: 280)
-        // FILL WHATEVER HEIGHT THE PANEL TAKES, pinned to the top.
-        //
-        // MEASURED 2026-09-01: the MenuBarExtra window keeps a HIGH-WATER MARK. Opening the panel
-        // while an extra terminal was listed grew it 823 -> 873 pt; closing that terminal shrank
-        // the content back to 823 and the window STAYED at 873. SwiftUI then centres the smaller
-        // content, so the window's own material shows as symmetric bands above and below — 125 pt
-        // each on the report that prompted this. A freshly launched app sizes correctly, which is
-        // why it looks fine until the panel has seen a taller state once.
-        //
-        // `maxHeight: .infinity` sets a MAXIMUM, not an ideal, so it cannot make the window grow;
-        // it only lets the content expand into height the window already has. `.top` keeps the
-        // card from floating in the middle of that space. Same remedy as the RememBar hosting-view
-        // bug (see the nshostingview-window-autosizes note): let the content fill the window, and
-        // put the brand surface on the FILLING frame so no window material is left visible.
-        .frame(maxHeight: .infinity, alignment: .top)
         .background(Tokens.panel)   // fixed-dark brand surface (shared with RememBar)
         .onAppear { viewModel.refreshTrust() }
         // MenuBarExtra(.window) keeps this view alive across opens, so `.onAppear` fires once per
         // process — a grant made later rendered a stale fix-it row. The panel becomes key on every
         // open; re-probe then (cheap, read-only).
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
             viewModel.refreshTrust()
+            Self.shrinkPanelToFitContent(note.object as? NSWindow)
         }
+    }
+
+    /// Shrink the menu panel's window back onto its content when the content has got shorter.
+    ///
+    /// `MenuBarExtra(.window)` keeps a HIGH-WATER MARK. Measured 2026-09-01: opening the panel
+    /// while an extra terminal was listed grew it 823 -> 873 pt; closing that terminal shrank the
+    /// content back to 823 and the window STAYED at 873, with the smaller content centred in it
+    /// and transparent bands above and below. On the report that prompted this the gap was 125 pt
+    /// each side. A freshly launched app sizes correctly, which is why it looks fine until the
+    /// panel has once seen a taller state.
+    ///
+    /// This is a documented deficiency in SwiftUI's `WindowMenuBarExtraStyle`, not something a
+    /// layout modifier can reach: the extra height is OUTSIDE the SwiftUI view. The bands measure
+    /// `alpha 0` — transparent window, not window material behind a too-small background — so a
+    /// `maxHeight: .infinity` frame had no effect when it was tried in 0.3.1. SwiftUI is never
+    /// offered the space, so only the WINDOW can give it back.
+    ///
+    /// The delta approach is taken from FluidMenuBarExtra, which exists to replace this style and
+    /// whose window applies `size - previousContentSize` in both directions. Doing it here keeps
+    /// the fix to one function instead of adopting a dependency that also requires an
+    /// `NSApplicationDelegate`, an extra `Scene`, and a different corner radius.
+    ///
+    /// Deliberately one-directional and guarded: it only ever SHRINKS, never grows, so it cannot
+    /// fight SwiftUI's own sizing on the way up, and a zero or absent fitting size is ignored
+    /// rather than treated as "resize to nothing".
+    @MainActor
+    private static func shrinkPanelToFitContent(_ window: NSWindow?) {
+        guard let window, let content = window.contentView else { return }
+        let fitting = content.fittingSize
+        guard fitting.height > 1 else { return }
+        let current = window.frame.height
+        guard current - fitting.height > 1 else { return }
+        window.setContentSize(NSSize(width: window.frame.width, height: fitting.height))
     }
 
     // MARK: - Composition
