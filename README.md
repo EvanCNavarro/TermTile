@@ -19,8 +19,9 @@ nothing until you ask it to.
 - **Optional focus** — when enabled, Rearrange asks macOS to bring the selected target app forward.
 - **Adjustable gap** — set the spacing between tiled windows from the menu.
 - **Session tint (optional, off by default, iTerm2 only)** — colours each terminal session by what
-  its agent is doing: green when idle, amber when it is blocked waiting on you, normal while it
-  works. Needs no extra permission, but it does read on-screen text — see **Privacy & permissions**.
+  its agent is doing: green when it is finished, blue when it has answered but a background shell
+  it started is still running, amber when it is blocked waiting on you, normal while it works.
+  Needs no extra permission, but it does read on-screen text — see **Privacy & permissions**.
   **WezTerm is not supported for this feature**: it ignores the OSC escape TermTile uses to set a
   background colour (measured 2026-08-31). Tiling works for both terminals as before.
   **Needs iTerm2 3.3 or newer** — the escape TermTile writes names its colour space (`bg=rgb:…`),
@@ -59,8 +60,9 @@ TermTile is local and quiet:
   the Accessibility API and writes new positions back. With **Session tint** off — which is how it
   ships — it never reads window *contents*, your keystrokes, or anything you type.
 - **Session tint reads more, and only when you turn it on.** This optional feature colours each
-  terminal session by what its agent is doing: green when idle, amber when it is waiting on you,
-  normal while it works. To tell those apart it reads two things nothing else in TermTile touches:
+  terminal session by what its agent is doing: green when finished, blue when a background shell it
+  started is still running, amber when it is waiting on you, normal while it works. To tell those
+  apart it reads two things nothing else in TermTile touches:
   - **The visible text of each session** — the last ~2,000 characters, through the Accessibility
     API. Not your whole scrollback, not your keystrokes; the tail of what is already on screen.
   - **One environment variable of the terminal's own processes** (`ITERM_SESSION_ID`), to work out
