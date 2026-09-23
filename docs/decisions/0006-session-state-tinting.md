@@ -412,6 +412,48 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
     is deliberately NOT matched — it is model-written, which is what findings 8 and 10 were both
     about.
 
+17. **Loop state cannot be read off the screen, so it is DECLARED.** (2026-09-23,
+    EvanCNavarro/TermTile#51.) A session running a long `/loop` alternates between running a cycle
+    and waiting for a scheduled wakeup, so it flickered between `working` and `ready`/`pending`.
+    Bobby asked for one colour held until the loop ends.
+
+    **The dormant stretch is why this needed a new mechanism rather than a new marker.** Measured
+    on a live `/loop /goal` session: during one, the pane is idle by every observable signal — no
+    interrupt affordance, static character count, and the tool's own session registry reporting
+    `idle`. It painted GREEN, meaning finished, while the session was mid-task and about to resume
+    on its own. That is a false green on a session doing work, which is worse than the flicker.
+
+    Everything derivable was measured and ruled out:
+
+    | source | why not |
+    |---|---|
+    | scrollback markers | `/loop`, `Claude resuming`, `Cycle N` sat 100+ lines back; the classifier reads ~400 chars. All HISTORICAL — the nearest belonged to a finished cycle, so matching it paints purple forever after any loop ever ran |
+    | the `⧉` task label | NOT user-settable. pushtext's label reads `icon-marks` while its branch is `master`; portfolio's reads `portfolio-roster` on `main`. Not branch, worktree, or registry name |
+    | `~/.claude/sessions/<pid>.json` | tool-maintained and tty-mappable, but `status` is only `busy`/`idle`/`shell` — 10-minute sample across 7 sessions, and the looping session read `busy` like any other |
+    | `scheduled_tasks.lock` | one session id for whoever holds the scheduler lock, not pending wakeups |
+    | `WAITING ON SCHEDULED WAKEUP` prose | model-written, the class findings 8 and 10 were both about — and present only BETWEEN cycles, so it could not hold one steady colour anyway |
+
+    **Consequence:** `AgentState.looping`, painted `#2A2438`, driven by a flag the session writes at
+    `~/.claude/termtile-loop/<tty>` containing its pid. `LoopFlagReading` is a port; the core stays
+    pure and takes `StateEvidence.isLooping` as an answer (ADR-0001). Precedence is
+    blocked > looping > working > pending > ready — blocked outranks it because a loop waiting on a
+    human needs the user NOW, and purple says "leave it alone". It sits ABOVE the baseline guard,
+    unlike `ready` and `pending`: those infer stillness and need a previous sample, while this is
+    declared and is evidence on the first poll.
+
+    **The pid is the entire safety story.** A flag left by a killed loop would strand a window
+    purple — finding 10's shape exactly, a durable marker outliving its state. TermTile ignores AND
+    deletes a flag whose process is gone, so it self-heals. Proven on the real path: a live flag
+    produced `looping` and `#2A2438`; killing the owner produced `ready` and the file was reaped.
+
+    **This reintroduces an out-of-tree flag of the kind #27 just removed, and that is a real cost.**
+    The distinction claimed: those flags existed because TermTile could not see the screen and died
+    the moment it could; this one exists because the screen does not carry the answer and cannot be
+    made to. A signal that is underivable is a different case from one that was inconvenient.
+
+    NOT automatic on its own — something must call `scripts/loop-flag.sh set` and `clear`. A
+    tool-side loop indicator, in the footer or the session registry, would replace this entirely.
+
 ## Decision
 
 ### Tier 1 — the default, and the only tier built here

@@ -56,9 +56,13 @@ struct CoordinatorVerdictLiveTests {
     @Test("what the real coordinator decides, painting nothing", .enabled(if: PaneDumpLiveTests.enabled))
     func verdicts() async {
         let writer = NoOpWriter()
+        // The REAL loop-flag reader, not the inert default. Omitting it made this probe silently
+        // blind to the looping state: a flag written for a live session produced no change at
+        // all, and the miss looked like a bug in the feature rather than in the harness (#51).
         let coordinator = TintingCoordinator(reader: AXSessionReader(bundleID: "com.googlecode.iterm2"),
                                              probe: ProcessTTYProbe(),
-                                             writer: writer)
+                                             writer: writer,
+                                             loopFlags: LoopFlagDirectory())
         _ = await coordinator.pass()                       // seeds baselines
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         let decisions = await coordinator.pass()

@@ -77,15 +77,18 @@ public actor TintingCoordinator {
     /// vanish is not enough on its own: a session that dies and is reborn on the same tty between
     /// two polls is present at both, and comparing the new session's count against the dead one's
     /// would manufacture a delta — or worse, manufacture STILLNESS and paint a working window green.
+    private let loopFlags: any LoopFlagReading
     private var baselines: [String: (cwd: String, count: Int)] = [:]
 
     public init(reader: any SessionReading,
                 probe: any TTYProbing,
                 writer: any SessionTinting,
+                loopFlags: any LoopFlagReading = NoLoopFlags(),
                 readyColor: TintColor = TintPalette.ready) {
         self.reader = reader
         self.probe = probe
         self.writer = writer
+        self.loopFlags = loopFlags
         self.readyColor = readyColor
     }
 
@@ -101,6 +104,9 @@ public actor TintingCoordinator {
     public func pass() async -> [TintDecision] {
         let panes = await reader.visiblePanes()
         let sessions = await probe.sessions()
+        // Read ONCE per pass, not per pane: the answer is the same for every pane in the pass and
+        // this touches the filesystem.
+        let looping = await loopFlags.loopingTTYs()
         let outcomes = SessionJoin.resolve(panes: panes.map(\.snapshot), sessions: sessions)
 
         var decisions: [TintDecision] = []
@@ -126,7 +132,8 @@ public actor TintingCoordinator {
                 let state = AgentStateClassifier.classify(
                     StateEvidence(tail: pane.scrollbackTail,
                                   widerTail: pane.scrollbackTail,
-                                  charCountDelta: delta))
+                                  charCountDelta: delta,
+                                  isLooping: looping.contains(tty)))
                 var wrote = false
                 if let colour = TintPalette.color(for: state, ready: readyColor) {
                     wrote = await writer.setBackground(colour, onTTY: tty)

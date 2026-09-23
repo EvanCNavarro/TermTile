@@ -228,7 +228,8 @@ struct TermTileApp: App {
         TintingDriver(coordinator: TintingCoordinator(
             reader: AXSessionReader(bundleID: targetBundleID),
             probe: ProcessTTYProbe(),
-            writer: OSCColorWriter()))
+            writer: OSCColorWriter(),
+            loopFlags: LoopFlagDirectory()))
     }
 
     /// A VM forced into the `grantBroken` state (untrusted probe + seeded `wasTrusted`) so the
