@@ -48,11 +48,28 @@ public enum TintPalette {
     /// Turn ended, background work still outstanding (EvanCNavarro/TermTile#47).
     ///
     /// Blue rather than a dimmer green, because the distinction the user acts on is "finished" vs
-    /// "not finished yet" and a shade of the same hue reads as a degree of the same thing.
-    /// Measured against the palette it has to be told apart from (dE2000): 27.5 from `normal`,
-    /// 31.3 from `ready`, 16.5 from `blocked`. For scale, `ready` sits 22.3 from `normal` today,
-    /// so this is MORE distinct from both than the existing pair is from each other.
-    public static let pendingBlue = TintColor(red: 0x16, green: 0x3A, blue: 0x56)
+    /// "not finished yet", and a shade of the same hue reads as a degree of the same thing.
+    ///
+    /// **DELIBERATELY QUIETER THAN GREEN.** Green is the state a user wants to catch across a
+    /// screen of windows; blue only says "nothing for you yet". The first value shipped in 0.4.0
+    /// was `#163A56`, and it out-shone the green it was meant to defer to — measured, its
+    /// lightness was 23.2 against green's 21.9 and its chroma 20.8 against green's 24.3, so it was
+    /// the BRIGHTER of the two. Bobby saw that immediately.
+    ///
+    /// This value sits under green on every axis that draws the eye:
+    ///
+    ///     lightness   18.0  vs green 21.9
+    ///     chroma      11.5  vs green 24.3      (less than half)
+    ///     dE2000 from normal  10.4  vs green's 22.3   (47% as prominent)
+    ///
+    /// Still unmistakably its own state, not a lighter `normal`: `normal` is itself a near-neutral
+    /// blue-grey (chroma 2.4), and this carries 4.7x that, so it reads as a colour. dE2000 23.1
+    /// from `ready` and 26.7 from `blocked`. Text contrast is 8.3:1, BETTER than green's 7.3:1.
+    ///
+    /// Earlier revisions of this comment carried the three dE figures PERMUTED — the measuring
+    /// script's column headers did not match its iteration order, so "27.5 from normal" was really
+    /// 27.5 from ready. Every number above is from an explicit one-pair-per-line printout.
+    public static let pendingBlue = TintColor(red: 0x1C, green: 0x2E, blue: 0x3C)
 
     /// The one stronger preset, for a dim display or where the standard green does not read.
     ///

@@ -384,11 +384,27 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
     eight lines, since a 400-character tail rarely holds more than that. Both were found only by
     planting, and the suite now asserts that its own fixtures survive truncation.
 
-    **Consequence:** `AgentState.pending`, painted `#163A56`. Precedence is blocked > working >
+    **Consequence:** `AgentState.pending`, painted `#1C2E3C`. Precedence is blocked > working >
     pending > ready, and pending sits AFTER the baseline guard so a session seen for the first time
     still paints nothing. Verified on the real coordinator against live panes: three sessions that
     were being painted green now paint blue, each corresponding to a real count in its footer, and
     the genuinely idle ones stayed green.
+
+    **AMENDED 2026-09-23, same day.** The first value, `#163A56`, was too loud and the ADR carried
+    its separations PERMUTED — the measuring script's column headers did not match its iteration
+    order, so "27.5 from normal" was really 27.5 from ready. True figures for that value: 16.5 from
+    normal, 27.5 from ready, 31.3 from blocked.
+
+    The substantive error the wrong labels hid: at lightness 23.2 and chroma 20.8, against green's
+    21.9 and 24.3, the blue was the BRIGHTER of the two. It out-shone the state it exists to defer
+    to. Green is what a user wants to catch across a screen of windows; blue only says "nothing for
+    you yet", so it must be the quieter of the pair.
+
+    `#1C2E3C` sits under green on every axis that draws the eye — lightness 18.0, chroma 11.5, and
+    dE2000 10.4 from `normal` against green's 22.3, so 47% as prominent. It stays unmistakably a
+    colour rather than a lighter `normal`, which is itself a near-neutral blue-grey at chroma 2.4:
+    this carries 4.7x that, sits 23.1 from `ready` and 26.7 from `blocked`, and its text contrast
+    of 8.3:1 is better than green's 7.3:1.
 
     NOT fixed: a session whose footer is hidden behind a scroll overlay shows no marker, and an
     agent that says it is waiting on a deploy with no background shell has no observable signal at
