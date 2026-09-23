@@ -350,6 +350,52 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
     That is a false NEGATIVE — an unpainted window rather than a wrong one, which is the safe
     direction for this feature.
 
+16. **Green meant "finished" and was painted on sessions that were not finished. There is now a
+    fourth state.** (2026-09-23, EvanCNavarro/TermTile#47.) A turn that ENDED while a shell it
+    launched was still running showed neither of `WorkingSignal`'s tells — the interrupt affordance
+    goes with the turn, the character count is static because nothing renders — so it fell through
+    to `.ready`. That is finding 8's false green, the failure this feature can least afford,
+    reached by a route finding 8 did not anticipate.
+
+    Observed live twice before any code changed: a Codex session reading `2 background terminals
+    running` and a Claude Code session reading `1 shell`, both tinted `5139,15419,8737`.
+
+    The marker was battle-tested rather than assumed, by starting exactly one background shell and
+    letting it end:
+
+    ```
+    BEFORE   bypass permissions on (shift+tab to cycle) · 1 agent     no count
+    DURING   bypass permissions on · 1 shell · 1 agent                marker present
+    AFTER    bypass permissions on (shift+tab to cycle) · 1 agent     no count
+    ```
+
+    Absent to present to absent on one controlled variable. These counts are TOOL-rendered, the
+    quality bar of finding 9, not model prose like finding 10.
+
+    **The final-line rule from finding 15 could not be reused.** Measured, this marker never sits
+    on the final line: the status line is three to four lines up, above the `/rc` line and the task
+    slot. The guard is instead three-part — a NUMBER before the phrase, chrome that only the real
+    footer carries on the SAME line, and that line inside the last five non-blank lines.
+
+    All three parts were proven load-bearing by planting each defect in turn and watching a named
+    row go red. **The first version of that test caught none of them**: its false-positive fixture
+    ran to ~560 characters, so `tail.suffix(400)` removed the quoted text before any guard saw it,
+    and the truncation passed the test on the guard's behalf. The footer window was also inert at
+    eight lines, since a 400-character tail rarely holds more than that. Both were found only by
+    planting, and the suite now asserts that its own fixtures survive truncation.
+
+    **Consequence:** `AgentState.pending`, painted `#163A56`. Precedence is blocked > working >
+    pending > ready, and pending sits AFTER the baseline guard so a session seen for the first time
+    still paints nothing. Verified on the real coordinator against live panes: three sessions that
+    were being painted green now paint blue, each corresponding to a real count in its footer, and
+    the genuinely idle ones stayed green.
+
+    NOT fixed: a session whose footer is hidden behind a scroll overlay shows no marker, and an
+    agent that says it is waiting on a deploy with no background shell has no observable signal at
+    all. This reduces false greens; it does not eliminate them. The prose convention `WAITING ON X`
+    is deliberately NOT matched — it is model-written, which is what findings 8 and 10 were both
+    about.
+
 ## Decision
 
 ### Tier 1 — the default, and the only tier built here

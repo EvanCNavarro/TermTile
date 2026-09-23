@@ -45,6 +45,15 @@ public enum TintPalette {
     /// Working, and the resting colour every session returns to. `#111417`.
     public static let normal = TintColor(red: 0x11, green: 0x14, blue: 0x17)
 
+    /// Turn ended, background work still outstanding (EvanCNavarro/TermTile#47).
+    ///
+    /// Blue rather than a dimmer green, because the distinction the user acts on is "finished" vs
+    /// "not finished yet" and a shade of the same hue reads as a degree of the same thing.
+    /// Measured against the palette it has to be told apart from (dE2000): 27.5 from `normal`,
+    /// 31.3 from `ready`, 16.5 from `blocked`. For scale, `ready` sits 22.3 from `normal` today,
+    /// so this is MORE distinct from both than the existing pair is from each other.
+    public static let pendingBlue = TintColor(red: 0x16, green: 0x3A, blue: 0x56)
+
     /// The one stronger preset, for a dim display or where the standard green does not read.
     ///
     /// ~~Four presets carried over verbatim: subtle / standard / louder / loudest.~~ **CUT TO TWO
@@ -63,6 +72,7 @@ public enum TintPalette {
         case .ready: return readyColor
         case .blocked: return blocked
         case .working: return normal
+        case .pending: return pendingBlue
         case .unknown: return nil
         }
     }

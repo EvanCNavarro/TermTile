@@ -11,6 +11,14 @@ public enum AgentState: String, Equatable, Sendable {
     case ready
     /// Actively working.
     case working
+    /// The turn has ENDED but background work is still outstanding — a shell the agent launched is
+    /// still running, so the session will come back to life on its own.
+    ///
+    /// Distinct from `ready` because green means FINISHED, and acting on a session that still has
+    /// work out is the false-green failure ADR-0006 finding 8 calls the worst this feature can
+    /// have. Distinct from `working` because nothing is rendering and the agent is not
+    /// interruptible — there is nothing to interrupt. Tracked as EvanCNavarro/TermTile#47.
+    case pending
     /// Blocked on a human answering something.
     case blocked
     /// No recognised marker. Caller leaves the session at its normal colour.
@@ -146,6 +154,9 @@ public enum AgentStateClassifier {
         if markerOnFinalLine(blocked, in: tail) { return .blocked }
         if WorkingSignal.isWorking(evidence) { return .working }
         guard evidence.charCountDelta != nil else { return .unknown }
+        // AFTER the baseline guard, deliberately: with no previous sample we cannot establish
+        // stillness, and "seen for the first time" must paint nothing at all (finding 8).
+        if PendingSignal.hasOutstandingWork(tail) { return .pending }
         return .ready
     }
 
@@ -188,6 +199,85 @@ public struct StateEvidence: Equatable, Sendable {
     }
 }
 
+/// Decides whether a pane has background work outstanding after its turn ended.
+///
+/// THE FALSE-GREEN FIX (EvanCNavarro/TermTile#47). A turn that has ENDED while a shell it launched
+/// is still running shows neither of `WorkingSignal`'s tells — the interrupt affordance goes with
+/// the turn, and the character count is static because nothing is rendering — so it fell through
+/// to `.ready` and was painted green. Green means finished. Observed live twice on 2026-09-23.
+///
+/// MEASURED, not assumed. Both agents render a live count of background shells, and the marker was
+/// battle-tested by starting exactly one background shell and letting it end:
+///
+///     BEFORE   ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent     no count
+///     DURING   ⏵⏵ bypass permissions on · 1 shell · ← 1 agent                marker present
+///     AFTER    ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent     no count
+///
+/// Absent -> present -> absent on the one controlled variable, so the marker measures running
+/// shells rather than something incidental. These are TOOL-rendered, the quality bar of
+/// `esc to interrupt` (finding 9) — not model prose like `waiting-on-a-person` (finding 10), which
+/// shipped as a state and reported an idle session blocked for hours.
+///
+/// WHY NOT THE FINAL-LINE RULE that guards the blocked marker (finding 15): this marker is never
+/// on the final line. Measured, the status line sits three lines up, above `/rc` and the `⧉` slot.
+/// So the guard is instead TWO-PART — the count must share its line with chrome only the real
+/// footer carries, and that line must be inside the footer region. A count quoted further up the
+/// scrollback (this investigation wrote several into its own) fails the second test.
+///
+/// The failure direction is deliberate. A miss leaves the session green exactly as it is today, so
+/// there is no regression; a false positive would only ask the user to wait on something already
+/// done. Acting on a session that is still working is the costlier mistake, so the rule is tuned
+/// to be quiet rather than eager.
+public enum PendingSignal {
+    /// A counted phrase, and the chrome that must appear on the SAME line for it to count.
+    ///
+    /// `shell` covers both `1 shell` and `3 shells`. The chrome is what separates a live footer
+    /// from a transcript that merely mentions one.
+    static let markers: [(phrase: String, chrome: String)] = [
+        ("shell", "⏵⏵"),                                        // Claude Code status line
+        ("background terminals running", "/ps to view")         // Codex
+    ]
+
+    /// How far back from the end the footer can start, in non-blank lines.
+    ///
+    /// FIVE, not eight. Eight was the first value and it was INERT: a 400-character tail rarely
+    /// holds more than about eight non-blank lines, so the window covered the whole thing and
+    /// excluded nothing. Planting a defect in it did not fail the suite, which is how that was
+    /// found. Measured, the marker sits 3-4 lines up in every observed footer — Claude Code above
+    /// its `/rc` line and the task-label slot, Codex above its input prompt — so five clears all
+    /// of them with one line to spare while putting quoted transcript text out of reach.
+    static let footerLines = 5
+
+    /// Whether `normalizedTail` shows work still outstanding. Expects the output of
+    /// `AgentStateClassifier.normalize`, so NUL padding has already become spaces.
+    public static func hasOutstandingWork(_ normalizedTail: String) -> Bool {
+        let lines = normalizedTail
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { line in line.contains { $0 != " " } }
+        return lines.suffix(footerLines).contains { line in
+            markers.contains { marker in
+                line.contains(marker.chrome) && isCounted(marker.phrase, in: line)
+            }
+        }
+    }
+
+    /// Whether `phrase` appears preceded by a NUMBER — `1 shell`, not the bare word.
+    ///
+    /// Without this, any footer mentioning a shell would match. The count is the whole signal:
+    /// the status line carries the phrase ONLY when shells are running, and the digit is what
+    /// makes that unambiguous.
+    static func isCounted(_ phrase: String, in line: Substring) -> Bool {
+        let needle = " " + phrase
+        var search = line[...]
+        while let found = search.range(of: needle) {
+            let beforeSpace = line[line.startIndex..<found.lowerBound]
+            if let digit = beforeSpace.last, digit.isNumber { return true }
+            search = line[found.upperBound...]
+        }
+        return false
+    }
+}
+
 /// Decides whether a pane is actively working.
 ///
 /// MEASURED 2026-08-31, 4 samples across 6 live sessions (24 observations), against ground truth
@@ -223,6 +313,7 @@ extension AgentState {
         switch self {
         case .ready: return "Idle"
         case .working: return "Working"
+        case .pending: return "Finishing up"
         case .blocked: return "Waiting on you"
         case .unknown: return "Not yet"
         }
