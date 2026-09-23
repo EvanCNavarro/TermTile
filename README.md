@@ -19,10 +19,13 @@ nothing until you ask it to.
 - **Optional focus** — when enabled, Rearrange asks macOS to bring the selected target app forward.
 - **Adjustable gap** — set the spacing between tiled windows from the menu.
 - **Session tint (optional, off by default, iTerm2 only)** — colours each terminal session by what
-  its agent is doing: green when it is finished, blue when it has answered but a background shell
-  it started is still running, purple while it is running a long loop, amber when it is blocked
-  waiting on you, normal while it works. Needs no extra permission, but it does read on-screen
-  text — see **Privacy & permissions**.
+  its agent is doing. **Green means finished** — the one colour that invites you to look. Two
+  colours mean *still going, nothing for you yet*: **blue** for a single piece of work still in
+  flight (the agent has answered, but a shell it started is still running) and **purple** for a
+  long loop, held for the whole loop including the pauses between cycles. Both end in green when
+  the work is genuinely done. **Amber** is the exception that wants you now — the agent is blocked
+  on your answer. A session doing ordinary work keeps its normal background. Needs no extra
+  permission, but it does read on-screen text — see **Privacy & permissions**.
   **WezTerm is not supported for this feature**: it ignores the OSC escape TermTile uses to set a
   background colour (measured 2026-08-31). Tiling works for both terminals as before.
   **Needs iTerm2 3.3 or newer** — the escape TermTile writes names its colour space (`bg=rgb:…`),
