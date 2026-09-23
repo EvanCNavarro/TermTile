@@ -71,6 +71,20 @@ public enum TintPalette {
     /// 27.5 from ready. Every number above is from an explicit one-pair-per-line printout.
     public static let pendingBlue = TintColor(red: 0x1C, green: 0x2E, blue: 0x3C)
 
+    /// Running a long autonomous loop, held through its dormant stretches (#51).
+    ///
+    /// Purple because the palette's other hues are taken and the distinction has to survive being
+    /// recalled from memory across a screen of windows, not compared side by side — hue carries
+    /// that far better than lightness. Measured: hue 304° against `pendingBlue`'s 256°, a 47°
+    /// separation, and dE2000 13.7 from it.
+    ///
+    /// Pitched at the same QUIET register as the blue, for the same reason: green means finished
+    /// and should stay the loudest state. Lightness 15.7 and chroma 14.4 both sit under green's
+    /// 21.9 and 24.3, and it is dE2000 13.1 from `normal` against green's 22.3 — 59% as prominent.
+    /// Separations: 29.2 from `ready`, 27.4 from `blocked`. Text contrast 8.8:1, better than
+    /// green's 7.3:1.
+    public static let loopingPurple = TintColor(red: 0x2A, green: 0x24, blue: 0x38)
+
     /// The one stronger preset, for a dim display or where the standard green does not read.
     ///
     /// ~~Four presets carried over verbatim: subtle / standard / louder / loudest.~~ **CUT TO TWO
@@ -90,6 +104,7 @@ public enum TintPalette {
         case .blocked: return blocked
         case .working: return normal
         case .pending: return pendingBlue
+        case .looping: return loopingPurple
         case .unknown: return nil
         }
     }

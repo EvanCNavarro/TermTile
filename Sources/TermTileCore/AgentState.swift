@@ -19,6 +19,15 @@ public enum AgentState: String, Equatable, Sendable {
     /// have. Distinct from `working` because nothing is rendering and the agent is not
     /// interruptible — there is nothing to interrupt. Tracked as EvanCNavarro/TermTile#47.
     case pending
+    /// Running a long autonomous loop — held for the WHOLE loop, including the dormant stretches
+    /// between cycles while it waits for a scheduled wakeup.
+    ///
+    /// Those gaps are why this cannot be derived from the other states: during one, the session is
+    /// idle by every observable signal — no interrupt affordance, static character count, the
+    /// tool's own registry reporting `idle` — so it would paint green, FINISHED, while it is
+    /// mid-task and about to resume on its own. Measured 2026-09-23 on a live `/loop /goal`
+    /// session. Tracked as EvanCNavarro/TermTile#51.
+    case looping
     /// Blocked on a human answering something.
     case blocked
     /// No recognised marker. Caller leaves the session at its normal colour.
@@ -152,6 +161,15 @@ public enum AgentStateClassifier {
     static func classify(_ evidence: StateEvidence, blocked: [String]) -> AgentState {
         let tail = normalize(String(evidence.tail.suffix(tailWindow)))
         if markerOnFinalLine(blocked, in: tail) { return .blocked }
+        // AFTER blocked, BEFORE everything else. A loop that is waiting on a human needs the user
+        // now, and purple says "leave it alone" — so blocked has to win. Everything below this is
+        // a phase the loop passes through, and the point of the state is that they all look the
+        // same from outside: one colour until the loop ends (#51).
+        //
+        // It also sits ABOVE the baseline guard, unlike `ready` and `pending`. Those infer
+        // stillness and so need a previous sample to compare against; this is DECLARED by the
+        // session itself, which is evidence in its own right on the very first poll.
+        if evidence.isLooping { return .looping }
         if WorkingSignal.isWorking(evidence) { return .working }
         guard evidence.charCountDelta != nil else { return .unknown }
         // AFTER the baseline guard, deliberately: with no previous sample we cannot establish
@@ -191,11 +209,22 @@ public struct StateEvidence: Equatable, Sendable {
     public let widerTail: String
     /// Change in the pane's character count since the previous poll; `nil` if there wasn't one.
     public let charCountDelta: Int?
+    /// Whether this session has DECLARED itself to be running a long autonomous loop.
+    ///
+    /// Declared rather than observed, and deliberately so: loop state is not derivable from the
+    /// terminal. Measured 2026-09-23 on a live `/loop /goal` session — the `/loop` command and
+    /// every cycle marker sat 100+ lines back in the scrollback and were HISTORICAL (the nearest
+    /// belonged to a cycle that had already finished), the tool's session registry reports only
+    /// `busy`/`idle`/`shell` across a 10-minute sample of 7 sessions, and during a dormant stretch
+    /// the screen carries nothing distinguishing at all. The shell reads a flag the loop itself
+    /// writes; the core stays pure and just takes the answer (ADR-0001).
+    public let isLooping: Bool
 
-    public init(tail: String, widerTail: String, charCountDelta: Int?) {
+    public init(tail: String, widerTail: String, charCountDelta: Int?, isLooping: Bool = false) {
         self.tail = tail
         self.widerTail = widerTail
         self.charCountDelta = charCountDelta
+        self.isLooping = isLooping
     }
 }
 
@@ -314,6 +343,7 @@ extension AgentState {
         case .ready: return "Idle"
         case .working: return "Working"
         case .pending: return "Finishing up"
+        case .looping: return "Looping"
         case .blocked: return "Waiting on you"
         case .unknown: return "Not yet"
         }
