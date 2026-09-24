@@ -176,3 +176,69 @@ struct AgentStateFinalLineTests {
         }
     }
 }
+
+/// EvanCNavarro/TermTile#39 — the standing watch found a real false negative on 2026-09-23.
+///
+/// A WebFetch permission prompt is genuinely blocked on the user, yet its footer carries NO
+/// `Esc to cancel` at all: the escape affordance is rendered inline as `(esc)` inside option 3.
+/// Captured live, and the window was painted GREEN — finished — while waiting for an answer.
+///
+/// Found by DRIVING the state rather than waiting to observe it. Six shapes have now been driven
+/// deliberately; this is the first that the marker set missed.
+@Suite("Blocked: the permission family that carries no Esc-to-cancel")
+struct BlockedWebFetchFamilyTests {
+    /// Real capture, 2026-09-23. Note the final line: the only escape hint is `(esc)`.
+    static let webFetchPrompt = """
+          Claude wants to fetch content from example.com
+        Permission rule WebFetch requires confirmation for this tool.
+        /permissions to update rules
+        Do you want to allow Claude to fetch this content?
+        ❯ 1. Yes
+          2. Yes, and don't ask again for example.com
+          3. No, and tell Claude what to do differently (esc)
+        """
+
+    /// The two markers together must cover it; neither alone does.
+    static let markers = ["Esc to cancel", "tell Claude what to do differently"]
+
+    @Test("the capture genuinely lacks the original marker")
+    func captureLacksOriginalMarker() {
+        #expect(!Self.webFetchPrompt.contains("Esc to cancel"),
+                "fixture drifted — if it now contains the marker it is not this defect")
+        #expect(Self.webFetchPrompt.contains("tell Claude what to do differently"))
+    }
+
+    @Test("the original marker set MISSES it — this is the defect")
+    func originalMarkerSetMisses() {
+        #expect(AgentStateClassifier.classify(scrollback: Self.webFetchPrompt,
+                                              blocked: ["Esc to cancel"]) != .blocked)
+    }
+
+    @Test("the widened marker set catches it")
+    func widenedMarkerSetCatches() {
+        #expect(AgentStateClassifier.classify(scrollback: Self.webFetchPrompt,
+                                              blocked: Self.markers) == .blocked)
+    }
+
+    /// THE ONE THAT MATTERS. The three tests above inject a marker set through the test seam, so
+    /// they pass whether or not PRODUCTION carries the new marker — a green that proves the
+    /// mechanism and not the shipped behaviour. This calls the production overload.
+    @Test("the SHIPPED classifier catches it")
+    func productionCatchesIt() {
+        #expect(AgentStateClassifier.classify(scrollback: Self.webFetchPrompt) == .blocked,
+                "production blockedMarkers does not cover the WebFetch permission family")
+    }
+
+    /// The new marker must still obey the final-line rule, or it reopens #34 on a new string.
+    @Test("a session merely quoting the new marker is not blocked")
+    func quotingTheNewMarkerIsNotBlocked() {
+        let quoting = """
+            it said "No, and tell Claude what to do differently"
+            ──────────────
+            [Opus 5] │ termtile
+            ⏵⏵ bypass permissions on
+            /rc
+            """
+        #expect(AgentStateClassifier.classify(scrollback: quoting, blocked: Self.markers) != .blocked)
+    }
+}

@@ -67,7 +67,19 @@ public enum AgentStateClassifier {
     /// `.blocked` and would have been painted amber: 400 characters is several screen rows, so
     /// "unlikely" took exactly one sentence to defeat. Matching is now confined to the FINAL LINE
     /// — see `markerOnFinalLine`.
-    static let blockedMarkers = ["Esc to cancel"]
+    /// TWO markers since 2026-09-23, because one family carries neither.
+    ///
+    /// `tell Claude what to do differently` covers the permission prompts whose escape affordance
+    /// is rendered inline as `(esc)` inside the decline option, so `Esc to cancel` never appears.
+    /// A WebFetch approval is one: captured live, genuinely blocked on the user, and painted GREEN
+    /// — finished — the whole time (EvanCNavarro/TermTile#39).
+    ///
+    /// Found by DRIVING the state rather than waiting to see it. Six blocked shapes have now been
+    /// produced deliberately — AskUserQuestion, a plan-mode question, and Bash/Edit/Write/WebFetch
+    /// approvals — and this is the only one the original marker missed. Bobby's question is what
+    /// prompted it: the watch had been framed as needing a real-world sighting, when every shape
+    /// was reachable from a scratch session in minutes.
+    static let blockedMarkers = ["Esc to cancel", "tell Claude what to do differently"]
     static let workingMarkers = ["esc to interrupt"]
     /// EMPTY, DELIBERATELY — see ADR-0006 finding 8. `shift+tab to cycle` was used here until
     /// 2026-08-31, when it was measured on a window that was ACTIVELY RUNNING a command and found

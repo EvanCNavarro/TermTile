@@ -454,6 +454,41 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
     NOT automatic on its own — something must call `scripts/loop-flag.sh set` and `clear`. A
     tool-side loop indicator, in the footer or the session registry, would replace this entirely.
 
+18. **The standing watch found a real false negative — by DRIVING the states instead of waiting for
+    one.** (2026-09-23, EvanCNavarro/TermTile#39.) The watch had been framed as needing a
+    real-world sighting: something only daily use could surface. Bobby asked whether each open item
+    could be triggered deliberately in a terminal. It could, and doing so found the defect in about
+    four minutes.
+
+    Six blocked shapes were produced on demand from one scratch project with a
+    `permissions.ask` rule — AskUserQuestion, a plan-mode clarifying question, and Bash, Edit,
+    Write and WebFetch approvals. Five carry `Esc to cancel` on the final line and classify
+    correctly. **WebFetch carries it nowhere:**
+
+    ```
+    Do you want to allow Claude to fetch this content?
+    > 1. Yes
+      2. Yes, and don't ask again for example.com
+      3. No, and tell Claude what to do differently (esc)
+    ```
+
+    The escape affordance renders inline as `(esc)` inside the decline option. Measured on the live
+    pane: zero occurrences of the marker in the 400-character tail, and the window painted
+    `#143C22` — GREEN, meaning finished — while genuinely waiting for an answer. Worse than the
+    missed amber the watch anticipated: finding 8's false green, on a session blocked on the user.
+
+    **Consequence:** a second marker, `tell Claude what to do differently`, which sits on the final
+    line and so obeys finding 15's rule unchanged. Proven on the real path — the same live pane
+    that read green then read `blocked` and `#4A320F`.
+
+    **The method is the durable part.** A watch that waits is a watch that reports nothing; the
+    same scratch-project technique produces any of these shapes in minutes, and it is what should
+    be run against a new marker rather than a fixture written from memory.
+
+    A vacuous green nearly shipped inside this fix: the first three tests injected a marker set
+    through the test seam, so they passed whether or not PRODUCTION carried the new marker. The
+    test that calls the production overload is the one that went red.
+
 ## Decision
 
 ### Tier 1 — the default, and the only tier built here
