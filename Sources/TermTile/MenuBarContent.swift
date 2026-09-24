@@ -177,8 +177,16 @@ struct MenuBarContent: View {
         // MenuBarExtra(.window) keeps this view alive across opens, so `.onAppear` fires once per
         // process — a grant made later rendered a stale fix-it row. The panel becomes key on every
         // open; re-probe then (cheap, read-only).
+        //
+        // The tint summary needs the same treatment for the same reason (#57). Its `.task(id:)`
+        // below re-runs only when the toggle flips, so the count froze at whatever was true in that
+        // instant: measured 2026-09-24, a freshly launched app read "1 tinted · 7 not:" twice
+        // sixteen seconds apart while all eight sessions were in fact painted with correct state
+        // colours, read back off iTerm2. `lastDecisions()` is a cached read, not an AX pass, so
+        // refreshing on every open costs nothing.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             viewModel.refreshTrust()
+            Task { await viewModel.refreshTintDiagnostics() }
         }
     }
 
