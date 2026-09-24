@@ -489,6 +489,71 @@ from runs on this Mac against live iTerm2 windows, not from reading docs.
     through the test seam, so they passed whether or not PRODUCTION carried the new marker. The
     test that calls the production overload is the one that went red.
 
+19. **Tier 2's central claim is MEASURED, and Tier 1's ceilings are measured as NOT-YET-HIT.**
+    (2026-09-24, EvanCNavarro/TermTile#12.) Tier 2 had been argued for from its ceilings alone —
+    "Apple Events has no pane problem at all" was an inference nobody had run. It needed no
+    prototype: `osascript` reaches iTerm2 from an ordinary shell, so both halves are one command.
+
+    **The real workload is not hitting any ceiling.** Census of every agent session, read through
+    the app's own `ProcessTTYProbe` and `AXSessionReader`:
+
+    ```
+    CENSUS sessions=8 visiblePanes=8
+    CEILINGS windows=8 multiSessionWindows=0 cwdCollidingWindows=0 beyondBadgeCeiling=[]
+    ```
+
+    Eight single-session windows, no cwd collision inside any window, nothing past badge 9, and
+    `sessions == visiblePanes` so no background tab is hidden. The trigger clause "Tier 1's
+    ceilings prove annoying in daily use" is measurably not firing.
+
+    **Planted the ceiling rather than trusting that zero.** A split in the TermTile window with a
+    second agent process `cd`-ed to the same directory:
+
+    ```
+    WINDOW w5 badge=6 sessions=2 collidingCwd=true
+        t0p0 tty=/dev/ttys005 cwd=termtile
+        t0p1 tty=/dev/ttys008 cwd=termtile
+    CEILINGS ... multiSessionWindows=1 cwdCollidingWindows=1
+    VERDICT unknown wrote=false tty=- ambiguity=multipleCandidates cwd=termtile
+    VERDICT unknown wrote=false tty=- ambiguity=multipleCandidates cwd=evancnavarro
+    WOULD-PAINT 8            (9 with the window resolved, 10 with it split but cwds distinct)
+    ```
+
+    So the instrument can say both yes and no. And the **cost is larger than the ADR states**:
+    finding 6b says such a window "is left untinted", which reads as the new pane losing its
+    colour. Both panes go unresolved, so a window that was correctly tinted a second earlier goes
+    dark — a split costs the tint of the session that was already working. With DISTINCT cwds the
+    same split resolves cleanly: both panes tinted, no ambiguity.
+
+    **Apple Events resolves exactly that case, by tty, with no join at all:**
+
+    ```
+    AS-w1t0p0 tty=/dev/ttys005 name=◑ iTerm2 color integration in termtile (node)
+    AS-w1t0p1 tty=/dev/ttys008 name=claude
+    ```
+
+    It also carries the state glyph in the session NAME on windows whose `AXTitle` is overridden
+    (`✳` idle, `◐`/`◑` working, observed live across all eight windows) — finding 9's premise,
+    confirmed on the real set rather than argued from one window.
+
+    **Two things Tier 2 must not assume.** AppleScript window order is NOT the
+    `ITERM_SESSION_ID` window index — AS `w0` was `ttys007`, whose id says `w7` — so ordering is
+    z-order and cannot be used as identity; the tty must be. And the absence of a >9-window
+    ceiling for Apple Events is INFERRED, not measured: it enumerates `windows` directly, but only
+    eight were open.
+
+    **Trap, for whoever plants this next.** `/bin/sleep` is SIP-protected and macOS blanks a
+    restricted binary's environment block — 11 bytes against 39,015 for a real session — so
+    `ITERM_SESSION_ID` is unreadable and the plant simply does not register, looking like a probe
+    bug. A copy of the binary is SIGKILLed for a broken signature. Plant with a non-restricted
+    interpreter; `node` is what the real agent runs anyway.
+
+    **The decision is unchanged.** Every cost in EvanCNavarro/TermTile#12 is still unpaid — a
+    third TCC prompt, a permanent iTerm2-only binding, a weaker README privacy story, and the ADR
+    amendment this document requires. What has changed is that the case for it rests on
+    measurement now, and the case against it is stronger: the ceiling it removes is one the real
+    workload does not reach.
+
 ## Decision
 
 ### Tier 1 — the default, and the only tier built here
