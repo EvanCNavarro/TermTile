@@ -51,6 +51,26 @@ struct ReleaseReadinessTests {
         return version.lexicographicallyPrecedes(floor) == false && version.lexicographicallyPrecedes(ceiling)
     }
 
+    /// The newest release that has a PUBLISHED-artifact verification record.
+    ///
+    /// Keyed on `docs/verification/release-v<version>.md` rather than on `release-notes/`, because
+    /// notes are authored BEFORE the tag by design (see docs/RELEASING.md) and would red this gate
+    /// in the window between writing them and cutting the release. A verification doc only exists
+    /// once the artifact has actually been checked, so it tracks published releases exactly.
+    ///
+    /// `release-v0.2.6-local.md` and friends are skipped: `semver` rejects a non-numeric component.
+    private static func latestVerifiedRelease() -> String? {
+        let dir = repoRoot().appending(path: "docs/verification")
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        let versions: [(text: String, parts: [Int])] = names.compactMap { name in
+            guard name.hasPrefix("release-v"), name.hasSuffix(".md") else { return nil }
+            let text = String(name.dropFirst("release-v".count).dropLast(".md".count))
+            guard let parts = semver(text) else { return nil }
+            return (text, parts)
+        }
+        return versions.max { $0.parts.lexicographicallyPrecedes($1.parts) }?.text
+    }
+
     private static func swiftFiles(under path: String) -> [(path: String, contents: String)] {
         let root = repoRoot()
         let base = root.appending(path: path)
@@ -278,22 +298,29 @@ struct ReleaseReadinessTests {
         }
     }
 
+    /// HANDOFF.md must point operators at the NEWEST verified release, whichever that is.
+    ///
+    /// This assertion used to hardcode `v0.2.6`, and that is how it failed: releases v0.3.0 through
+    /// v0.5.1 all shipped while the gate went on demanding the v0.2.6 strings, so the handoff kept
+    /// telling operators v0.2.6 was current and the test ENFORCED that lie. A gate pinned to a
+    /// literal cannot tell "still correct" from "frozen"; deriving the version from the repo can.
     @Test("handoff points release operators at the latest public verification")
     func handoffRecordsLatestPublicReleaseVerification() {
         let docs = Self.file("HANDOFF.md")
-
-        for required in [
-            "Latest published release | **v0.2.6**",
-            "latest completed for `v0.2.6`",
-            "TermTile-v0.2.6.zip --repo EvanCNavarro/TermTile",
-            "docs/verification/release-v0.2.6.md"
-        ] {
-            #expect(docs.localizedCaseInsensitiveContains(required),
-                    "HANDOFF.md must mention \(required)")
+        guard let latest = Self.latestVerifiedRelease() else {
+            Issue.record("no docs/verification/release-v<version>.md exists — nothing to point at")
+            return
         }
 
-        #expect(!docs.localizedCaseInsensitiveContains("Post-release artifact verification** - completed for `v0.2.5`"),
-                "HANDOFF.md must not leave the post-release verification item pinned to v0.2.5")
+        for required in [
+            "Latest published release | **v\(latest)**",
+            "latest completed for `v\(latest)`",
+            "TermTile-v\(latest).zip --repo EvanCNavarro/TermTile",
+            "docs/verification/release-v\(latest).md"
+        ] {
+            #expect(docs.localizedCaseInsensitiveContains(required),
+                    "HANDOFF.md must mention \(required); v\(latest) is the newest verified release")
+        }
     }
 
     @Test("handoff records the current MacFaceKit dependency line")

@@ -1,6 +1,6 @@
 # TermTile - Handoff
 
-_Last updated: 2026-08-31. This is the single spot to pick TermTile back up. Read it top-to-bottom,
+_Last updated: 2026-09-24. This is the single spot to pick TermTile back up. Read it top-to-bottom,
 then jump to **Start here**. (Companion handoffs: `RememBar/HANDOFF.md`, `MacFaceKit/README.md` -
 the three repos share the MacFaceKit design system.)_
 
@@ -12,9 +12,9 @@ the three repos share the MacFaceKit design system.)_
 | Tests | Run `swift test` before claiming health |
 | Lint | Run `swiftlint --strict` before claiming health |
 | Git | Check `git status --short` before release |
-| Latest published release | **v0.2.6** (2026-07-18), build 138, Developer ID signed/notarized/stapled |
-| Release target | None active; v0.2.6 is published |
-| Latest unreleased work | **Session tint (ADR 0006, Phase F)** — colours each terminal session by what its agent is doing. Complete and live-verified, OFF by default, NOT yet released. Plus earlier live-app polish: top-right update indicators, stale-permission recovery, zoom-safe drag-reorder. |
+| Latest published release | **v0.5.2** (2026-09-24), Developer ID signed/notarized/stapled |
+| Release target | None active; v0.5.2 is published |
+| Latest unreleased work | None. Session tint shipped across v0.3.0–v0.5.2: the state palette (green finished · blue a shell still running · purple a whole loop · amber blocked on you), the colour-space fix, and the menu-panel height fix. |
 | Public signing | Developer ID Application: Evan Navarro (`XG9SBNWNXT`) |
 | Notarization | Accepted; release CI notarizes, staples, and Gatekeeper-assesses before zipping |
 | Design-system dep | MacFaceKit `.upToNextMinor(from: "0.4.2")` (public git URL, auto-resolved) |
@@ -27,22 +27,26 @@ the three repos share the MacFaceKit design system.)_
    (This bit RememBar this session; TermTile is currently clean.)
 2. **Verify notarized release artifacts after each public release.** Use `docs/NOTARIZATION.md`:
    fresh-download the zip, verify checksum/provenance, then run `codesign`, `stapler validate`, and
-   `spctl --assess` against the downloaded `TermTile.app`. This was completed for `v0.2.6`;
-   evidence is in `docs/verification/release-v0.2.6.md`.
+   `spctl --assess` against the downloaded `TermTile.app`. This was completed for `v0.5.2`;
+   evidence is in `docs/verification/release-v0.5.2.md`. Run the checks against a TAMPERED copy too
+   — `gh attestation verify` prints nothing and exits 0 on a good artifact, so its pass is
+   indistinguishable from a no-op unless you have seen it fail.
 3. **For the next release, repeat the tag workflow.** Author `release-notes/<version>.md`, run the
    local gate, commit the complete release diff, create `v<version>`, and push `master` + the tag.
 
 ## Where the project is
 
-- **Latest release:** v0.2.6 - menu-bar window-tiler: pick a terminal (iTerm2/WezTerm), press
-  **Rearrange now**, and windows snap into even columns of two. The Rearrange section now has a
-  default-off **Bring app forward** option that asks macOS to focus the selected target app after
-  tiling. v0.2.6 adds Sparkle-backed update indicators in the menu-bar glyph and overflow menu, and
-  tightens drag-reorder so content/screenshot drags inside an unchanged focused window do not snap it
-  back to the grid. It is Developer ID signed, notarized, stapled, Gatekeeper-assessed by release CI,
-  and published with a signed Sparkle appcast. It keeps the v0.2.4 uninstall privacy cleanup and stale
-  permission repair flows. `v0.2.1` was the transitional signed but unstapled build used to stabilize
-  macOS TCC grants across updates.
+- **Latest release:** v0.5.2 — the menu-bar window-tiler (pick a terminal, press **Rearrange now**,
+  windows snap into even columns of two) plus **Session tint**, which is what the 0.3–0.5 line was
+  about: each terminal session is coloured by what its agent is doing. Green means finished and is
+  the only colour that invites a look; blue means a shell it started is still running; purple holds
+  for a whole loop including the pauses between cycles; amber means it is blocked on you; ordinary
+  work keeps the normal background. Off by default, iTerm2 only, no extra TCC permission.
+  v0.5.2 itself fixes the menu panel keeping a high-water-mark height and the tint summary going
+  stale, and corrects 0.3.1's release note, which claimed the height fix worked when it did not.
+  Every release is Developer ID signed, notarized, stapled, Gatekeeper-assessed by release CI, and
+  published with a signed Sparkle appcast. `v0.2.1` was the transitional signed but unstapled build
+  used to stabilize macOS TCC grants across updates.
 - **Unreleased live-app polish:** top-right update dots on the menu-bar glyph and overflow ellipsis,
   row-level **Check for Updates** attention, a **Reset & Open Settings** stale-Accessibility recovery
   action, button-like permission notice actions, and drag-reorder ignoring title-bar zoom/resize gestures.
@@ -94,12 +98,20 @@ resolves to the **`TermTile`** domain, not `dev.ecn.apps.termtile`. Seeding the 
 launching the debug binary proves nothing — it reads absent keys and correctly does nothing, which
 is indistinguishable from broken wiring. This cost a confident wrong conclusion once already.
 
-**What remains:** backlog `#37g` retires the out-of-tree poller this replaces, and is deliberately
-gated on daily use rather than on a green suite. Its source is preserved at
-`docs/reference/replaced-tooling/` so the removal is recoverable. Open issues:
-EvanCNavarro/TermTile#6 (widen the blocked-marker vocabulary), #12 (Tier 2 Apple Events — stronger
-now than when deferred, since the session-name glyph is unreadable on renamed windows), #13 (verify
-the OSC write path against WezTerm before any multi-terminal claim).
+**What remains:** the out-of-tree poller is retired (its source stays at
+`docs/reference/replaced-tooling/` so the removal is recoverable), and #6 and #13 are closed. The
+ONE open issue is EvanCNavarro/TermTile#12 (Tier 2 Apple Events).
+
+**#12's case is now measured rather than argued, and the measurement points away from building it.**
+Apple Events does resolve what Tier 1 cannot — it hands over the tty with no join, and carries the
+state glyph in the session name on renamed windows — but the workload does not reach the ceiling it
+removes. Its trigger is a command now, not an impression:
+
+    TT_LIVE_AX=1 TT_DUMP=1 swift test --filter SessionCensusLiveTests
+
+Build Tier 2 when that reports `cwdCollidingWindows` > 0 or a non-empty `beyondBadgeCeiling` under a
+layout worth keeping, or when a background-tab indicator is wanted (Tier 1 cannot do it at all).
+Until then the third TCC prompt buys nothing. Full evidence: ADR-0006 finding 19.
 
 ## Known-good dev hooks / gotchas
 
@@ -113,13 +125,30 @@ the OSC write path against WezTerm before any multi-terminal claim).
   once after clone, and again if a build reds with "no such module 'Sparkle'". `build-app.sh` embeds it
   last; an interrupted build yields an app that dyld-aborts on `@rpath/Sparkle.framework`; re-run it whole.
 - `.engine/state/*.md` (STOKE plan files) are gitignored working notes; local-only, don't expect them in git.
+- **You can iterate on the REAL menu panel without losing the Accessibility grant.** `build-app.sh`
+  honours `TERMTILE_SIGN_IDENTITY`, so
+  `TERMTILE_SIGN_IDENTITY=6870044708F197502D867264A53AE1D1D4AAF640 scripts/install-app.sh` installs
+  a build that SATISFIES the stored TCC requirement — grants survive. This is what made #44 fixable;
+  it had been written off as costing a signed release per attempt.
+- **The panel is AX-drivable, and its controls take `AXPress`.** It is NOT "a single opaque
+  `AXGroup`" — that claim in #44 was wrong and cost two failed fixes. Open it with
+  `osascript -e 'tell application "System Events" to tell process "TermTile" to click menu bar item 1 of menu bar 2'`,
+  then read or press its elements. The Session-tint toggle is the only control that changes the
+  panel's height materially, which makes it the lever for any layout measurement.
+- **Measure panel geometry over LEAF elements only.** The root `AXGroup` always fills the window, so
+  a union including it reports a zero gap in every state — a number that cannot say otherwise.
+- **`ps -Eww` returns a BLANK environment for SIP-protected binaries** (11 bytes vs ~39,000 for a
+  real session). Anything standing in for an agent process in a probe must be a non-restricted
+  binary — `node`, which is what the real agent runs — or `ITERM_SESSION_ID` reads as absent and the
+  probe silently sees nothing. Copying a system binary does not help: it is SIGKILLed.
 
 ## Open items / deferred
 
-- **Post-release artifact verification** - recurring release task; latest completed for `v0.2.6`:
+- **Post-release artifact verification** - recurring release task; latest completed for `v0.5.2`:
   checksum, codesign, stapler, Gatekeeper, bundle metadata, latest appcast, release workflow, and
-  `gh attestation verify TermTile-v0.2.6.zip --repo EvanCNavarro/TermTile`. Evidence:
-  `docs/verification/release-v0.2.6.md`.
+  `gh attestation verify TermTile-v0.5.2.zip --repo EvanCNavarro/TermTile`, plus the same two
+  detectors run against a tampered copy to prove they can fail. Evidence:
+  `docs/verification/release-v0.5.2.md`.
 - `[DEP:#33]` — RememBar's `ProcessRunner` 1s drainer-wait ceiling (shared-pattern note; RememBar's concern,
   low risk). Tracked in that repo.
 - Twin-drift with RememBar is intentional + documented: TermTile's `Updater` is a lazy instance gated by
