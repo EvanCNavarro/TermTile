@@ -76,3 +76,44 @@ struct CoordinatorVerdictLiveTests {
         print("WOULD-PAINT \(asked.count): " + asked.map { "\($0.1)=#\($0.0.hex)" }.joined(separator: " "))
     }
 }
+
+/// Measures whether Tier 1's known ceilings are actually HIT by the real workload — the live half
+/// of EvanCNavarro/TermTile#12's trigger, which asks for daily-use evidence rather than an argument
+/// from the ceilings' existence. Committed because that question recurs every time #12 is revisited
+/// and this answers it in one command (ADR-0006 finding 19).
+///
+/// `sessions` is the ground truth from the process table; `visiblePanes` is what AX can see, so a
+/// gap between them is a hidden background tab. A window with `collidingCwd=true` is the case the
+/// join cannot resolve — and it costs the tint of EVERY session in that window, not just the new
+/// one.
+///
+/// To PLANT that case, split a window and start the second agent with a non-restricted interpreter
+/// (`exec -a claude node -e '...'`). `/bin/sleep` will not do: macOS blanks a SIP-protected
+/// binary's environment block, `ITERM_SESSION_ID` reads as absent, and the plant silently fails to
+/// register.
+///
+///     TT_LIVE_AX=1 TT_DUMP=1 swift test --filter SessionCensusLiveTests
+struct SessionCensusLiveTests {
+    @Test("every agent session vs what AX can see", .enabled(if: PaneDumpLiveTests.enabled))
+    func census() async {
+        let sessions = await ProcessTTYProbe().sessions()
+        let panes = await AXSessionReader(bundleID: "com.googlecode.iterm2").visiblePanes()
+        print("CENSUS sessions=\(sessions.count) visiblePanes=\(panes.count)")
+        let byWindow = Dictionary(grouping: sessions, by: \.windowIndex)
+        var multiSession = 0
+        var colliding = 0
+        for (w, group) in byWindow.sorted(by: { $0.key < $1.key }) {
+            let cwds = group.map(\.cwd)
+            let collide = Set(cwds).count != cwds.count
+            if group.count > 1 { multiSession += 1 }
+            if collide { colliding += 1 }
+            print("  WINDOW w\(w) badge=\(w + 1) sessions=\(group.count) collidingCwd=\(collide)")
+            for s in group.sorted(by: { ($0.tabIndex, $0.paneIndex) < ($1.tabIndex, $1.paneIndex) }) {
+                print("      t\(s.tabIndex)p\(s.paneIndex) tty=\(s.tty) cwd=\(s.cwd)")
+            }
+        }
+        let beyondBadge = byWindow.keys.filter { $0 + 1 > 9 }.sorted()
+        print("CEILINGS windows=\(byWindow.count) multiSessionWindows=\(multiSession)"
+              + " cwdCollidingWindows=\(colliding) beyondBadgeCeiling=\(beyondBadge)")
+    }
+}
