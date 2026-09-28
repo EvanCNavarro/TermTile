@@ -199,6 +199,10 @@ struct TermTileApp: App {
                                       launch: LaunchEnvironment) -> MenuBarViewModel {
         let (visibleFrame, eps) = (launch.visibleFrame, launch.epsilon)
         let (isSelftest, isGallery) = (launch.isSelftest, launch.isGallery)
+        // Re-read the screen on every rearrange: a remote-desktop client or monitor swap can resize it while
+        // TermTile runs. Selftest/gallery keep the fixed launch frame (deterministic).
+        var screenProvider: (@MainActor () -> CGRect)?
+        if !isSelftest && !isGallery { screenProvider = { @MainActor in originAXVisibleFrame() } }
         return MenuBarViewModel(
             settings: settings,
             loginItem: loginItem,
@@ -217,7 +221,8 @@ struct TermTileApp: App {
             // sequences into someone's live terminals.
             tinting: (!isSelftest && !isGallery)
                 ? Self.makeTintingDriver(targetBundleID: settings.load().targetBundleID)
-                : nil)
+                : nil,
+            visibleFrameProvider: screenProvider)
     }
 
     /// Post-construction launch policy: activation policy, and starting tinting if the user had
