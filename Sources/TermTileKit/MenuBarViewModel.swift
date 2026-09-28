@@ -80,6 +80,10 @@ public final class MenuBarViewModel {
     @ObservationIgnored private let loginItem: any LoginItem
     @ObservationIgnored private let isTrustedProbe: @Sendable () -> Bool
     @ObservationIgnored private let visibleFrame: CGRect
+    /// Reads the screen at rearrange time (a remote-desktop client or monitor swap can resize it while TermTile
+    /// runs). nil → the launch-time `visibleFrame`.
+    @ObservationIgnored private let visibleFrameProvider: (@MainActor () -> CGRect)?
+    private var currentVisibleFrame: CGRect { visibleFrameProvider?() ?? visibleFrame }
     @ObservationIgnored private let epsilon: CGFloat
     @ObservationIgnored private let makeActor: @Sendable (String) -> TilingActor
     @ObservationIgnored private var actor: TilingActor
@@ -116,7 +120,8 @@ public final class MenuBarViewModel {
         foregrounder: (any TargetAppForegrounding)? = nil,
         dragReorder: (any DragReorderControlling)? = nil,
         permissionRepairer: (any PermissionRepairing)? = nil,
-        tinting: (any TintingControlling)? = nil
+        tinting: (any TintingControlling)? = nil,
+        visibleFrameProvider: (@MainActor () -> CGRect)? = nil
     ) {
         let loaded = settings.load()
         self.settings = settings
@@ -124,6 +129,7 @@ public final class MenuBarViewModel {
         self.loginItem = loginItem
         self.isTrustedProbe = isTrustedProbe
         self.visibleFrame = visibleFrame
+        self.visibleFrameProvider = visibleFrameProvider
         self.epsilon = epsilon
         self.makeActor = makeActor
         self.uninstaller = uninstaller
@@ -219,8 +225,8 @@ public final class MenuBarViewModel {
     /// Reorder the dropped window at drag-END (fresh enumerate → nearest slot) using the user's chosen
     /// strategy (#27) on the current grid.
     public func reorderDroppedWindow(_ id: CGWindowID) async {
-        await actor.reorderDropFresh(id, config: TileConfig(isEnabled: true, visibleFrame: visibleFrame, gap: gap),
-                                     strategy: reorderStrategy)
+        let config = TileConfig(isEnabled: true, visibleFrame: currentVisibleFrame, gap: gap)
+        await actor.reorderDropFresh(id, config: config, strategy: reorderStrategy)
     }
 
     /// Re-read the trust probe and LATCH `wasTrusted` the first time trust is observed (guarded on
@@ -347,7 +353,7 @@ public final class MenuBarViewModel {
         let targetBundleID = targetBundleID
         let actor = actor
         let foregrounder = foregrounder
-        let config = TileConfig(isEnabled: true, visibleFrame: visibleFrame, gap: gap)
+        let config = TileConfig(isEnabled: true, visibleFrame: currentVisibleFrame, gap: gap)
         let shouldBringToFront = bringToFrontOnRearrange && isAccessibilityTrusted
         let requestGeneration = foregroundRequestGeneration
         await actor.activate(config: config)
