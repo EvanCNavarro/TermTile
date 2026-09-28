@@ -56,6 +56,18 @@ Settings pane, and then enable the current signed app again. For drag-reorder, T
 
 Requires **macOS 14 (Sonoma) or later**, on **Apple Silicon**.
 
+## Rearrange from a script
+
+Another program can ask TermTile to rearrange, the same as pressing the button:
+
+```bash
+open -g termtile://rearrange
+```
+
+`-g` keeps TermTile in the background. Only that exact URL is accepted; anything else (other commands, parameters)
+is ignored. Requests that arrive while a rearrange is running are combined into one more rearrange, so a script
+that opens several windows can call it after each one.
+
 ## Privacy & permissions
 
 TermTile is local and quiet:

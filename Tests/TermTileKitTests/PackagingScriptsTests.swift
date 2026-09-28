@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import TermTileCore
 
 /// #13a — the packaging scripts unit-tested AS TEXT (RememBar's "scripts unit-tested as text"
 /// pattern; audit §4/§8). Each assertion pins one hard-won packaging lesson as a POSITIVE,
@@ -167,6 +168,19 @@ struct PackagingScriptsTests {
         let s = Self.script("build-app.sh")
         #expect(s.contains("LSUIElement"), "Info.plist must set LSUIElement (menu-bar only)")
         #expect(s.contains("plutil -lint"), "the generated Info.plist must be plutil -lint'ed")
+    }
+
+    @Test("build-app.sh: registers the termtile:// URL scheme the Core allowlist parses")
+    func plistRegistersExternalCommandScheme() {
+        let s = Self.normalizedPlist(Self.script("build-app.sh"))
+        #expect(s.contains("<key>CFBundleURLTypes</key><array><dict>"),
+                "without CFBundleURLTypes LaunchServices has no app for `open termtile://rearrange`")
+        #expect(s.contains("<key>CFBundleURLSchemes</key><array><string>\(ExternalCommand.scheme)</string></array>"),
+                "the registered scheme must be exactly the one ExternalCommand accepts")
+    }
+
+    private static func normalizedPlist(_ text: String) -> String {
+        text.components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
     @Test("build-app.sh: disables Sparkle automatic-check prompting for passive startup probes")

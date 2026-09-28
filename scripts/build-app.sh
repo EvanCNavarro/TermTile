@@ -80,6 +80,13 @@ cat > "$PLIST" <<PLIST_EOF
 	<key>SUFeedURL</key><string>$SU_FEED_URL</string>
 	<key>SUPublicEDKey</key><string>$SU_PUBLIC_ED_KEY</string>
 	<key>SUEnableAutomaticChecks</key><false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key><string>$BUNDLE_ID.external-command</string>
+			<key>CFBundleURLSchemes</key><array><string>termtile</string></array>
+		</dict>
+	</array>
 </dict>
 </plist>
 PLIST_EOF

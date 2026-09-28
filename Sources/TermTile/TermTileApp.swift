@@ -1,4 +1,5 @@
 import AppKit
+import os
 import MacFaceKit
 import SwiftUI
 import TermTileCore
@@ -54,6 +55,15 @@ struct TermTileApp: App {
         // Global hotkey → the same rearrangeNow() the menu button invokes (#25). Active on the normal
         // path only (not selftest/gallery, where a global hotkey would interfere).
         hotKeyMonitor = Self.makeHotKeyMonitor(vm: viewModel, active: !isSelftest && !isGallery)
+
+        // `termtile://rearrange` → the same rearrangeNow() (zio re-tiles after opening/closing a window). Normal
+        // path only, like the hotkey.
+        if !isSelftest && !isGallery {
+            let vm = viewModel
+            TermTileAppDelegate.externalCommands = ExternalCommandRouter(rearrange: { @MainActor [weak vm] in
+                await vm?.rearrangeNow()
+            })
+        }
 
         // Opt-in drag-reorder (#26): wire the controller POST-init (its closures capture the VM). The
         // VM starts/stops it only when opted-in + trusted + Input-Monitoring-granted; off by default.
@@ -342,7 +352,27 @@ struct TermTileApp: App {
 /// Minimal app delegate — the reliable place for lifecycle hooks the SwiftUI adaptor omits.
 /// Re-asserts the accessory activation policy (belt to `init()`'s set).
 final class TermTileAppDelegate: NSObject, NSApplicationDelegate {
+    /// Set by `TermTileApp.init` on the normal path (nil under selftest/gallery, so a stray URL does nothing).
+    @MainActor static var externalCommands: ExternalCommandRouter?
+    private static let log = Logger(subsystem: "dev.ecn.apps.termtile", category: "external-command")
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+    }
+
+    /// `open -g termtile://rearrange` (zio, after it opens or closes a session window). The router applies the
+    /// Core allowlist and coalesces bursts; a rejected URL is logged and ignored.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let router = Self.externalCommands else { return }
+        for url in urls {
+            Task {
+                // Public: only an allowlisted command word is logged; a rejected URL logs nothing of its content.
+                if await router.receive(url) {
+                    Self.log.notice("external command accepted: \(url.host?.lowercased() ?? "", privacy: .public)")
+                } else {
+                    Self.log.notice("external URL rejected")
+                }
+            }
+        }
     }
 }
