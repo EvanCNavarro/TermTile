@@ -109,10 +109,14 @@ struct PackagingScriptsTests {
                 "every sign line must enable hardened runtime for notarization")
         // Resolution: explicit TERMTILE_SIGN_IDENTITY wins; else auto-use the local dev cert IF present;
         // else fall back to ad-hoc so CI (no env, no keychain cert) needs no signing setup (#13c).
+        // The resolution lives in scripts/lib/identity.sh (shared with test-packaged-app.sh, TRAP-23).
         let script = Self.script("build-app.sh")
+        let identity = Self.script("lib/identity.sh")
         #expect(script.contains("sign_code()"), "build-app.sh must keep signing flags centralized")
-        #expect(script.contains("TERMTILE_SIGN_IDENTITY"), "explicit sign-identity override must exist")
-        #expect(script.contains("SIGN_IDENTITY=\"-\""),
+        #expect(script.contains("SIGN_IDENTITY=\"$(termtile_sign_identity)\""),
+                "build-app.sh must resolve its identity through the shared library")
+        #expect(identity.contains("TERMTILE_SIGN_IDENTITY"), "explicit sign-identity override must exist")
+        #expect(identity.contains("echo \"-\""),
                 "SIGN_IDENTITY must fall back to ad-hoc (\"-\") so CI needs no keychain")
 
         let verifyLine = ls.first { $0.contains("codesign") && $0.contains("--verify") }

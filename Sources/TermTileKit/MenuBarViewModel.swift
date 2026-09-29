@@ -18,6 +18,8 @@ public final class MenuBarViewModel {
     public private(set) var isAccessibilityTrusted: Bool
     /// Whether the user has EVER granted Accessibility; latched by `syncTrust()` for `grantBroken`.
     public private(set) var wasTrusted: Bool
+    /// Sent to Settings to allow TermTile this launch (not persisted) — see MenuBarViewModel+Permissions.swift.
+    var sentToAccessibilitySettings = false
     /// Whether the app is registered to launch at login (source of truth = `LoginItem.status`).
     public private(set) var launchAtLogin: Bool
     /// The tile gap in points (#17a) — loaded from settings, tracked so the Stepper live-updates.
@@ -55,7 +57,7 @@ public final class MenuBarViewModel {
     /// over the two tracked vars, so it's Observation-reactive.
     public var accessibilityState: AccessibilityState {
         if isAccessibilityTrusted { return .trusted }
-        return wasTrusted ? .grantBroken : .needsFirstGrant
+        return (wasTrusted || sentToAccessibilitySettings) ? .grantBroken : .needsFirstGrant
     }
 
     /// User-visible status for failed best-effort app activation. Successful, skipped, or disabled

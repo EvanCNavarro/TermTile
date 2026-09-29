@@ -493,8 +493,12 @@ struct ReleaseReadinessTests {
         }
         let needsFirstGrantBlock = String(menu[firstGrant.upperBound..<grantBroken.lowerBound])
         let grantBrokenBlock = String(menu[grantBroken.upperBound..<noticeEnd.lowerBound])
-        #expect(needsFirstGrantBlock.contains("linkLabel: \"Allow Accessibility\""),
+        #expect(needsFirstGrantBlock.contains("actionLabel: \"Allow Accessibility\""),
                 "first-grant-looking state must offer a direct settings action")
+        #expect(needsFirstGrantBlock.contains("viewModel.noteAccessibilitySettingsOpened()"),
+                "Allow must record the Settings visit, so a grant that doesn't take offers the reset (TRAP-23)")
+        #expect(!needsFirstGrantBlock.contains("repairAccessibilityPermission"),
+                "a first grant must never reset anything")
         #expect(grantBrokenBlock.contains("actionLabel: \"Reset & Open Settings\""),
                 "grant-broken state must expose the stale-entry reset action")
         #expect(grantBrokenBlock.contains("viewModel.repairAccessibilityPermission()"),

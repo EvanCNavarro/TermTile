@@ -11,7 +11,13 @@ set -euo pipefail
 
 APP="${1:-${APP:-dist/TermTile.app}}"
 APP_NAME="${APP_NAME:-TermTile}"
-BUNDLE_ID="${BUNDLE_ID:-dev.ecn.apps.termtile}"
+# Expected bundle ID from how THIS app is actually signed, by the same rule build-app.sh uses (scripts/lib/identity.sh,
+# TRAP-23): Developer ID → production ID, anything else → .local. Read from the bundle, not the environment, because
+# the release smoke step does not carry TERMTILE_SIGN_IDENTITY.
+# shellcheck source=lib/identity.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/identity.sh"
+APP_AUTHORITY="$(codesign -dv --verbose=2 "$APP" 2>&1 | sed -n 's/^Authority=//p' | head -1)"
+BUNDLE_ID="$(termtile_default_bundle_id "${APP_AUTHORITY:--}")"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
