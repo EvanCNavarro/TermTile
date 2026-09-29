@@ -260,3 +260,15 @@ Project-local traps discovered during cycles. When a trap proves universal (recu
   ACTION is not done until the commit lands. Not cleanly mechanically checkable (a mid-beat tree is
   legitimately dirty, so a static "clean tree" gate would false-fire during normal work) — this
   reorient-git-status habit is the guard.
+
+### TRAP-23: launching an ad-hoc local build with the production bundle ID pins the user's Accessibility grant to it
+- what happened (2026-09-28): to prove `termtile://rearrange` live, `scripts/build-app.sh` built an ad-hoc
+  `dist/TermTile.app` with the default `BUNDLE_ID` (dev.ecn.apps.termtile) and it was launched. macOS created the
+  Accessibility row for that bundle ID with the AD-HOC cdhash as its code requirement. After the signed 0.6.0 was
+  installed, Bobby switched that row on; it matched only the throwaway build, so 0.6.0 kept showing
+  "Accessibility access required" with the toggle visibly ON (row csreq `cdhash H"bd5d70…"` vs the app's
+  Developer ID designated requirement).
+- warning: never LAUNCH a local build under the production bundle ID on a machine where the released app is (or
+  will be) used. Build proofs with `BUNDLE_ID=dev.ecn.apps.termtile.local scripts/build-app.sh`. If it already
+  happened, the fix is TermTile's "Reset & Open Settings" (or remove the row in System Settings) — a TCC reset is the
+  user's action, not an agent's.
