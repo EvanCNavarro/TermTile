@@ -227,7 +227,11 @@ struct MenuBarContent: View {
             NoticeCard(title: "Accessibility access required",
                        message: "TermTile needs Accessibility permission to arrange windows. "
                        + "Open Settings and allow TermTile.",
-                       linkLabel: "Allow Accessibility", url: viewModel.accessibilitySettingsURL)
+                       actionLabel: "Allow Accessibility", actionSystemImage: "gearshape") {
+                // Recorded so that, if this copy is still untrusted afterwards, the reset is offered (TRAP-23).
+                viewModel.noteAccessibilitySettingsOpened()
+                NSWorkspace.shared.open(viewModel.accessibilitySettingsURL)
+            }
         case .grantBroken:
             NoticeCard(title: "Accessibility access needs reset",
                        message: "Settings may show TermTile enabled for an older build. "

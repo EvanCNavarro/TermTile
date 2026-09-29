@@ -11,7 +11,12 @@
 set -euo pipefail
 
 APP_NAME="${APP_NAME:-TermTile}"
-BUNDLE_ID="${BUNDLE_ID:-dev.ecn.apps.termtile}"
+# Signing identity + bundle ID come from ONE place (scripts/lib/identity.sh; TRAP-23: only a Developer ID build
+# defaults to the production bundle ID).
+# shellcheck source=lib/identity.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/identity.sh"
+SIGN_IDENTITY="$(termtile_sign_identity)"
+BUNDLE_ID="$(termtile_default_bundle_id "$SIGN_IDENTITY")"
 CONFIGURATION="${CONFIGURATION:-release}"
 SHORT_VERSION="${SHORT_VERSION:-0.1.0}"
 DIST_DIR="${DIST_DIR:-dist}"
@@ -121,21 +126,7 @@ ditto "$SPARKLE_FRAMEWORK" "$SPARKLE_DST"
 # Inside-out sign (no --deep). Sign the deepest nested Sparkle code FIRST (its XPC services /
 # helpers individually - --deep can corrupt those signatures, per Sparkle's docs), then the
 # framework, then the app binary, then the bundle; verify strict.
-# Signing identity. A STABLE keychain identity keeps the app's code identity constant across rebuilds,
-# so macOS TCC grants (Accessibility, Input Monitoring) survive - ad-hoc ("-") gets a fresh cdhash every
-# build and silently resets every grant (#13c). Resolution order: explicit TERMTILE_SIGN_IDENTITY wins;
-# else auto-use the local "TermTile Dev Signing" identity IF it's in the keychain (so a dev machine that
-# ran scripts/setup-dev-signing.sh gets stable grants with zero ceremony); else fall back to ad-hoc (CI /
-# a fresh clone without the cert). This default is why grants no longer break on every local rebuild.
-DEFAULT_DEV_IDENTITY="TermTile Dev Signing"
-if [ -n "${TERMTILE_SIGN_IDENTITY:-}" ]; then
-	SIGN_IDENTITY="$TERMTILE_SIGN_IDENTITY"
-elif security find-identity -v -p codesigning 2>/dev/null | grep -q "$DEFAULT_DEV_IDENTITY"; then
-	SIGN_IDENTITY="$DEFAULT_DEV_IDENTITY"
-else
-	SIGN_IDENTITY="-"
-fi
-echo "build-app.sh: signing with identity: $SIGN_IDENTITY" >&2
+echo "build-app.sh: signing with identity: $SIGN_IDENTITY, bundle ID: $BUNDLE_ID" >&2
 xattr -cr "$APP"
 DISABLE_LIBRARY_VALIDATION="${TERMTILE_DISABLE_LIBRARY_VALIDATION:-auto}"
 case "$DISABLE_LIBRARY_VALIDATION" in

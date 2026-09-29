@@ -113,7 +113,7 @@ struct MenuBarContentAccessibilityTests {
 
         #expect(dragBlock.contains("actionLabel: \"Allow Input Monitoring\""))
         #expect(dragBlock.contains("viewModel.repairInputMonitoringPermission()"))
-        #expect(accessibilityBlock.contains("linkLabel: \"Allow Accessibility\""))
+        #expect(accessibilityBlock.contains("actionLabel: \"Allow Accessibility\""))  // records the visit (TRAP-23)
         #expect(accessibilityBlock.contains("actionLabel: \"Reset & Open Settings\""))
         #expect(accessibilityBlock.contains("viewModel.repairAccessibilityPermission()"))
         #expect(!dragBlock.contains("Repair Input Monitoring"))
